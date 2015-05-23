@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+ <title>Digital Audio Workstation</title>
+ <link rel="SHORTCUT ICON" href="http://shroom.dv8.org/favicon.ico"/>
+ <link rel="stylesheet" href="index.css" type="text/css" media="screen" title="Shrewm"/ >
+</head>
+<body>
+
+<h1>Digital Audio Workstation</h1>
+<hr/>
+<p class="mainNav">
+ <a href="http://webaudio.github.io/web-audio-api/">[WebAudio]</a>
+ <a href="http://validator.w3.org/check/referer">[XHTML 1.0]</a>
+ <a href="http://jigsaw.w3.org/css-validator/check/referer/">[CSS 2.1]</a>
+ <a href="http://shroom.dv8.org/">[home]</a>
+</p>
+
+<!-- each track gets a bunch of beats -->
+<div class="rythm">
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
+</div>
+<p style="display:inline-block; background:#080"  onmousedown="pause=!pause; this.style.background=pause?'red':'green'">pause</p>
+
+
+<div style="border:none" id="DB"></div>
+
+<script type="text/javascript">//<![CDATA[
+
+  /*****************************************************************************
+    Debug_console_window
+    Usage::
+      <p id="DB"></p> -- Set the element's ID
+      DB("string")    -- Send string to info window
+      DB.clear()      -- Clear the window of all text
+  *****************************************************************************/
+  var DB = (function () {
+    var InfoElement = document.getElementById('DB'); //var e = document.createElement("p");
+
+    if (!InfoElement) return function (s) { };
+
+    InfoElement.style.overflow = "auto";
+    //InfoElement.style.height = "45em";
+
+    var me = function (s) {
+//return
+        InfoElement.innerHTML += s;
+        InfoElement.scrollTop = InfoElement.scrollHeight;
+    }
+
+    me.clear = function () { InfoElement.innerHTML = ""; }
+
+    return me;
+
+  })();
+
+
+  window.onmouseup = function () { MouseIsDown = false; }
+
+  /*window.onkeydown = function () {
+    if (event.keyCode == 191) DB.clear();
+    else {
+      DB(event);
+      DB(event.keyCode);
+    }
+  }*/
+
+
+FileNames =
+ ["808.bass.raw",
+  "808.snare.noise.raw",
+  "808.maracas.raw",
+  "808.cowbell.raw",
+  "808.rim.raw",
+  "808.highhat.closed.raw",
+  "808.claves.raw",
+  "808.clap.raw",
+  "808.highhat.opened.raw",
+  "808.cymbal.raw",
+  "909.snare.noise.raw"];
+
+var pause=false;
+var ctx = new AudioContext();
+var NoiseSamples = []; // Array of AudioBuffer
+var NoiseCount = 0;
+
+var MouseIsDown = false;
+
+var OriginalBackgrounds = [];
+var ToggleButtonState = 0;
+
+var TrackCount = 0;
+var BeatCount = 16;
+var TracksBeats = []; // Each entry will be an array of beats [{color, element}, ...]
+var BeatDuration = .25; // Keep timing binary friendly.
+var Beat = 0; // Forever incrementing
+
+
+/* Play a one shot noise.  TODO: handle looped sound.
+
+  Currently:
+
+  [AudioBuffer]--->[AudioBufferSourceNode]--O[Destination]
+                         .
+                         |
+                  start--+
+*/
+function play (noise, when) {
+  var source = ctx.createBufferSource();
+  source.connect(ctx.destination);
+  source.buffer = NoiseSamples[noise];
+  source.start(when);
+  if (noise == -1) { // Loop the bass noise for one second
+    var lp = ctx.createBiquadFilter();
+    source.playbackRate.value = 0.125;
+    source.loop = true;
+    source.stop((when==0 ? ctx.currentTime : when) + 1);
+  }
+  source.onended = (function(source){ return function() { source.disconnect(); }})(source);
+}
+
+
+/* Load the sounds asynchronously
+*/
+function loadNoises (fileNames) {
+  fileNames.forEach( function (fn, i) {
+    var client = new XMLHttpRequest();
+    client.open('GET', fn);
+    client.responseType = "arraybuffer";
+    client.onreadystatechange = // Callback after remote file has been loaded
+        function() {
+          if (4 == client.readyState && 200 == client.status) {
+            var samples = new Int16Array(client.response); // Consider byte array as s16 array.
+            // Normalized each s16 sample to f32 between -1 and 1.
+            var Noise =  new Float32Array(samples.length);
+            for (var j=0; j<samples.length; ++j) Noise[j] = samples[j]/32768;
+            // Create and set the audio buffer
+            NoiseSamples[i] = ctx.createBuffer(1, samples.length, 44100);
+            NoiseSamples[i].getChannelData(0).set(Noise);
+          }
+        }
+    client.send();
+  } );
+  return fileNames.length;
+}
+
+
+var beatCounter = 0;
+function domCreate16th (track, beat) {
+  var p;
+  var d = document.createElement('div');
+
+  d.className = "beat";
+  d.style.backgroundColor = ["#333", "#222", "#222", "#222"][beatCounter++%4];
+  for (var i=0; i<4; ++i) {
+    p = document.createElement('p');
+    p.className = "tick"
+    p.onmouseover = function (event) {
+      if (0 == ToggleButtonState) {
+        ToggleButtonState = this.innerText == "." ? 1 : 2;
+      }
+      if (MouseIsDown) this.innerText = ToggleButtonState == 1 ? "X" : "."
+    }
+    p.onmousedown = function (event) {
+      MouseIsDown = true;
+      ToggleButtonState = this.innerText == "." ? 1 : 2;
+      this.innerText = ToggleButtonState == 1 ? "X" : "."
+    }
+    var v = parseInt(window.location.search[1+track+NoiseCount*beat], 16) // Consider prexisting beat state
+    p.innerText = (v & 1<<i)? "X" : ".";
+    d.appendChild(p);
+  }
+
+  return d;
+}
+
+function main () {
+  var o, b, t, TracksDOM=document.getElementsByClassName("track"); // Consider beat elements in the DOM.
+
+  TrackCount = TracksDOM.length;
+  
+  // Create the DOM that represents the machine
+  for (t=0; t<TrackCount; ++t) {
+    TracksBeats[t] = new Array();
+    // Add beat elements to DOM
+    for (b=0; b<BeatCount; ++b) {
+      p = domCreate16th(t, b);
+      TracksDOM[t].appendChild(p);
+      o= new Object();
+      o.element = p;
+      o.color = p.style.backgroundColor;
+      TracksBeats[t][b] = o; // Set the global grid for easy access
+    }
+    // Add sound name elements to DOM
+    var p = document.createElement('p');
+    p.className = "name"
+    p.innerText = FileNames[t];
+    p.onmousedown = (function (noise) {return function () { play(noise, 0); }})(t);
+    TracksDOM[t].appendChild(p);
+  }
+
+  // A beat used to be the smallest tick length but I've since added 16th notes (4 more beats per beat).
+  var LastRenderedTick = -1;
+  var BeatLast = 0; // Quarter beat
+  var SBeatLast = 0; // Sixteenth beat
+  function rendererLoop () {
+    if (pause) return;
+    var t;
+    var tick = Math.floor(ctx.currentTime / (BeatDuration/4)) % (BeatCount*4);
+    var beat = Math.floor(tick/4);
+    var sbeat = [0,2,3,1][tick%4];
+
+    if (LastRenderedTick == tick) return;
+
+    for (t=0; t<TrackCount; ++t) {
+      // 16th beat rendering
+      //TracksBeats[t][BeatLast].element.children[SBeatLast].style.backgroundColor = TracksBeats[t][BeatLast].color;
+      //TracksBeats[t][beat].element.children[sbeat].style.backgroundColor = 'green';//"rgb("+Math.floor(Math.random()*256)+","+Math.floor(Math.random()*256)+","+Math.floor(Math.random()*256)+")";
+      // 1/4th beat rendering
+      TracksBeats[t][BeatLast].element.style.backgroundColor = TracksBeats[t][BeatLast].color;
+      TracksBeats[t][beat].element.style.backgroundColor = 'green';//"rgb("+Math.floor(Math.random()*256)+","+Math.floor(Math.random()*256)+","+Math.floor(Math.random()*256)+")";
+    }
+    LastRenderedTick = tick;
+    BeatLast = beat;
+    SBeatLast = sbeat;
+    //setTimeout(rendererLoop, 100);
+  }
+
+  var pattern="";
+  var sum = 0;
+  function sequencerLoop () {
+    var t, pre='', ret='';
+    if (pause) return;
+    while ((Beat * BeatDuration) <= (ctx.currentTime + 1.0)) {
+      if (0 == (Beat % BeatCount)) {
+        window.history.replaceState("ohhai", "Digital Audio Workstation", "http://shroom.dv8.org/dev/js/?" + pattern);
+        pattern="";
+      }
+      for (t=0; t<TrackCount; ++t) {
+        sum = 0;
+        for (s=0; s<4; ++s) {
+          var note = TracksBeats[t][Beat % BeatCount].element.children[s].innerText;
+          if (('.' != note) && NoiseSamples[t]) { // If the noise actually exists (has been loaded)...
+            play(t, Beat * BeatDuration + (s*BeatDuration)/4);
+            sum += 1<<s;
+          } //if
+        } // sub beats
+        pattern = pattern + sum.toString(16);
+      } // beats
+      Beat += 1.0;
+    } // while
+    //setTimeout(sequencerLoop, 100);  // This is not a proper way of handling timing.  Temporary hack!
+  }
+
+  setInterval(rendererLoop, 10);
+  setInterval(sequencerLoop, 10);
+}
+
+
+
+/* Main
+*/
+window.onload = function () {
+  NoiseCount = loadNoises(FileNames);
+  main();
+}
+
+//]]></script>
+
+
+</body></html>
