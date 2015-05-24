@@ -3,7 +3,6 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
  <title>Digital Audio Workstation</title>
- <link rel="SHORTCUT ICON" href="http://shroom.dv8.org/favicon.ico"/>
  <link rel="stylesheet" href="index.css" type="text/css" media="screen" title="Shrewm"/ >
 </head>
 <body>
@@ -14,7 +13,6 @@
  <a href="http://webaudio.github.io/web-audio-api/">[WebAudio]</a>
  <a href="http://validator.w3.org/check/referer">[XHTML 1.0]</a>
  <a href="http://jigsaw.w3.org/css-validator/check/referer/">[CSS 2.1]</a>
- <a href="http://shroom.dv8.org/">[home]</a>
 </p>
 
 <!-- each track gets a bunch of beats -->
@@ -30,8 +28,10 @@
   <div class="track"></div>
   <div class="track"></div>
   <div class="track"></div>
+  <div class="track"></div>
+  <div class="track"></div>
 </div>
-<p style="display:inline-block; background:#080"  onmousedown="pause=!pause; this.style.background=pause?'red':'green'">pause</p>
+<p style="display:inline-block; background:#080"  onmousedown="pause=!pause; this.style.background=pause?'red':'green'; Beat = Math.floor(ctx.currentTime / BeatDuration)">pause</p>
 
 
 <div style="border:none" id="DB"></div>
@@ -88,6 +88,7 @@ FileNames =
   "808.clap.raw",
   "808.highhat.opened.raw",
   "808.cymbal.raw",
+  "909.thump.raw",
   "909.snare.noise.raw"];
 
 var pause=false;
@@ -103,7 +104,7 @@ var ToggleButtonState = 0;
 var TrackCount = 0;
 var BeatCount = 16;
 var TracksBeats = []; // Each entry will be an array of beats [{color, element}, ...]
-var BeatDuration = .25; // Keep timing binary friendly.
+var BeatDuration = .125 + /*0.0625 + */ 0.03125; // Keep timing binary friendly.
 var Beat = 0; // Forever incrementing
 
 
@@ -117,17 +118,42 @@ var Beat = 0; // Forever incrementing
                   start--+
 */
 function play (noise, when) {
+
+  if (noise == 0) return;
+
+  --noise;
   var source = ctx.createBufferSource();
-  source.connect(ctx.destination);
   source.buffer = NoiseSamples[noise];
   source.start(when);
-  if (noise == -1) { // Loop the bass noise for one second
-    var lp = ctx.createBiquadFilter();
-    source.playbackRate.value = 0.125;
-    source.loop = true;
-    source.stop((when==0 ? ctx.currentTime : when) + 1);
-  }
   source.onended = (function(source){ return function() { source.disconnect(); }})(source);
+
+  if (noise == 0) { // Loop the bass noise for one second
+    var release=0.5
+    var now = when==0 ? ctx.currentTime : when; // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
+    //source.playbackRate.value = 0.5;
+    source.playbackRate.setValueAtTime(0.4, now);
+    source.playbackRate.linearRampToValueAtTime(0.35, now+release);
+    source.loop = true;
+    source.stop(now + release);
+
+    var lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 120;
+    lp.Q.value = 0.5;
+
+    var gain = ctx.createGain();
+    //gain.gain.value = 1.0; // default
+    //gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(0.7, now);
+    //gain.gain.exponentialRampToValueAtTime(0.00001, now+release);
+    gain.gain.linearRampToValueAtTime(0, now+release);
+
+    source.connect(lp);
+    lp.connect(gain);
+    source = gain;
+  }
+
+  source.connect(ctx.destination);
 }
 
 
@@ -157,6 +183,7 @@ function loadNoises (fileNames) {
 
 
 var beatCounter = 0;
+
 function domCreate16th (track, beat) {
   var p;
   var d = document.createElement('div');
@@ -177,7 +204,7 @@ function domCreate16th (track, beat) {
       ToggleButtonState = this.innerText == "." ? 1 : 2;
       this.innerText = ToggleButtonState == 1 ? "X" : "."
     }
-    var v = parseInt(window.location.search[1+track+NoiseCount*beat], 16) // Consider prexisting beat state
+    var v = parseInt(window.location.search[1+(track-1)+NoiseCount*beat], 16) // Consider prexisting beat state
     p.innerText = (v & 1<<i)? "X" : ".";
     d.appendChild(p);
   }
@@ -190,7 +217,9 @@ function main () {
 
   TrackCount = TracksDOM.length;
   
-  // Create the DOM that represents the machine
+  // Create the DOM that represents the synth track
+
+  // Create the DOM that represents the drum machine
   for (t=0; t<TrackCount; ++t) {
     TracksBeats[t] = new Array();
     // Add beat elements to DOM
@@ -205,7 +234,7 @@ function main () {
     // Add sound name elements to DOM
     var p = document.createElement('p');
     p.className = "name"
-    p.innerText = FileNames[t];
+    p.innerText = t==0 ? "synth" : FileNames[t-1];
     p.onmousedown = (function (noise) {return function () { play(noise, 0); }})(t);
     TracksDOM[t].appendChild(p);
   }
@@ -244,7 +273,7 @@ function main () {
     if (pause) return;
     while ((Beat * BeatDuration) <= (ctx.currentTime + 1.0)) {
       if (0 == (Beat % BeatCount)) {
-        window.history.replaceState("ohhai", "Digital Audio Workstation", "http://shroom.dv8.org/dev/js/?" + pattern);
+        window.history.replaceState("ohhai", "Digital Audio Workstation", document.location.href + (document.location.href.slice(-1)=="?"?"":"?") + pattern);
         pattern="";
       }
       for (t=0; t<TrackCount; ++t) {
@@ -256,7 +285,7 @@ function main () {
             sum += 1<<s;
           } //if
         } // sub beats
-        pattern = pattern + sum.toString(16);
+        if (0 < t) pattern = pattern + sum.toString(16);
       } // beats
       Beat += 1.0;
     } // while
