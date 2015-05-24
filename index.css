@@ -55,19 +55,51 @@ h1 {
 
 .track { border:0; padding:0; margin:0 }
 
-.beat  { border:thin solid black; padding:0; margin:0; height:2.1em; width:2.1em; text-align:center; display:inline-block; color:#aaa; vertical-align:top}
+.beat  { border:thin solid black; padding:0; margin:0; height:2.1em; width:2.1em; text-align:center; display:inline-block; color:#999; vertical-align:top}
 .beat:hover { border: solid thin #a0a }
 
 .tick { border:0; padding:0; margin:0; height:1em; width:1em; display:inline-block; }
 
-.beat .tick:nth-child(1) { }
-.beat .tick:nth-child(2) { }
-.beat .tick:nth-child(3) { }
-.beat .tick:nth-child(4) { }
+.beat .tick:nth-child(1):hover { background-color:yellow}
+.beat .tick:nth-child(2):hover { background-color:yellow}
+.beat .tick:nth-child(3):hover { background-color:yellow}
+.beat .tick:nth-child(4):hover { background-color:yellow}
 .name  { display:inline-block; padding:0; margin:0; border: solid thin black; vertical-align:top; height:2em;}
 .name:hover { border: solid thin #a0a }
 
+.piano {
+ display:inline-block;
+ text-align:center; 
+}
 
+.piano > div {
+ position:relative;
+ display:table-cell;
+}
+
+.piano > div > p {
+ background-color:white;
+ width:1.5em;
+ padding:4em 0 0 0;
+ border:solid thin black;
+ margin:0;
+}
+
+.piano > div > p + p {
+ background-color:black;
+ position:absolute;
+ left:1.0em;
+ top:0;
+ z-index:1;
+ width:1.5em;
+ padding:2em 0 0 0;
+ border:0;
+ margin:0;
+}
+
+.piano > div:hover { background-color: gray }
+.piano > div > p:hover { background-color: gray }
+ 
 
 /*******************************************************************************
    Score
