@@ -67,38 +67,44 @@ h1 {
 .name  { display:inline-block; padding:0; margin:0; border: solid thin black; vertical-align:top; height:2em;}
 .name:hover { border: solid thin #a0a }
 
-.piano {
+#piano {
+ font-family: "Times New Roman", Times, serif;
+ color: black;
  display:inline-block;
  text-align:center; 
 }
 
-.piano > div {
+#piano > div {
  position:relative;
  display:table-cell;
+ width:1.5em;
 }
 
-.piano > div > p {
+#piano > div > div {
  background-color:white;
  width:1.5em;
- padding:4em 0 0 0;
+ height:1em;
+ padding:2em 0 0 0;
  border:solid thin black;
  margin:0;
 }
 
-.piano > div > p + p {
- background-color:black;
+#piano > div > p {
+ background-color:#222;
  position:absolute;
- left:1.0em;
+ left:1.1em;
  top:0;
  z-index:1;
- width:1.5em;
- padding:2em 0 0 0;
+ width:1.0em;
+ height:1em;
+ padding:.6em 0 0 0;
  border:0;
  margin:0;
 }
 
-.piano > div:hover { background-color: gray }
-.piano > div > p:hover { background-color: gray }
+
+#piano > div > div:hover { background-color: #bbb }
+#piano > div > p:hover { background-color: #bbb }
  
 
 /*******************************************************************************

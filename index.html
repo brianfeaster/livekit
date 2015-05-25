@@ -15,91 +15,68 @@
  <a href="http://jigsaw.w3.org/css-validator/check/referer/">[CSS 2.1]</a>
 </p>
 
-<div class="piano">
- <div><p>C1</p><p>#</p></div>
- <div><p>D</p><p>#</p></div>
- <div><p>E</p></div>
- <div><p>F</p><p>#</p></div>
- <div><p>G</p><p>#</p></div>
- <div><p>A</p><p>#</p></div>
- <div><p>B</p></div>
- <div><p>C2</p><p>#</p></div>
- <div><p>D</p><p>#</p></div>
- <div><p>E</p></div>
- <div><p>F</p><p>#</p></div>
- <div><p>G</p><p>#</p></div>
- <div><p>A</p><p>#</p></div>
- <div><p>B</p></div>
- <div><p>C3</p><p>#</p></div>
- <div><p>D</p><p>#</p></div>
- <div><p>E</p></div>
- <div><p>F</p><p>#</p></div>
- <div><p>G</p><p>#</p></div>
- <div><p>A</p><p>#</p></div>
- <div><p>B</p></div>
- <div><p>C4</p><p>#</p></div>
- <div><p>D</p><p>#</p></div>
- <div><p>E</p></div>
- <div><p>F</p><p>#</p></div>
- <div><p>G</p><p>#</p></div>
- <div><p>A</p><p>#</p></div>
- <div><p>B</p></div>
- <div><p>C5</p></div>
-</div>
-
+<div id="piano"></div>
+<br/>
 <!-- each track gets a bunch of beats -->
-<div class="rythm">
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
-  <div class="track"></div>
+<div id="rythm">
 </div>
-<p style="display:inline-block; background:#080"  onmousedown="pause=!pause; this.style.background=pause?'red':'green'; Beat = Math.floor(ctx.currentTime / BeatDuration)">pause</p>
+<p style="display:inline-block; background:#080"  onmousedown="pause=!pause; this.style.background=pause?'red':'green'; Beat = Floor(ctx.currentTime / BeatDuration)">pause</p>
 
 <p id="DB"></p>
 
 <script type="text/javascript">//<![CDATA[
 
+/******************************************************************************
+  Useful aliases
+******************************************************************************/
+var Floor = Math.floor;
+var Pow   = Math.pow;
+var CreateAppendChild = function (name, element) { return element.appendChild(document.createElement(name)); }
+var CreateInsertBefore = function (name, element) { return element.insertBefore(document.createElement(name), element.firstChild); }
 
 /******************************************************************************
-  Debug message console
+  Debug message console and error checking
   Usage::
-    <p id="DB"></p> -- Create this element.
+    <p id="DB"></p> -- Create the console element.  If nonexistent, this object will revert to using the browser's console.
     DB("string")    -- Send string to info window.  Behaves like a pre element.
     DB.clear()      -- Clear the window of all text
+    DB.check(expr, string) -- If expr is false, send string to console.  status() will return false after an error checked.
+    DB.status()     -- False if check ever failed.
 ******************************************************************************/
 var DB = (function () {
-  var _DBelement = document.getElementById('DB');
-  var _self;
+  var consoleElement = document.getElementById('DB');
+  var self;
+  var status = true;
 
-  // Create the instance or, if the DOM element doesn't exist, a null object.
-  if (!_DBelement) {
-    _self =  function (s) { console.log(s);}
-    _self.clear = function () { }
-  } else {
-    _DBelement.style.border = "solid thin green";
-    _DBelement.style.whiteSpace = "pre";
-    _DBelement.style.overflow = "auto";
-    _DBelement.style.maxHeight = "20em";
-    _self = function (s) {
-      _DBelement.innerHTML += "\n" + s;
-      _DBelement.scrollTop = _DBelement.scrollHeight;
-    }
-
-    _self.clear = function () { _DBelement.innerHTML = ""; }
+  var setStyles = function (e) {
+    e.style.border = "solid thin green";
+    e.style.whiteSpace = "pre";
+    e.style.overflow = "auto";
+    e.style.maxHeight = "20em";
   }
 
-  return _self;
+  // Create the instance which is a function.  Also create the clear function.
+  if (!consoleElement) {
+    self = function (s) { console.log(s);}
+    self.clear = function () { }
+  } else {
+    setStyles(consoleElement);
+    self = function (s) {
+      consoleElement.innerHTML += "\n" + s;
+      consoleElement.scrollTop = consoleElement.scrollHeight;
+    }
+    self.clear = function () { consoleElement.innerHTML = ""; }
+  }
 
-})();
+  self.check = function (expr, msg) {
+    status = status && expr;
+    return expr || self(msg) && false;
+  }
+
+  self.status = function () { return status; }
+
+  return self;
+})(); // DB
 
 
 /******************************************************************************
@@ -108,23 +85,18 @@ var DB = (function () {
 
   USAGE::
     var noises = new AudioBuffersDB(["song1.raw", "song2.raw"]);
-    noises.status()       If valid, an empty strings.  Otherwise a non-empty
-                          string with error message.
-    noises.count          Number of files loaded.
+    noises.length         Number of files loaded.
     noises.fileName(i)    Get a filename.
-    noises.audioBuffer(i) Get an audio buffer.
+    noises.audioBuffer(i) Get an audio buffer or undefined.
 ******************************************************************************/
 var AudioBuffersDB = function (fileNames) {
-  DB("::AudioBuffersDB");
 
   // Private
 
-  var _errorStatus = ""
-  var _samplesSet = [];
+  var _audioBuffers = [];
 
   function _Validate () {
-    if ((!fileNames) || (0 == fileNames.length)) {
-      _errorStatus += "WARNING: AudioBuffersDB fileNames was passed no array of strings.\n"
+    if (!DB.check(fileNames && Array.isArray(fileNames), "ERROR: AudioBuffersdb: Invalid fileNames ary.")) {
       fileNames = [];
     }
   }
@@ -137,11 +109,7 @@ var AudioBuffersDB = function (fileNames) {
       client.onreadystatechange = // Callback after remote file has been loaded
         function () {
           if (4 != client.readyState) return;
-          if (200 != client.status) {
-            var msg = "WARNING: problem with file '" + client.responseURL + "'";
-            DB(msg);
-            _errorStatus += msg + "\n";
-          }
+          DB.check(200 == client.status, "ERROR: AudioBuffersDB._loadRawAudioFiles:  Problem with file '" + client.responseURL + "'");
           if (200 == client.status) {
             var samples = new Int16Array(client.response); // Consider u8 ary as s16 ary.
             // Normalized each s16 sample to f32 between -1 and 1.
@@ -150,8 +118,8 @@ var AudioBuffersDB = function (fileNames) {
               Noise[j] = samples[j]/32768;
             }
             // Create and set the audio buffer
-            _samplesSet[i] = ctx.createBuffer(1, samples.length, 44100);
-            _samplesSet[i].getChannelData(0).set(Noise);
+            _audioBuffers[i] = ctx.createBuffer(1, samples.length, 44100);
+            _audioBuffers[i].getChannelData(0).set(Noise);
           } // if
         } // function()
       client.send();
@@ -165,27 +133,308 @@ var AudioBuffersDB = function (fileNames) {
 
   // Public
 
-  this.count = fileNames ? fileNames.length : 0;
+  this.length = fileNames ? fileNames.length : 0;
   this.fileName = function (i) { return fileNames[i]; }
-  this.audioBuffer = function (i) { return _samplesSet[i]; }
-  this.setAudioBuffer = function (i, o) { _samplesSet[i] = o; } // TODO: get rid of this
-  this.status = function () { return _errorStatus; }
-
-  DB(_errorStatus + "--AudioBuffersDB");
-}
+  this.audioBuffer = function (i) { return _audioBuffers[i]; }
+  this.setAudioBuffer = function (i, o) { _audioBuffers[i] = o; } // TODO: get rid of this
+} // AudioBuffersDB 
 
 
-var KeysDOM;
-var PianoTypeDOM; // sine, square, etc
-var PianoNotes = []; // Sixteenth count array of note indices
-var CurrentPianoNote = 0;
+/******************************************************************************
+  Create a piano keyboard in the DOM.
 
+  USAGE::
+    var Keyboard = new PianoKeyboard("piano", 37, 0, 1, 130.813);
+
+  CONSTRUCTOR PARAMETERS::
+    DOM element id
+    number of keys
+    starting key (0==C, 1==C#, ... 11=B)
+    octave
+    first specified key's frequency
+
+  METHODS::
+    Keyboard.keyElements     All key DOM elements in an array
+    Keyboard.keyElement      Get the DOM element representing the white or black key
+    Keyboard.freq(key)       Frequency of key.  Indexed between 0 and number of keys (36 in this example).
+******************************************************************************/
+var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequency) {
+
+  //// Private
+
+  var _pianoDOM = document.getElementById(id);
+  DB.check(_pianoDOM, "ERROR: PianoKeyboard: Element id=" + id + " not found in DOM.");
+
+  var _keysDOM = []; // Keeps track of the DOM elements which represent the white and black keys in order.
+
+  var _createDOM = function () {
+    var notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    var sharps = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]; // Bool table of sharps in an octave, starting at C
+    var newKey, keyPair = false; // The piano DOM is composed of divs containing either just a div (white key) or div and p (white and black key)
+    startKey += startOctave*12; // Adjust initial key to account for octave
+    for (var i=0; (i < keyCount); ++i) {
+
+      if (sharps[(i + startKey)%12]) {
+        // Create the sharp key.  If this is the first key, the key pair element needs to also be created.
+        keyPair || (keyPair = CreateAppendChild('div', _pianoDOM));
+        newKey = CreateAppendChild('p', keyPair);
+      } else {
+        // Create the natural key.
+        keyPair = CreateAppendChild('div', _pianoDOM);
+        var note   = (i + startKey) % 12;
+        var octave = Floor((i + startKey) / 12);
+        newKey = CreateAppendChild('div', keyPair)
+        newKey.innerText = notes[note] + (note==0?octave:'');
+      }
+
+      _keysDOM.push(newKey); // Keep track of each created key.
+    }
+  }
+
+  // Construct
+
+  _createDOM();
+  DB.check(keyCount == _keysDOM.length, "ERROR: PianoKeyboard: Created incorrect number of keys.");
+
+  // Public
+
+  this.keyElements = _keysDOM;
+  this.keyElement = function (i) { return _keysDOM[i]; }
+  this.freq = function (k) { return startFrequency * Pow(2, k/12.0);  }
+} // PianoKeyboard 
+
+
+/******************************************************************************
+  Create a playable drumkit.  Expects a webaudio context and Audio Buffers DB.
+
+  USAGE::
+    var DrumKit = new Drumkit(ctx, audioBufers);
+
+  CONSTRUCTOR PARAMETERS::
+    An web audio context and audio buffers object.
+
+  METHODS::
+    DrumKit.play(soundIdx, when)  Plays key specified by the Keyboard object at
+                                  webaudio context time 'when' or immediately if
+                                  when==0.
+******************************************************************************/
+var Drumkit = function (ctx, audioBuffers) {
+  //// Local
+  var release = 0.5; // Release time in seconds for both the filter and gain.
+  //// Public
+  this.play = function (drum, when) {
+    var audioBuffer = audioBuffers.audioBuffer(drum);
+    if (!audioBuffer) return; // Do nothing if no audio buffer.
+    var now = when==0 ? ctx.currentTime : when; // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
+    var source = ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.start(when);
+    source.onended = function() { source.disconnect(); } // When the audio stops, remove it from the graph.
+  
+    if (drum == 0) { // HACK: need to generalize a sound pipeline
+      // Loop the bass noise for one second with a LPF and gain ramp.
+      var release=0.9
+      source.playbackRate.setValueAtTime(0.4, now);
+      source.playbackRate.linearRampToValueAtTime(0.37, now+release);
+      source.loop = true;
+      source.stop(now + release);
+  
+      var lp = ctx.createBiquadFilter(); // LPF
+      lp.type = "lowpass";
+      lp.frequency.value = 120;
+      lp.Q.value = 0.5;
+  
+      var gain = ctx.createGain(); // Ramp
+      gain.gain.setValueAtTime(0.7, now);
+      gain.gain.linearRampToValueAtTime(0, now+release);
+  
+      source.connect(lp);
+      lp.connect(gain);
+      source = gain;
+    }
+
+    source.connect(ctx.destination);
+  }
+} // Drumkit
+
+
+/******************************************************************************
+  Create a playable synthesizer.  Expects a webaudio context global ctx to be
+  defined.
+
+  USAGE::
+    var Synth = new Synthesizer(Keyboard);
+
+  CONSTRUCTOR PARAMETERS::
+    A web audio context.
+    An instantiated playable object.
+
+  METHODS::
+    Synth.play(key, when)  Plays key specified by the Keyboard object at
+                           webaudio context time 'when' or immediately if
+                           when==0.
+    Synth.lastKey()        Get last key played
+    Synth.waveform()       Get current waveform string.
+    Synth.waveformNext()   Select the next waveform.
+******************************************************************************/
+var Synthesizer = function (ctx, keyboard) {
+  //// Local
+  var _release = 0.5; // Release time in seconds for both the filter and gain.
+  var _waveforms = ["sine", "square", "sawtooth", "triangle"];
+  var _waveformIdx = 0;
+  var _lastKey = 0;
+
+  var _play = function (key, when) {
+    var now = when==0 ? ctx.currentTime : when; // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
+    var osc = ctx.createOscillator(); // Create and add to table if not already
+    osc.frequency.value = keyboard.freq(key); // Ask the keyboard object for the frequency of this key
+    osc.type = _waveforms[_waveformIdx];
+    osc.start(now);
+    osc.stop(now + _release);
+    osc.onended = (function(osc){ return function() { osc.disconnect(); }})(osc);
+
+    var gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.linearRampToValueAtTime(0, now + _release);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    _lastKey = key;
+  }
+
+  //// Public
+  this.play = _play;
+  this.lastKey = function () { return _lastKey; }
+  this.waveform = function () { return _waveforms[_waveformIdx]; }
+  this.waveformNext = function () {
+    if (_waveforms.length == ++_waveformIdx) _waveformIdx=0;
+  }
+} // Synthesizer
+
+
+/******************************************************************************
+  Creates a track.  Plays a sequence of sounds.
+
+  USAGE::
+    var track = new Track(playableObject, defaultNote);
+
+  CONSTRUCTOR PARAMETERS::
+
+  METHODS::
+    track.playable          Get the playable object
+    track.element           Get the DOM element
+    track.elementBeat(i)    Get the ith beat element
+    track.elementTicks      get array of all tick elements.
+    track.elementTick(i)    Get the ith tick element
+    track.elementName       Get the DOM name element for this track
+    track.backgroundBeat(i) Get ith beat's original background.
+    track.backgroundTick(i) Get ith tick's original background.
+    track.tickLength        Get number of ticks
+    track.key(i)            Get the key at tick i.
+    track.setKey(i, key)    Set the ith tick's key.
+    track.setAllKeys        Set the default key or drum index.
+    track.play(tick, when)  Play the note at sequence 'tick'
+    track.tick(time)        Sequences all sounds from the web audio's context
+                            current time through the specified 'time' parameter.
+******************************************************************************/
+var Track = function (ctx, beatCount, subBeatCount, playable) {
+  //// Local
+  var _beatCounter = 0;
+  var _element; // The DOM element
+  var _elementBeats = [];
+  var _elementTicks = [];
+  var _elementName;
+  var _notes = []; // Each tick (beatCount * subBeatCount) gets its own key.
+  var _beatOriginalBackground = [];
+  var _tickOriginalBackground = [];
+
+  var _createElements = function () {
+    var p;
+    _element = document.createElement('div'); // Track element
+    _element.className = "track";
+    // Add beat elements to DOM
+    for (b=0; (b < BeatCount); ++b) {
+      var beatElement = CreateAppendChild('div', _element); // Beat element added to track element
+      beatElement.className = "beat";
+      beatElement.style.backgroundColor = ["#333", "#222", "#222", "#222"][_beatCounter++ % subBeatCount];
+      // Keep track of the beat DOM element and its default background color.
+      _elementBeats.push(beatElement);
+      _beatOriginalBackground.push(beatElement.style.backgroundColor);
+      for (t=0; (t < subBeatCount); ++t) {
+        var tickElement = CreateAppendChild('p', beatElement); // Four tick elements added to each beat element
+        tickElement.className = "tick"
+        //var v = parseInt(window.location.search[1+track+(TrackCount+1)*beat], 16) // Consider prexisting beat state
+        //tickElement.innerText = (v & 1<<i)? "X" : ".";
+        tickElement.innerText = '.';
+        // Keep track of the track DOM element and its default background color.
+        _elementTicks.push(tickElement);
+        _tickOriginalBackground.push(tickElement.style.backgroundColor); // Cache original background color of beat element
+        _notes.push(b); // Build up the tick's key values.
+        tickElement.onmousedown = function (event) {
+          MouseIsDown = true;
+          ToggleButtonState = this.innerText == "." ? 1 : 2;
+          this.innerText = ToggleButtonState == 1 ? "X" : "."
+        }
+        tickElement.onmouseover = function (event) {
+          if (0 == ToggleButtonState) {
+            ToggleButtonState = this.innerText == "." ? 1 : 2;
+          }
+          if (MouseIsDown) this.innerText = ToggleButtonState == 1 ? "X" : "."
+        }
+      }
+    }
+    // Add sound name element to this track DOM element
+    _elementName = CreateAppendChild('p', _element);
+    _elementName.className = "name"
+  }
+
+  var _setAllKeys = function (key) {
+    for (var t=0; t<_notes.length; ++t) { _notes[t] = key; }
+  }
+
+  // Construct
+  _createElements();
+
+  //// Public
+  this.playable = playable;
+  this.element = _element;
+  this.elementBeat = function (i) { return _elementBeats[i]; }
+  this.elementTicks = _elementTicks;
+  this.elementTick = function (i) { return _elementTicks[i]; }
+  this.elementName = _elementName;
+  this.backgroundBeat = function (i) { return _beatOriginalBackground[i]; }
+  this.backgroundTick = function (i) { return _tickOriginalBackground[i]; }
+  this.tickLength = _notes.length;
+  this.key = function (k) { return _notes[k]; }
+  this.setKey = function (tick, key) { _notes[tick] = key; }
+  this.setAllKeys = function (key) { _setAllKeys(key); }
+  this.play = function (tick, when) { playable.play(_notes[tick], when); }
+  //this.tick = function (time) { }
+} // Track
+
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+
+DB.check((window.AudioContext || window.webkitAudioContext), "Audio context not found.");
+var ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+var Keyboard;
+//var PianoSequencerNotes = []; // 64 (4 measures, 4 beats, 4 sub-beats) Sixteenth count array of note indices
+var Synth; // The synthesizer object
+var Drumkit; // The drumkit object
+var Tracks = [];
+//var CurrentPianoNote = 0;
 var pause=false;
-var ctx = new AudioContext();
 
- // Object containg AudioBuffers derived from remote files
-var Noises = new AudioBuffersDB(
+var setTrackTickKey = false; // This becomes a function that sets the key of some track.
+
+var Noises = new AudioBuffersDB( // Object containg AudioBuffers derived from remote files
  ["808.bass.raw",
+  "mom.raw",
   "808.snare.noise.raw",
   "808.maracas.raw",
   "808.cowbell.raw",
@@ -199,301 +448,179 @@ var Noises = new AudioBuffersDB(
   "909.snare.noise.raw"]);
 
 var MouseIsDown = false;
-
-var OriginalBackgrounds = [];
 var ToggleButtonState = 0;
-
-var TrackCount = 0;
+var TrackCount = Noises.length;
 var BeatCount = 16;
-var TracksBeats = []; // Each entry will be an array of beats [{color, element}, ...]
-var BeatDuration = .25 + /*0.0625 + */ 0.03125; // Keep timing binary friendly.
-var Beat = 0; // Forever incrementing
+var BeatDuration = .125  /* + 0.0625 +  0.03125;*/ // Keep timing binary friendly.
 
 window.onmouseup = function () { MouseIsDown = false; }
 window.onkeydown = function () { if (event.keyCode == 191) DB.clear(); }
 
-/* Play a one shot noise.  TODO: handle looped sound.
-
-  Currently:
-
-  [AudioBuffer]--->[AudioBufferSourceNode]--O[Destination]
-                         .
-                         |
-                  start--+
-*/
-function play (noise, when) {
-  var source;
-  var now = when==0 ? ctx.currentTime : when; // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
-
-  if (999 <= noise) {
-    if (noise == 999) return;
-    var freq = 130.813;
-    var release=0.5
-    var osc = ctx.createOscillator(); // Create and add to table if not already
-    noise = freq * Math.pow(2, (noise-1000)/12); 
-    osc.frequency.value = noise; // The frequency is encoded as 1000+freq in parameter noise.
-    osc.type = PianoTypeDOM.innerText;
-    osc.start(now);
-    osc.stop(now + release);
-    osc.onended = (function(osc){ return function() { osc.disconnect(); }})(osc);
-
-    var gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.4, now);
-    gain.gain.linearRampToValueAtTime(0, now + release);
-
-    osc.connect(gain);
-    source = gain;
-  } else {
-    source = ctx.createBufferSource();
-    source.buffer = Noises.audioBuffer(noise);
-    source.start(when);
-    source.onended = (function(source){ return function() { source.disconnect(); }})(source);
-  
-    if (noise == 0) { // Loop the bass noise for one second
-      var release=0.5
-      //source.playbackRate.value = 0.5;
-      source.playbackRate.setValueAtTime(0.4, now);
-      source.playbackRate.linearRampToValueAtTime(0.35, now+release);
-      source.loop = true;
-      source.stop(now + release);
-  
-      var lp = ctx.createBiquadFilter();
-      lp.type = "lowpass";
-      lp.frequency.value = 120;
-      lp.Q.value = 0.5;
-  
-      var gain = ctx.createGain();
-      //gain.gain.value = 1.0; // default
-      //gain.gain.cancelScheduledValues(now);
-      gain.gain.setValueAtTime(0.7, now);
-      //gain.gain.exponentialRampToValueAtTime(0.00001, now+release);
-      gain.gain.linearRampToValueAtTime(0, now+release);
-  
-      source.connect(lp);
-      lp.connect(gain);
-      source = gain;
-    }
-  }
-
-  source.connect(ctx.destination);
-}
-
-
-
-function PreparePianoKeys () {
-  var PianoDOM = document.getElementsByClassName("piano")[0];
-  KeysDOM = PianoDOM.getElementsByTagName('p');
-  var note = 0;
-  for (var i=0; i<KeysDOM.length; ++i) {
-    KeysDOM[i].onmousedown =
-      (function(note) { // I can has a let?
-         return function(){
-          MouseIsDown=true;
-          play(1000+note, 0);
-          KeysDOM[PianoNotes[CurrentPianoNote]].style.backgroundColor=""; // Reset current key hilight
-          KeysDOM[note].style.backgroundColor="yellow"; // Set current key hilight
-          PianoNotes[CurrentPianoNote] = note;
-         }
-       })(note);
-    KeysDOM[i].onmouseover =
-      (function(note) { // I can has a let?
-         return function() {
-           if (MouseIsDown) {
-             play(1000+note, 0);
-             KeysDOM[PianoNotes[CurrentPianoNote]].style.backgroundColor=""; // Reset current key hilight
-             KeysDOM[note].style.backgroundColor="yellow"; // Set current key hilight
-             PianoNotes[CurrentPianoNote] = note;
-           }
-         }
-       })(note);
-    ++note;
-  }
-}
-
 
 var beatCounter = 0;
-var hoverHilight = 0;
-function domCreate16th (track, beat) {
-  var p;
-  var d = document.createElement('div');
+function setupTrack (track) {
+  var lastKey=0;
+  var currentMouseOverElement = false; // For some reason, mouseleave can occur after mouseover.  This is used to ignore mouseover.
 
-  d.className = "beat";
-  d.style.backgroundColor = ["#333", "#222", "#222", "#222"][beatCounter++%4];
-  for (var i=0; i<4; ++i) {
-    p = document.createElement('p');
-    p.className = "tick"
-    if (track == TrackCount) { // synth track
-      p.onmouseover = (function(beat, i){return function (event) {
-        if (0 == ToggleButtonState) {
-          ToggleButtonState = this.innerText == "." ? 1 : 2;
-        }
-        if (MouseIsDown) this.innerText = ToggleButtonState == 1 ? "X" : "."
-        TracksBeats[TrackCount-1][Math.floor(CurrentPianoNote/4)].element.children[CurrentPianoNote%4].style.backgroundColor="";
-        KeysDOM[PianoNotes[CurrentPianoNote]].style.backgroundColor="";
-        hoverHilight = beat*4 + i;
-        KeysDOM[PianoNotes[hoverHilight]].style.backgroundColor="yellow";
-      }})(beat, i);
-      p.onmouseleave = function (event) {
-        this.style.backgroundColor="";
-        KeysDOM[PianoNotes[hoverHilight]].style.backgroundColor="";
-        KeysDOM[PianoNotes[CurrentPianoNote]].style.backgroundColor="yellow";
-        TracksBeats[TrackCount-1][Math.floor(CurrentPianoNote/4)].element.children[CurrentPianoNote%4].style.backgroundColor="yellow";
-      }
-      p.onmousedown = (function(beat,i){return function (event) {
-        MouseIsDown = true;
-        ToggleButtonState = this.innerText == "." ? 1 : 2;
-        this.innerText = ToggleButtonState == 1 ? "X" : "."
-        KeysDOM[PianoNotes[CurrentPianoNote]].style.backgroundColor="";
-        CurrentPianoNote = beat*4+i;
-        KeysDOM[PianoNotes[CurrentPianoNote]].style.backgroundColor="yellow";
-      }})(beat, i);
-      var j = 1+(TrackCount+1)*BeatCount; // Start of the 2 hex character note indices
-      j += 2*(beat*4 + i);
-      PianoNotes[beat*4 + i] = parseInt(window.location.search.substring(j, j+2), 16)|0;
-    } else { // drum track
-      p.onmouseover = function (event) {
-        if (0 == ToggleButtonState) {
-          ToggleButtonState = this.innerText == "." ? 1 : 2;
-        }
-        if (MouseIsDown) this.innerText = ToggleButtonState == 1 ? "X" : "."
-      }
-      p.onmousedown = function (event) {
-        MouseIsDown = true;
-        ToggleButtonState = this.innerText == "." ? 1 : 2;
-        this.innerText = ToggleButtonState == 1 ? "X" : "."
-      }
-    }
-    var v = parseInt(window.location.search[1+track+(TrackCount+1)*beat], 16) // Consider prexisting beat state
-    p.innerText = (v & 1<<i)? "X" : ".";
-    d.appendChild(p);
-  }
+  track.elementTicks.map (function (tickElement, t) {
 
-  return d;
+    tickElement.onmouseover = function (event) {
+      currentMouseOverElement = event.srcElement;
+      if (0 == ToggleButtonState) {
+        ToggleButtonState = this.innerText == "." ? 1 : 2;
+      }
+      if (MouseIsDown) this.innerText = ToggleButtonState == 1 ? "X" : "."
+      Keyboard.keyElement(lastKey).style.backgroundColor="";
+      Keyboard.keyElement(track.key(t)).style.backgroundColor="yellow";
+      lastKey = track.key(t);
+    };
+
+    tickElement.onmouseleave = function (event) {
+      //this.style.backgroundColor="";
+      //Keyboard.keyElement(PianoSequencerNotes[hoverHilight]).style.backgroundColor="";
+      //Keyboard.keyElement(PianoSequencerNotes[CurrentPianoNote]).style.backgroundColor="yellow";
+      //TracksBeats[TrackCount-1][Floor(CurrentPianoNote/4)].element.children[CurrentPianoNote%4].style.backgroundColor="yellow";
+      if (currentMouseOverElement == event.srcElement) Keyboard.keyElement(lastKey).style.backgroundColor="";
+    };
+
+    tickElement.onmousedown = function (event) {
+      MouseIsDown = true;
+      ToggleButtonState = this.innerText == "." ? 1 : 2;
+      this.innerText = ToggleButtonState == 1 ? "X" : "."
+      //Keyboard.keyElement(PianoSequencerNotes[CurrentPianoNote]).style.backgroundColor="";
+      //CurrentPianoNote = beat*4+i;
+      //Keyboard.keyElement(PianoSequencerNotes[CurrentPianoNote]).style.backgroundColor="yellow";
+      setTrackTickKey = function (k) { track.setKey(t, k); }
+      lastKey = track.key(t);
+    };
+
+    //var j = 1+(TrackCount+1)*BeatCount; // Start of the 2 hex character note indices
+    //j += 2*(beat*4 + i);
+    //PianoSequencerNotes[beat*4 + i] = parseInt(window.location.search.substring(j, j+2), 16)|0;
+    //var v = parseInt(window.location.search[1+track+(TrackCount+1)*beat], 16) // Consider prexisting beat state
+    //tickElement.innerText = (v & 1<<i)? "X" : ".";
+  }); // map function
 }
 
-function main () {
-DB("::main");
-  var o, b, t, TracksDOM=document.getElementsByClassName("track"); // Consider beat elements in the DOM.
-  TrackCount = TracksDOM.length;
-  
-  // Create the DOM that represents the drum machine
-  for (t=0; t<TrackCount; ++t) {
-    TracksBeats[t] = new Array();
-    // Add beat elements to DOM
-    for (b=0; b<BeatCount; ++b) {
-      p = domCreate16th(t, b);
-      TracksDOM[t].appendChild(p);
-      o= new Object();
-      o.element = p;
-      o.color = p.style.backgroundColor;
-      TracksBeats[t][b] = o; // Set the global grid for easy access
+
+var setupKeyboard = function (keyboard, synth) {
+  var lastHitNote = 0;
+
+  // Register mouse event handlers for every DOM keyboard element representing a key.
+  keyboard.keyElements.map(function (keyElement, key) {
+    var keyboardPress = function () {
+      keyboard.keyElement(lastHitNote).style.backgroundColor=""; // Reset current key hilight
+      lastHitNote = key;
+      keyboard.keyElement(key).style.backgroundColor="#08f"; // Set current key hilight
+      synth.play(key, 0);
+      if (setTrackTickKey) { setTrackTickKey(key); }
     }
-    // Add sound name elements to DOM
-    var p = document.createElement('p');
-    p.className = "name"
-    p.innerText = Noises.fileName(t);
-    p.onmousedown = (function (noise) {return function () { play(noise, 0); }})(t);
-    TracksDOM[t].appendChild(p);
+    keyElement.onmousedown = function() { MouseIsDown=true; keyboardPress(); };
+    keyElement.onmouseover = function() { if (MouseIsDown) { keyboardPress(); } };
+    //keyElement.onmouseout = keyElement.onmouseup = function() { keyboard.keyElement(lastHitNote).style.backgroundColor=""; }
+  });//map function
+
+} // setupKeyboard
+
+
+var createTracks = function (synths, drumKit) {
+  var rythmDOM = document.getElementById("rythm"); // Consider the rythm block where the tracks will live.
+  var track;
+
+  for (c=0; (c < synths.length); ++c) {
+    // Create synth tracks which are kept track of in global 'Tracks'
+    Tracks.push(track = new Track(ctx, 16, 4, synths[c]));
+    track.elementName.innerText = track.playable.waveform();
+    track.elementName.onmousedown = (function (track) { return function () {
+      track.playable.waveformNext();
+      track.elementName.innerText = track.playable.waveform();
+    }})(track);
+    rythmDOM.appendChild(track.element);
+    setupTrack(track);
   }
 
-  // Create the DOM that represents the synth track.  It's logically at the end but at the top onscreen.
-  var RythmDOM = document.getElementsByClassName("rythm")[0];
-  var Track = document.createElement('div');
-  RythmDOM.insertBefore(Track, RythmDOM.firstChild);
-  TracksBeats[TrackCount] = new Array();
-  for (b=0; b<BeatCount; ++b) {
-    p = domCreate16th(TrackCount, b);
-    Track.appendChild(p);
-    o = new Object();
-    o.element = p;
-    o.color = p.style.backgroundColor;
-    TracksBeats[TrackCount][b] = o; // Set the global grid for easy access
+  // Create beat tracks which are kept track of in global 'Tracks'
+  for (i=0; (i < Noises.length); ++i) {
+    Tracks.push(track = new Track(ctx, 16, 4, drumKit));
+    track.elementName.innerText = Noises.fileName(i);
+    track.setAllKeys(i);
+    track.elementName.onmousedown = (function(track, key) { return function () { track.play(key, 0); }})(track, i);
+    rythmDOM.appendChild(track.element);
   }
-
-  // Add sound name elements to DOM
-  var p = document.createElement('p');
-  p.className = "name";
-  p.innerText = "sawtooth"
-  PianoTypeDOM = p;
-  PianoTypeDOM.onmousedown =
-    (function(note) { // I can has a let?
-       return function(){ PianoTypeDOM.innerText = ["sine", "square", "sawtooth", "triangle"][++note%4] }
-     })(0);
-  Track.appendChild(p);
-  Noises.setAudioBuffer(TrackCount, "synth"); // HACK
-  ++TrackCount;
+} // createTracks
 
 
-  // A beat used to be the smallest tick length but I've since added 16th notes (4 more beats per beat).
-  var LastRenderedTick = -1;
-  var BeatLast = 0; // Quarter beat
-  var SBeatLast = 0; // Sixteenth beat
-  function rendererLoop () {
+/* Whenver this is called, it will highlight whatever beat should be playing
+   currently.  It uses the web audio context's counter as a reference.
+*/
+var LastRenderedTick = -1;
+var BeatLast = 0; // Quarter beat
+
+var rendererLoop = function () {
     if (pause) return;
     var t;
-    var tick = Math.floor(ctx.currentTime / (BeatDuration/4)) % (BeatCount*4);
-    var beat = Math.floor(tick/4);
-    var sbeat = [0,2,3,1][tick%4];
+    var tick = Floor(ctx.currentTime / (BeatDuration/4)) % (BeatCount*4); // Realtime tick (16th beat)
+    var beat = Floor(tick/4); // 1/4 beat
 
     if (LastRenderedTick == tick) return;
 
-    for (t=0; t<TrackCount; ++t) {
-      // 16th beat rendering
+    for (t=0; (t < Tracks.length); ++t) {
       // 1/4th beat rendering
-      TracksBeats[t][BeatLast].element.style.backgroundColor = TracksBeats[t][BeatLast].color;
-      TracksBeats[t][beat].element.style.backgroundColor = 'green';//"rgb("+Math.floor(Math.random()*256)+","+Math.floor(Math.random()*256)+","+Math.floor(Math.random()*256)+")";
+      Tracks[t].elementBeat(BeatLast).style.backgroundColor = Tracks[t].backgroundBeat(BeatLast);
+      Tracks[t].elementBeat(beat).style.backgroundColor = "green";
     }
     LastRenderedTick = tick;
     BeatLast = beat;
-    SBeatLast = sbeat;
-    //setTimeout(rendererLoop, 100);
-  }
-
-  var pattern="";
-  var sum = 0;
-  function sequencerLoop () {
-    var t, pre='', ret='';
-    if (pause) return;
-    while ((Beat * BeatDuration) <= (ctx.currentTime + 1.0)) {
-      if (0 == (Beat % BeatCount)) {
-        for (i=0; i<PianoNotes.length; ++i) // Add the note values for the synth track
-           pattern += (PianoNotes[i]<16?"0":"") + PianoNotes[i].toString(16);
-        window.history.replaceState("ohhai", "Digital Audio Workstation", document.location.href.split('?')[0] + '?'  + pattern);
-        pattern="";
-      }
-      for (t=0; t<TrackCount; ++t) {
-        sum = 0;
-        for (s=0; s<4; ++s) {
-          var note = TracksBeats[t][Beat % BeatCount].element.children[s].innerText;
-          if (('.' != note) && Noises.audioBuffer(t)) { // If the noise actually exists (has been loaded)...
-            if (t == TrackCount-1)
-              play(1000 + PianoNotes[(Beat%BeatCount)*4 + s], Beat * BeatDuration + (s*BeatDuration)/4);
-            else
-              play(t, Beat * BeatDuration + (s*BeatDuration)/4);
-            sum += 1<<s;
-          } //if
-        } // sub beats
-        pattern = pattern + sum.toString(16);
-      } // beats
-      Beat += 1.0;
-    } // while
-    //setTimeout(sequencerLoop, 100);  // This is not a proper way of handling timing.  Temporary hack!
-  }
-
-  setInterval(rendererLoop, 10);
-  setInterval(sequencerLoop, 10);
-DB("--main");
 }
 
+
+var Beat = 0; // Forever incrementing
+var pattern="";
+var sum = 0;
+var sequencerLoop = function () { // HACK: The sequencer
+  if (pause) return;
+  while ((Beat * BeatDuration) <= (ctx.currentTime + 1.0)) { // Perform up to one second in the future
+
+/*
+    if (0 == (Beat % BeatCount)) { //  On the initial beat, upate the URL's get string.
+      for (i=0; i<PianoSequencerNotes.length; ++i) // Add the note values for the synth track
+         pattern += (PianoSequencerNotes[i]<16?"0":"") + PianoSequencerNotes[i].toString(16);
+      window.history.replaceState("ohhai", "Digital Audio Workstation", document.location.href.split('?')[0] + '?'  + pattern);
+      pattern="";
+    }
+*/
+    for (var t=0; (t < Tracks.length); ++t) {
+      sum = 0;
+      for (s=0; s<4; ++s) {
+        var note = Tracks[t].elementTick(4*(Beat%BeatCount) + s).innerText;
+        if ('.' != note ) {
+            Tracks[t].play((Beat%BeatCount)*4 + s, Beat * BeatDuration + (s*BeatDuration)/4);
+          sum += 1<<s; // Add the 16th notes giving a value between 0x0 and 0xf (used in the URL's get string);
+        } //if
+      } // sub beats
+      pattern = pattern + sum.toString(16);
+    } // beats
+    Beat += 1.0;
+  } // while
+}
 
 
 /* Main
 */
 window.onload = function () {
-  DB("::window.onload");
-  PreparePianoKeys();
-  main();
-  DB("--window.onload");
+  DB("::onload");
+
+  Keyboard = new PianoKeyboard("piano", 39, 0, 1, 130.813); // Create a piano in the dom.  SID 4 EVR
+  Synth    = new Synthesizer(ctx, Keyboard);
+  Synth2   = new Synthesizer(ctx, Keyboard);
+  Synth3   = new Synthesizer(ctx, Keyboard);
+  DrumKit  = new Drumkit(ctx, Noises);
+  setupKeyboard(Keyboard, Synth); // Give the piano immediate playing capability
+  createTracks([Synth, Synth2, Synth3], DrumKit);
+  setInterval(rendererLoop, 50);
+  setInterval(sequencerLoop, 50);
+
+  DB("--onload [" + DB.status() + "]");
 }
 
 //]]></script>
