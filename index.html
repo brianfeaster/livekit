@@ -17,11 +17,11 @@
 </p>
 
 <div id="piano"></div>
+<p style="display:inline-block; background:green"  onmousedown="pause=!pause; this.style.background=pause?'red':'green'; Beat = Floor(ctx.currentTime / BeatDuration)">pause</p>
 <br/>
 <!-- each track gets a bunch of beats -->
 <div id="rythm">
 </div>
-<p style="display:inline-block; background:#080"  onmousedown="pause=!pause; this.style.background=pause?'red':'green'; Beat = Floor(ctx.currentTime / BeatDuration)">pause</p>
 
 
 <script type="text/javascript">//<![CDATA[
@@ -485,25 +485,26 @@ function setupSynthTrack (track) {
 
   track.elementTicks.map(function (tickElement, t) {
 
-    tickElement.onmouseover = function (event) { // TODO move this elsewhere just like onmousedown
+    tickElement.onmouseover = function (event) {
       currentMouseOverElement = event.srcElement;
       currentPianoKey = track.key(t);
-      Keyboard.keyElement(track.key(t)).style.backgroundColor="yellow";
+      Keyboard.keyElement(currentPianoKey).style.backgroundColor="yellow";
       if (0 == ToggleButtonState) {
         ToggleButtonState = this.innerText == "." ? 1 : 2;
       }
       if (MouseIsDown) this.innerText = ToggleButtonState == 1 ? "X" : "."
-      if (this.innerText=="X") track.playable.play(track.key(t), 0);
+      if (this.innerText=="X") track.playable.play(currentPianoKey, 0);
     }
 
-    tickElement.onmouseleave = function (event) { // TODO move this elsewhere just like onmousedown
-      if (event.srcElement == currentMouseOverElement) {
+    tickElement.onmouseleave = function (event) {
+      if (event.srcElement == currentMouseOverElement) { // Leaving a tick that we are still on.
         currentMouseOverElement = false;
         currentPianoKey = -1;
+        Keyboard.keyElement(track.key(t)).style.backgroundColor = ""; // Undo yellow highlighting.
+        if (currentActiveTrack && 0 <= currentActiveTrack.cursor()) Keyboard.keyElement(currentActiveTrack.key(currentActiveTrack.cursor())).style.background = "blue";  // Redo blue in case it was beneath yellow.
+      } else if (track.key(t) != currentPianoKey) { // Leaving a tick that we are not on any longer.
         Keyboard.keyElement(track.key(t)).style.backgroundColor = "";
-        if (currentActiveTrack && 0 <= currentActiveTrack.cursor()) Keyboard.keyElement(currentActiveTrack.key(currentActiveTrack.cursor())).style.background = "blue";
-      } else if (track.key(t) != currentPianoKey) {
-        Keyboard.keyElement(track.key(t)).style.backgroundColor = "";
+        if (currentActiveTrack && 0 <= currentActiveTrack.cursor() && currentActiveTrack.key(currentActiveTrack.cursor()) != currentPianoKey) Keyboard.keyElement(currentActiveTrack.key(currentActiveTrack.cursor())).style.background = "blue";  // Redo blue in case it was beneath yellow.
       }
     }
 
@@ -681,6 +682,70 @@ var sequencerLoop = function () { // HACK: The sequencer
 }
 
 
+// This is some fucked up shit right here but only because javascript is so WAT?!  What happens when the algorithm runs out of array elemnts to encode before it can fill an entire octet?  It will shift an empty array resulting in undefined but fortunately undefined & AnyInt == 0.
+
+var encode = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','-','_'];
+
+var testBase64 = function (ary) {
+  var left = 8; // How many bits left ito encode in the first ary element
+  var i, bits;
+  var result = "";
+
+  DB(ary);
+  while (ary.length) {
+    if (left == 8) { // [xxxxxx..]
+      bits = ary[0] >> 2;
+      result += encode[bits];
+      left = 2;
+    } else if (left == 2) { // [......xx][xxxx....]
+      bits = ((ary.shift() & 3) << 4);
+      bits += (ary[0] >> 4);
+      result += encode[bits];
+      left = 4;
+    } else if (left == 4) { // [....xxxx][xx......]
+      bits = ((ary.shift() & 15) << 2);
+      bits += (ary[0] >> 6);
+      result += encode[bits];
+      left = 6;
+    } else if (left == 6) { // [..xxxxxx]
+      bits = (ary.shift() & 63)
+      result += encode[bits];
+      left = 8;
+    }
+  }
+  DB(result);
+
+  ary=[];
+  i=0;
+  while (i<result.length) {
+      bits =  (encode.indexOf(result[i++]) << 2) // [xxxxxx]
+      if (result.length == i) {
+        break;
+        ary.push(bits);
+      }
+      bits += (encode.indexOf(result[i]) >> 4);  // [xx....]
+      ary.push(bits);
+
+      bits = ((encode.indexOf(result[i++])&15) << 4)  // [..xxxx]
+      if (result.length == i) {
+        break;
+        ary.push(bits);
+      }
+      bits += (encode.indexOf(result[i]) >> 2)    // [xxxx..]
+      ary.push(bits);
+
+      bits = ((encode.indexOf(result[i++])&3) << 6)  // [....xx]
+      if (result.length == i) {
+        break;
+        ary.push(bits);
+      }
+      bits += (encode.indexOf(result[i++]))       // [xxxxxx]
+      ary.push(bits);
+  }
+
+  DB(ary);
+}
+
 
 /******************************************************************************
 
@@ -699,6 +764,8 @@ window.onload = function () {
   createTracks([Synth, Synth2, Synth3], DrumKit);
   setInterval(rendererLoop, 50);
   setInterval(sequencerLoop, 50);
+
+  testBase64([255, 255, 255, 4]);
 
   DB("--onload [" + DB.status() + "]");
 }
