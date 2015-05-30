@@ -682,69 +682,58 @@ var sequencerLoop = function () { // HACK: The sequencer
 }
 
 
-// This is some fucked up shit right here but only because javascript is so WAT?!  What happens when the algorithm runs out of array elemnts to encode before it can fill an entire octet?  It will shift an empty array resulting in undefined but fortunately undefined & AnyInt == 0.
+var Base64 = (function () {
+  // Private
+  var self;
+  var base64table = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','-','_'];
 
-var encode = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','-','_'];
-
-var testBase64 = function (ary) {
-  var left = 8; // How many bits left ito encode in the first ary element
-  var i, bits;
-  var result = "";
-
-  DB(ary);
-  while (ary.length) {
-    if (left == 8) { // [xxxxxx..]
-      bits = ary[0] >> 2;
-      result += encode[bits];
-      left = 2;
-    } else if (left == 2) { // [......xx][xxxx....]
-      bits = ((ary.shift() & 3) << 4);
-      bits += (ary[0] >> 4);
-      result += encode[bits];
-      left = 4;
-    } else if (left == 4) { // [....xxxx][xx......]
-      bits = ((ary.shift() & 15) << 2);
-      bits += (ary[0] >> 6);
-      result += encode[bits];
-      left = 6;
-    } else if (left == 6) { // [..xxxxxx]
-      bits = (ary.shift() & 63)
-      result += encode[bits];
-      left = 8;
+  var _encode = function (ary) {
+    var ary1 = ary.slice(0); // Copy the array since I shift the elements off.
+    var octet=0;     // Which octet to create
+    var str = ""; // The encoded string
+    while (ary1.length) {
+      str +=
+        base64table[(0 == octet) ? ary1[0] >> 2 :                                  // [000000..]
+                    (1 == octet) ? ((ary1.shift() & 0b11) << 4) + (ary1[0] >> 4) : // [......00][1111....]
+                    (2 == octet) ? ((ary1.shift() & 0b1111) << 2) + (ary1[0] >> 6) //           [....1111][22......]
+                                 : ary1.shift() & 0b111111];                       //                     [..222222]
+      octet = ++octet & 3;
     }
-  }
-  DB(result);
-
-  ary=[];
-  i=0;
-  while (i<result.length) {
-      bits =  (encode.indexOf(result[i++]) << 2) // [xxxxxx]
-      if (result.length == i) {
-        break;
-        ary.push(bits);
-      }
-      bits += (encode.indexOf(result[i]) >> 4);  // [xx....]
-      ary.push(bits);
-
-      bits = ((encode.indexOf(result[i++])&15) << 4)  // [..xxxx]
-      if (result.length == i) {
-        break;
-        ary.push(bits);
-      }
-      bits += (encode.indexOf(result[i]) >> 2)    // [xxxx..]
-      ary.push(bits);
-
-      bits = ((encode.indexOf(result[i++])&3) << 6)  // [....xx]
-      if (result.length == i) {
-        break;
-        ary.push(bits);
-      }
-      bits += (encode.indexOf(result[i++]))       // [xxxxxx]
-      ary.push(bits);
+    return str;
   }
 
-  DB(ary);
-}
+  var _decode = function (str) {
+    var ary=[];
+    var i=0, byte;
+    while (i < str.length) {
+      ary.push((base64table.indexOf(str[i]) << 2) + (base64table.indexOf(byte=str[++i]) >> 4)); // [000000][00....]
+      if (++i == str.length) break;
+      ary.push(((base64table.indexOf(byte)&15) << 4) + (base64table.indexOf(byte=str[i]) >> 2));//         [..1111][1111..]
+      if (++i == str.length) break;
+      ary.push(((base64table.indexOf(byte)&3) << 6) + (base64table.indexOf(str[i])));           //                 [....22][222222]
+      if (++i == str.length) break;
+    }
+    return ary;
+  }
+
+  var _test = function (ary) {
+    str = Base64(ary);
+    ary2 = Base64(str);
+    DB.check(ary.toString() == ary2.toString(), ary + " != " + ary2);
+  }
+
+  //// Public
+  self = function (o) {
+    if (Array.isArray(o)) return _encode(o);
+    else if (typeof o == "string") return _decode(o);
+    else return false;
+  }
+  self.encode = _encode;
+  self.decode = _decode;
+  self.test = _test;
+  return self;
+})();
+
 
 
 /******************************************************************************
@@ -765,7 +754,22 @@ window.onload = function () {
   setInterval(rendererLoop, 50);
   setInterval(sequencerLoop, 50);
 
-  testBase64([255, 255, 255, 4]);
+  Base64.test([]);
+  Base64.test([0]);
+  Base64.test([1]);
+  Base64.test([2]);
+  Base64.test([255]);
+  Base64.test([1,255]);
+  Base64.test([255,1]);
+  Base64.test([255,1]);
+  Base64.test([255,1,255]);
+  Base64.test([255,1,255]);
+  Base64.test([1,255,1]);
+  Base64.test([0,0,0,0,0]);
+  Base64.test([0,0,0,0,255]);
+  Base64.test([255,0,0,0,0]);
+  Base64.test([1,1,1,1,1]);
+  Base64.test([255,255,255,255,255]);
 
   DB("--onload [" + DB.status() + "]");
 }
