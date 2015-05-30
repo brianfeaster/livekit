@@ -81,6 +81,73 @@ var DB = (function () {
 
 
 /******************************************************************************
+  Base64 encoder and decoder
+
+  USAGE::
+    Base64([1,2,3])  Returns a base64 encoded string of the byte values in
+                     the array.
+    Base64("0G83")   Returns the decoded base64 string as an array of bytes
+                     values.
+
+    Base64.encode()  Explicit call.
+    Base64.decode()  Explicit call.
+    Base64.test()    Calls DB.check on the comparision of the output of the
+                     encoding then decoding of the passed byte array.
+******************************************************************************/
+var Base64 = (function () {
+  // Private
+  var self;
+  var base64table = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','-','_'];
+
+  var _encode = function (ary) {
+    var ary1 = ary.slice(0); // Copy the array since I shift the elements off.
+    var octet=0;     // Which octet to create
+    var str = ""; // The encoded string
+    while (ary1.length) {
+      str +=
+        base64table[(0 == octet) ? ary1[0] >> 2 :                                  // [000000..]
+                    (1 == octet) ? ((ary1.shift() & 0b11) << 4) + (ary1[0] >> 4) : // [......00][1111....]
+                    (2 == octet) ? ((ary1.shift() & 0b1111) << 2) + (ary1[0] >> 6) //           [....1111][22......]
+                                 : ary1.shift() & 0b111111];                       //                     [..222222]
+      octet = ++octet & 3;
+    }
+    return str;
+  }
+
+  var _decode = function (str) {
+    var ary=[];
+    var i=0, byte;
+    while (i < str.length) {
+      ary.push((base64table.indexOf(str[i]) << 2) + (base64table.indexOf(byte=str[++i]) >> 4)); // [000000][00....]
+      if (++i == str.length) break;
+      ary.push(((base64table.indexOf(byte)&15) << 4) + (base64table.indexOf(byte=str[i]) >> 2));//         [..1111][1111..]
+      if (++i == str.length) break;
+      ary.push(((base64table.indexOf(byte)&3) << 6) + (base64table.indexOf(str[i])));           //                 [....22][222222]
+      if (++i == str.length) break;
+    }
+    return ary;
+  }
+
+  var _test = function (ary) {
+    str = Base64(ary);
+    ary2 = Base64(str);
+    DB.check((ary.toString() == ary2.toString()), ary + " != " + ary2);
+  }
+
+  //// Public
+  self = function (o) {
+    if (Array.isArray(o)) return _encode(o);
+    else if (typeof o == "string") return _decode(o);
+    else return false;
+  }
+  self.encode = _encode;
+  self.decode = _decode;
+  self.test = _test;
+  return self;
+})();
+
+
+/******************************************************************************
   Database of Web Audio audio buffers.  It will download and convert raw audio
   files into ready to use AudioBuffers.
 
@@ -364,8 +431,6 @@ var Track = function (ctx, beatCount, subBeatCount, playable) {
       for (t=0; (t < subBeatCount); ++t) {
         var tickElement = CreateAppendChild('p', beatElement); // Four tick elements added to each beat element
         tickElement.className = "tick"
-        //var v = parseInt(window.location.search[1+track+(TrackCount+1)*beat], 16) // Consider prexisting beat state
-        //tickElement.innerText = (v & 1<<i)? "X" : ".";
         tickElement.innerText = '.';
         // Keep track of the track DOM element and its default background color.
         _elementTicks.push(tickElement);
@@ -615,6 +680,8 @@ var createTracks = function (synths, drumKit) {
     rythmDOM.appendChild(track.element);
     setupDrumTrack(track);
   }
+
+  restoreTicks();
 } // createTracks
 
 
@@ -627,7 +694,6 @@ var createTracks = function (synths, drumKit) {
 var LastRenderedTick = -1;
 var BeatLast = 0; // Quarter beat
 var Beat = 0; // Forever incrementing
-var pattern="";
 var sum = 0;
 
 
@@ -651,23 +717,64 @@ var rendererLoop = function () {
     BeatLast = beat;
 }
 
+var saveTicks = function () {
+  var pattern=[];
+  var synthTracks=[]; 
+
+  // The track ticks
+  Tracks.map(function (track) {
+    var byte=0;
+    if (track.playable instanceof Synthesizer) synthTracks.push(track); // Keep track of synth tracks.
+    track.elementTicks.map(function (te, i) {
+      byte = (byte >> 1) + ("." == te.innerText ? 0 : 0b10000000);
+      if (7==i%8) {
+        pattern.push(byte);
+        byte=0;
+      }
+    });
+  });
+
+  // The synth track notes
+  var i;
+  synthTracks.map(function (track) {
+    for (i=0; i<track.tickLength; ++i) {
+      pattern.push(track.key(i))
+    }
+  });
+
+  window.history.replaceState("ohhai", "Digital Audio Workstation", document.location.href.split('?')[0] + '?'  + Base64(pattern));
+}
+
+var restoreTicks = function () {
+  var ary = Base64(window.location.search.substring(1));
+  var bit = 0;
+  var synthTracks=[];
+
+  Tracks.map(function (track) {
+    if (track.playable instanceof Synthesizer) synthTracks.push(track); // Keep track of synth tracks.
+    track.elementTicks.map(function (te, i) {
+      bit = i%8;
+      te.innerText = ((ary[0]>>bit) & 1) ? "X" : ".";
+      if (7==bit) ary.shift();
+    });
+  });
+
+  synthTracks.map(function (track) {
+    for (i=0; i<track.tickLength; ++i) {
+      track.setKey(i, ary.shift());
+    }
+  });
+}
+
 /* Periodically tell the various tracks to send their audio out to the audio
    context.
 */
 var sequencerLoop = function () { // HACK: The sequencer
   if (pause) return;
-  while ((Beat * BeatDuration) <= (ctx.currentTime + 1.0)) { // Perform up to one second in the future
 
-/*
-    if (0 == (Beat % BeatCount)) { //  On the initial beat, upate the URL's get string.
-      for (i=0; i<PianoSequencerNotes.length; ++i) // Add the note values for the synth track
-         pattern += (PianoSequencerNotes[i]<16?"0":"") + PianoSequencerNotes[i].toString(16);
-      window.history.replaceState("ohhai", "Digital Audio Workstation", document.location.href.split('?')[0] + '?'  + pattern);
-      pattern="";
-    }
-*/
+  while ((Beat * BeatDuration) <= (ctx.currentTime + 1.0)) { // Perform up to one second in the future
+    if (0 == (Beat % BeatCount)) { saveTicks(); } //  On the initial beat, upate the URL's get string.
     for (var t=0; (t < Tracks.length); ++t) {
-      sum = 0;
       for (s=0; s<4; ++s) {
         var note = Tracks[t].elementTick(4*(Beat%BeatCount) + s).innerText;
         if ('.' != note ) {
@@ -675,64 +782,11 @@ var sequencerLoop = function () { // HACK: The sequencer
           sum += 1<<s; // Add the 16th notes giving a value between 0x0 and 0xf (used in the URL's get string);
         } //if
       } // sub beats
-      pattern = pattern + sum.toString(16);
     } // beats
     Beat += 1.0;
   } // while
 }
 
-
-var Base64 = (function () {
-  // Private
-  var self;
-  var base64table = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','-','_'];
-
-  var _encode = function (ary) {
-    var ary1 = ary.slice(0); // Copy the array since I shift the elements off.
-    var octet=0;     // Which octet to create
-    var str = ""; // The encoded string
-    while (ary1.length) {
-      str +=
-        base64table[(0 == octet) ? ary1[0] >> 2 :                                  // [000000..]
-                    (1 == octet) ? ((ary1.shift() & 0b11) << 4) + (ary1[0] >> 4) : // [......00][1111....]
-                    (2 == octet) ? ((ary1.shift() & 0b1111) << 2) + (ary1[0] >> 6) //           [....1111][22......]
-                                 : ary1.shift() & 0b111111];                       //                     [..222222]
-      octet = ++octet & 3;
-    }
-    return str;
-  }
-
-  var _decode = function (str) {
-    var ary=[];
-    var i=0, byte;
-    while (i < str.length) {
-      ary.push((base64table.indexOf(str[i]) << 2) + (base64table.indexOf(byte=str[++i]) >> 4)); // [000000][00....]
-      if (++i == str.length) break;
-      ary.push(((base64table.indexOf(byte)&15) << 4) + (base64table.indexOf(byte=str[i]) >> 2));//         [..1111][1111..]
-      if (++i == str.length) break;
-      ary.push(((base64table.indexOf(byte)&3) << 6) + (base64table.indexOf(str[i])));           //                 [....22][222222]
-      if (++i == str.length) break;
-    }
-    return ary;
-  }
-
-  var _test = function (ary) {
-    str = Base64(ary);
-    ary2 = Base64(str);
-    DB.check(ary.toString() == ary2.toString(), ary + " != " + ary2);
-  }
-
-  //// Public
-  self = function (o) {
-    if (Array.isArray(o)) return _encode(o);
-    else if (typeof o == "string") return _decode(o);
-    else return false;
-  }
-  self.encode = _encode;
-  self.decode = _decode;
-  self.test = _test;
-  return self;
-})();
 
 
 
