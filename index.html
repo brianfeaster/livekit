@@ -747,6 +747,7 @@ var saveTicks = function () {
 
 var restoreTicks = function () {
   var ary = Base64(window.location.search.substring(1));
+  if (0 == ary.length) return;
   var bit = 0;
   var synthTracks=[];
 
