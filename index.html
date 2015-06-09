@@ -3,11 +3,11 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
  <title>Digital Audio Workstation</title>
- <link rel="stylesheet" href="index.css" type="text/css" media="screen" title="Shrewm"/ >
+ <link rel="stylesheet" href="index.css" type="text/css" media="screen" title="Shrewm"/>
 </head>
 <body oncontextmenu="return false;">
 
-<h1>Digital Audio Workstation</h1>
+<h1>Digital Audio Workstation &#x2669; &#x266a; &#x266b; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
 <p id="nDB" style="width:20em; background:black; z-index:1; border:solid thin green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; top:0"></p>
 <p class="mainNav">
@@ -18,11 +18,12 @@
 
 <div id="piano"></div>
 <div style="display:inline-block">
- <p id="speed" style="display:inline-block; background:blue" contenteditable="true">120</p></br>
+ <p id="freq" style="display:inline-block; background:cyan" contenteditable="true">65.4064</p>
+ <p id="speed" style="display:inline-block; background:blue" contenteditable="true">120</p>
  <p id="pause" style="display:inline-block; background:green" onmousedown="pause(event)">pause</p>
  <p id="reset" style="display:inline-block; background:purple" onmousedown="reset(event)">reset</p>
 </div>
-<br/>
+<div id="sheet"></div>
 <!-- each track gets a bunch of beats -->
 <div id="rythm">
 </div>
@@ -271,6 +272,10 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
   this.keyElements = _keysDOM;
   this.keyElement = function (i) { return _keysDOM[i]; }
   this.freq = function (k) { return _frequencies[k]; }
+  this.setStartFrequency = function (newStartFrequency) {
+    var i;
+    for (i=0; (i < keyCount); ++i) _frequencies[i] = newStartFrequency * Pow(2, i/12.0);
+  }
 } // PianoKeyboard 
 
 
@@ -413,7 +418,7 @@ var Synthesizer = function (ctx, keyboard) {
   //// Local
   var _release = 0.5; // Release time in seconds for both the filter and gain.
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
-  var _waveformIdx = 0;
+  var _waveformIdx = 3;
 
   var _play = function (key, vol, when) {
     var now = when==0 ? ctx.currentTime : when; // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
@@ -486,7 +491,7 @@ var Track = function (beatCount, subBeatCount, beatsPerMeasure, playable) {
   var _beatOriginalBackground = [];
   var _tickOriginalBackground = [];
   var _cursor = -1;
-  var _vol = 0.5;
+  var _vol = 0.4;
 
   var _createElements = function () {
     var p;
@@ -609,7 +614,7 @@ var currentActiveTrack = false;  // This is the last track acted upon.
 var setTrackTickKey = false; // HACK: This becomes a function that sets the key of some track.  Move this functionality into the piano keyboard object.
 
 var ToggleButtonState = 1;
-var BeatDuration = .50 ; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.
+var BeatDuration = .75 ; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
@@ -715,10 +720,13 @@ function setupSynthTrack (track) {
 
       // Play the note
       if (this.innerText=="X") track.playable.play(track.key(t), track.vol(), 0);
+
+      var sheetElement = document.getElementById("sheet");
+      sheetElement.innerText = "";
+      track.elementTicks.map(function (e){ sheetElement.innerText += e.innerText; });
     };
 
-    tickElement.onmouseup = function (event) {
-    }
+    tickElement.onmouseup = function (event) { }
 
   }); // map function
 }
@@ -892,7 +900,7 @@ var pause = function (event) {
   } else {
     DB.post('pause', 'resume');
     event.target.style.background = 'green';
-    nextBeatTime = ctx.currentTime + 0.25;
+    if (nextBeatTime <= ctx.currentTime) { nextBeatTime = ctx.currentTime + 0.25; }
   }
 }
 
@@ -900,6 +908,7 @@ var reset = function (event) {
   if (Pause) {
     Pause = false;
     DB.post('pause', 'resume');
+    event.target.style.background = 'green';
   }
   Beat = 0;
   nextBeatTime = ctx.currentTime + 0.25;
@@ -915,7 +924,8 @@ var reset = function (event) {
 window.onload = function () {
   DB("::onload");
 
-  Keyboard = new PianoKeyboard("piano", 41, 0, 1, 130.813); // Create a piano in the dom.  SID 4 EVR
+  Keyboard = new PianoKeyboard("piano", 61, 0, 2, 95.4064); // Create a piano in the dom.  61 keys, starting at C in octave 2.  SID 4 EVR
+  //Keyboard = new PianoKeyboard("piano", 61, 0, 2, 65.4064); // Create a piano in the dom.  61 keys, starting at C in octave 2.  SID 4 EVR
   Synth    = new Synthesizer(ctx, Keyboard);
   Synth2   = new Synthesizer(ctx, Keyboard);
   Synth3   = new Synthesizer(ctx, Keyboard);
@@ -929,13 +939,23 @@ window.onload = function () {
   nextBeatTime = ctx.currentTime+1.2;
 
   document.getElementById('speed').onkeypress = function (event) {
-    if (event.charCode == 13) {
-      setTimeout(function () {
-                   var newDuration = parseInt(event.target.innerText.replace("\n",""));
-                   event.target.innerText = newDuration;
-                   BeatDuration = 60/newDuration;
-                 }); // function
-    } // if
+    setTimeout(function() { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
+      if (event.charCode == 13) {
+        var newDuration = parseInt(event.target.innerText.replace("\n",""));
+        event.target.innerText = newDuration;
+        BeatDuration = 60/newDuration;
+      } // if
+    }); // function
+  } // function
+
+  document.getElementById('freq').onkeypress = function (event) {
+    setTimeout(function () { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
+      if (event.charCode == 13) {
+      
+      Keyboard.setStartFrequency(event.target.innerText = parseFloat(event.target.innerText.replace("\n","")));
+    
+      } // if
+    }); // function
   } // function
 
   DB("--onload [" + DB.status() + "]");
