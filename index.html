@@ -5,31 +5,36 @@
  <title>Digital Audio Workstation</title>
  <link rel="stylesheet" href="index.css" type="text/css" media="screen" title="Shrewm"/>
 </head>
-<body oncontextmenu="return false;">
+<body Xoncontextmenu="return false;">
 
 <h1>Digital Audio Workstation &#x2669; &#x266a; &#x266b; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
-<p id="DB" style="width:20em; background:black; z-index:1; border:solid thin green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; top:0"></p>
+<p id="DB" style="width:20em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; top:0"></p>
 <p class="mainNav">
  <a href="http://webaudio.github.io/web-audio-api/">[WebAudio]</a>
  <a href="http://validator.w3.org/check/referer">[XHTML 1.0]</a>
- <a href="http://jigsaw.w3.org/css-validator/check/referer/">[CSS 2.1]</a>
+ <a href="http://jigsaw.w3.org/css-validator/tabindex="1" check/referer/">[CSS 2.1]</a>
 </p>
 
 <div id="piano"></div>
-<div style="display:inline-block">
- <p id="freq" style="display:inline-block; background:cyan" contenteditable="true">65.4064</p>
- <p id="speed" style="display:inline-block; background:blue" contenteditable="true">120</p>
- <p id="pause" style="display:inline-block; background:green" onmousedown="pause(event)">pause</p>
- <p id="reset" style="display:inline-block; background:purple" onmousedown="reset(event)">reset</p>
+
+<div style="display:inline-block; position:relative">
+ <p id="freq"  tabindex="0" style="display:inline-block; background:cyan"   contenteditable="true">65.4064</p>
+ <p id="speed" tabindex="0" style="display:inline-block; background:blue"   contenteditable="true">120</p>
+ <p id="pause" tabindex="0" style="display:inline-block; background:green"  onmousedown="pause(event)">pause</p>
+ <p id="reset" tabindex="0" style="display:inline-block; background:purple" onmousedown="reset(event)">reset</p>
+ <p id="hide"  tabindex="0" style="display:inline-block; background:red"    onmousedown="hide(event)">hide</p>
 </div>
+
 <div id="sheet"></div>
-<!-- each track gets a bunch of beats -->
-<div id="rythm">
+
+<div id="rythmContainer">
+ <div id="rythm">
+ </div>
 </div>
 
 <script type="text/javascript">//<![CDATA[
-
+"use strict"
 /******************************************************************************
 
   Useful aliases and objects
@@ -38,6 +43,7 @@
 
 var Floor = Math.floor;
 var Pow   = Math.pow;
+var Abs   = Math.abs;
 var CreateAppendChild = function (name, element) { return element.appendChild(document.createElement(name)); }
 var CreateInsertBefore = function (name, element) { return element.insertBefore(document.createElement(name), element.firstChild); }
 
@@ -64,7 +70,7 @@ var DB = (function () {
 
   var setStyles = function (e) {
     return;
-    e.style.border = "solid thin green";
+    e.style.border = "solid 1px green";
     e.style.whiteSpace = "pre";
     e.style.overflow = "auto";
     e.style.maxHeight = "20em";
@@ -223,9 +229,14 @@ var Base64 = (function () {
     first specified key's frequency
 
   METHODS::
-    Keyboard.keyElements     All key DOM elements in an array
-    Keyboard.keyElement      Get the DOM element representing the white or black key
-    Keyboard.freq(key)       Frequency of key.  Indexed between 0 and number of keys (36 in this example).
+    Keyboard.keyElements       All key DOM elements in an array
+    Keyboard.keyElement(key)   Get the DOM element representing the white or black key  Indexed between 0 and number of keys-1.
+    Keyboard.freq(key)         Frequency of key.
+    Keyboard.setStartFrequency Reset the base frequencies of the keyboard (first note's frequency)
+    Keyboard.highlight(key, color);
+    Keyboard.highlight(key, color);
+    Keyboard.unhighlight(key); // Removes last/top highlighted color
+
 ******************************************************************************/
 var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequency) {
 
@@ -236,6 +247,7 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
 
   var _keysDOM = []; // Keeps track of the DOM elements which represent the white and black keys in order.
   var _frequencies = [];
+  var _highlights = []; // Array of stacks.  An empty stack implies no high-light.
 
   var _createDOM = function () {
     var notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -259,6 +271,7 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
 
       _keysDOM.push(newKey); // Keep track of each created key.
       _frequencies.push(startFrequency * Pow(2, i/12.0));
+      _highlights.push([]);
     }
   }
 
@@ -266,6 +279,7 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
 
   _createDOM();
   DB.check(keyCount == _keysDOM.length, "ERROR: PianoKeyboard: Created incorrect number of keys.");
+  DB.check(keyCount == _frequencies.length, "ERROR: PianoKeyboard: Created incorrect number of frequencies.");
 
   // Public
 
@@ -275,6 +289,25 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
   this.setStartFrequency = function (newStartFrequency) {
     var i;
     for (i=0; (i < keyCount); ++i) _frequencies[i] = newStartFrequency * Pow(2, i/12.0);
+  }
+  this.highlight = function (key, color)  {
+    if ((0 <= key) && (key < keyCount)) {
+      _highlights[key].push(color);
+      _keysDOM[key].style.backgroundColor = color;
+    }
+  }
+  this.unhighlight = function (key, color) {
+    var i;
+    var stk = _highlights[key];
+    if (!stk) return; // If invalid key, retutn
+    if (color) { // Remove color from stack (could be anywhere)
+      i = stk.indexOf(color);
+      if (-1 < i) { stk.splice(i, 1); }
+    } else {
+      stk.pop(); // If no color passe, pop last color
+    }
+    i = stk.length;
+    _keysDOM[key].style.backgroundColor = (0 < i) ? stk[i-1] : "";
   }
 } // PianoKeyboard 
 
@@ -401,7 +434,7 @@ var Drumkit = function (ctx, audioBuffers) {
   Create a playable synthesizer.
 
   USAGE::
-    var Synth = new Synthesizer(ctx, Keyboard);
+    var Synth = new Synthesizer(ctx, Keyboard, color);
 
   CONSTRUCTOR PARAMETERS::
     A web audio context.
@@ -414,11 +447,11 @@ var Drumkit = function (ctx, audioBuffers) {
     Synth.waveform()       Get current waveform string.
     Synth.waveformNext()   Select the next waveform.
 ******************************************************************************/
-var Synthesizer = function (ctx, keyboard) {
+var Synthesizer = function (ctx, keyboard, color) {
   //// Local
   var _release = 0.5; // Release time in seconds for both the filter and gain.
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
-  var _waveformIdx = 3;
+  var _waveformIdx = 2;
 
   var _play = function (key, vol, when) {
     var now = when==0 ? ctx.currentTime : when; // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
@@ -439,11 +472,18 @@ var Synthesizer = function (ctx, keyboard) {
   }
 
   //// Public
+  this.color = color
   this.play = _play;
   this.waveform = function () { return _waveforms[_waveformIdx]; }
   this.waveformNext = function () {
     if (_waveforms.length == ++_waveformIdx) _waveformIdx=0;
   }
+  this.highlight = (function (lastKey) { return function (key) {
+    keyboard.unhighlight(lastKey, color); // Remove last high-light
+    keyboard.highlight(key, color); // Set new high-light
+    lastKey = key
+  }; })(-1, "");
+  //this.tick = function (time) { }
 } // Synthesizer
 
 
@@ -498,14 +538,14 @@ var Track = function (beatCount, subBeatCount, beatsPerMeasure, playable) {
     _trackElement = document.createElement('div'); // Track element
     _trackElement.className = "track";
     // Add beat elements to DOM
-    for (b=0; (b < beatCount); ++b) {
+    for (var b=0; (b < beatCount); ++b) {
       var beatElement = CreateAppendChild('div', _trackElement); // Beat element added to track element
       beatElement.className = "beat";
       beatElement.style.backgroundColor = (0 == (_beatCounter++ % beatsPerMeasure)) ? "#333" : "#222";
       // Keep track of the beat DOM element and its default background color.
       _elementBeats.push(beatElement);
       _beatOriginalBackground.push(beatElement.style.backgroundColor);
-      for (t=0; (t < subBeatCount); ++t) {
+      for (var t=0; (t < subBeatCount); ++t) {
         var tickElement = CreateAppendChild('p', beatElement); // Four tick elements added to each beat element
         tickElement.className = "tick"
         tickElement.innerText = '.';
@@ -572,8 +612,6 @@ var Track = function (beatCount, subBeatCount, beatsPerMeasure, playable) {
   this.setVol = function (v) {_vol = v; }
   this.setCursor = function (i) { _cursor = i; }
   this.play = function (tick, when) { playable.play(_notes[tick], _vol, when); }
-
-  //this.tick = function (time) { }
 } // Track
 
 
@@ -614,14 +652,33 @@ var currentActiveTrack = false;  // This is the last track acted upon.
 var setTrackTickKey = false; // HACK: This becomes a function that sets the key of some track.  Move this functionality into the piano keyboard object.
 
 var ToggleButtonState = 1;
-var BeatDuration = .75 ; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.
+var BeatDuration = .50 ; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
 window.onmouseup = function () { MouseIsDown = false; }
 
-// Pressing '/' will clear the DB (debug console) element.
-window.onkeydown = function () { if (event.keyCode == 191) DB.clear(); }
+// It's nice to keep track of the user's shift state.
+var ShiftIsDown = false;
+var ShiftCallback = false; // Called when mouse moves and shift is down
+var ShiftCallbackDone  = false;
+window.onkeyup = function (event) {
+  if (ShiftIsDown && !event.shiftKey) {
+    if (ShiftCallbackDone) ShiftCallbackDone(event);
+    ShiftIsDown = ShiftCallback = ShiftCallbackDone = false;
+    DB(ShiftIsDown);
+  }
+}
+
+window.onkeydown = function (event) {
+  if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
+}
+
+window.onmousemove = function (event) {
+  if (ShiftCallback) ShiftCallback(event);
+}
+
+document.body.addEventListener('touchstart', function (event) { if (event.touches.length=='fack') event.preventDefault(); DB(event.touches);}, true);
 
 
 /******************************************************************************
@@ -631,18 +688,19 @@ window.onkeydown = function () { if (event.keyCode == 191) DB.clear(); }
 var setupKeyboard = function (keyboard) {
   // Register mouse event handlers for every DOM keyboard element representing a key.
   keyboard.keyElements.map(function (keyElement, key) {
+    var KeyPressColor = "#0af"
     var _keyAction = function () {
-      keyElement.style.backgroundColor="#0af"; // Set current key hilight
+      keyboard.highlight(key, KeyPressColor); // Set current key hilight
       currentActiveTrack.playable.play(key, currentActiveTrack.vol(), 0);
     }
     keyElement.onmouseover = function() { if (MouseIsDown) { _keyAction(); } };
     keyElement.onmousedown = function() { MouseIsDown=true; _keyAction(); };
     keyElement.onmouseleave = function () {
-      if (MouseIsDown) keyElement.style.backgroundColor="";
+      keyboard.unhighlight(key, KeyPressColor);
     }
     keyElement.onmouseup = function (event) {
+      keyboard.unhighlight(key, KeyPressColor);
       if (setTrackTickKey) setTrackTickKey(key);  // Evaluate the track callback passing the key/note index.  Generally this will be used to set the key/note in the track at its cursor position.
-      else if (MouseIsDown) keyElement.style.backgroundColor="";
     }
   });//map function
 } // setupKeyboard()
@@ -651,71 +709,66 @@ var setupKeyboard = function (keyboard) {
 /* The synth tracks all share one cursor for the keyboard.  It could be the case that there are multiple keyboards.  This means the keyboard should keep track of which track and tick the cursor is.
 */
 
-  var currentMouseOverElement = false; // For some reason, mouseleave can occur after mouseover.  This is used to ignore mouseover should it be on an element the mouse is not on any more.
-  var currentPianoKey = -1;
+var currentMouseOverElement = false; // For some reason, mouseleave can occur after mouseover.  This is used to ignore mouseover should it be on an element the mouse is not on any more.
+var currentPianoKey = -1;
+
 function setupSynthTrack (track) {
 
   track.elementTicks.map(function (tickElement, t) {
 
     tickElement.onmouseover = function (event) {
+      // If mousing over a key but still on another key, remove other key's high-light
+      if (currentMouseOverElement) {
+        Keyboard.unhighlight(currentPianoKey, "yellow")
+      }
+      // Set this key's high-light
       currentMouseOverElement = event.srcElement;
       currentPianoKey = track.key(t);
-      Keyboard.keyElement(currentPianoKey).style.backgroundColor="yellow";
-      if (MouseIsDown) this.innerText = ToggleButtonState == 1 ? "X" : "."
-      if (this.innerText=="X") track.playable.play(currentPianoKey, track.vol(), 0);
+      Keyboard.highlight(currentPianoKey, "yellow")
+
+      if (MouseIsDown) this.innerText = ToggleButtonState == 1 ? "X" : "." // If dragging mouse while down, set note
+      if (this.innerText=="X") track.playable.play(currentPianoKey, track.vol(), 0); // Play note if on
     }
 
     tickElement.onmouseleave = function (event) {
       if (event.srcElement == currentMouseOverElement) { // Leaving a tick that we are still on.
+        Keyboard.unhighlight(currentPianoKey, "yellow")
         currentMouseOverElement = false;
         currentPianoKey = -1;
-        Keyboard.keyElement(track.key(t)).style.backgroundColor = ""; // Undo yellow highlighting.
-        if (currentActiveTrack && 0 <= currentActiveTrack.cursor()) Keyboard.keyElement(currentActiveTrack.key(currentActiveTrack.cursor())).style.background = "blue";  // Redo blue in case it was beneath yellow.
-      } else if (track.key(t) != currentPianoKey) { // Leaving a tick that we are not on any longer.
-        Keyboard.keyElement(track.key(t)).style.backgroundColor = "";
-        if (currentActiveTrack && 0 <= currentActiveTrack.cursor() && currentActiveTrack.key(currentActiveTrack.cursor()) != currentPianoKey) Keyboard.keyElement(currentActiveTrack.key(currentActiveTrack.cursor())).style.background = "blue";  // Redo blue in case it was beneath yellow.
       }
     }
 
     tickElement.onmousedown = function (event) {
-      var c;
-      MouseIsDown = true;
+      MouseIsDown = true; // Set global state
 
-      if (currentActiveTrack && 0 <= currentActiveTrack.cursor()) Keyboard.keyElement(currentActiveTrack.key(currentActiveTrack.cursor())).style.background = ""; // Erase old keyboard active tick key
-
-      if (currentActiveTrack != track) { // A different track has been acted on.  This will be the new target for the keyboard programming event.
-        if (currentActiveTrack && 0 <= currentActiveTrack.cursor()) { // The cursor exists and needs to be removed from the old track.
-          c = currentActiveTrack.cursor();
-          currentActiveTrack.elementTick(c).style.backgroundColor = currentActiveTrack.backgroundTick(c);
-          currentActiveTrack.setCursor(-1);
-        }
-        currentActiveTrack = track; // Update last track to this new one
+      if (0 <= currentActiveTrack.cursor()) {
+        var c = currentActiveTrack.cursor();
+        Keyboard.unhighlight(currentActiveTrack.key(c), "blue"); // Erase keyboard's tick high-light
+        currentActiveTrack.elementTick(c).style.backgroundColor = currentActiveTrack.backgroundTick(c); // Erase tick's high-light
       }
 
-      c = track.cursor();
+      // At this point, no tick nor keyboard key is high-lighted with the blue
 
-      // Set keyboard key for new current track tick
-      Keyboard.keyElement(currentActiveTrack.key(t)).style.background = "blue"; // Set keyboard key to this active track's tick
+      currentActiveTrack = track;
 
-      if (c == t) { // Current cursor is this tick, just toggle the tick's status on/off.
-        ToggleButtonState = this.innerText == "." ? 1 : 2;
-        this.innerText = ToggleButtonState == 1 ? "X" : "."
-      } else {
-        if (0 <= track.cursor()) { // Reset last cursor
-          track.elementTick(c).style.backgroundColor = track.backgroundTick(c);
-        }
-        this.style.backgroundColor = "blue";
-        // If the note is active, keep it active, otherwise active it
-        ToggleButtonState = 1;
-        if (this.innerText  != "X") { this.innerText = "X"; }
-        track.setCursor(t);
-      }
+      track.setCursor(t)
+
+      // Set keyboard key to this active track's tick
+      Keyboard.highlight(track.key(t), "blue")
+
+      var c = track.cursor();
+
+      // If the note is active, keep it active, otherwise active it
+      ToggleButtonState = this.innerText == "." ? 1 : 2;
+      this.innerText = ToggleButtonState == 1 ? "X" : "."
+      this.style.backgroundColor = "blue";
  
       // Callback for the keyboard to set this current new track's tick's key/note value.
       setTrackTickKey = function (k) {
-        if (currentActiveTrack && 0 <= currentActiveTrack.cursor()) Keyboard.keyElement(currentActiveTrack.key(currentActiveTrack.cursor())).style.background = ""; // Erase old keyboard active tick key
+        if (currentActiveTrack && 0 <= currentActiveTrack.cursor())
+          Keyboard.unhighlight(currentActiveTrack.key(currentActiveTrack.cursor()), "blue") // Erase old keyboard active tick key
         track.setKey(t, k);
-        Keyboard.keyElement(currentActiveTrack.key(t)).style.background = "blue"; // Set keyboard key to this active track's tick
+        Keyboard.highlight(currentActiveTrack.key(t), "blue") // Set keyboard key to this active track's tick
       }
 
       // Play the note
@@ -754,7 +807,7 @@ var createTracks = function (beats, ticks, measure, synths, drumKit) {
   var rythmDOM = document.getElementById("rythm"); // Consider the rythm block where the tracks will live.
   var track;
 
-  for (c=0; (c < synths.length); ++c) {
+  for (var c=0; (c < synths.length); ++c) {
     Tracks.push(track = new Track(beats, ticks, measure, synths[c]));
     track.elementName.innerText = track.playable.waveform();
     track.elementName.onmousedown = (function (track) { return function () {
@@ -768,11 +821,14 @@ var createTracks = function (beats, ticks, measure, synths, drumKit) {
   currentActiveTrack = Tracks[0]; // Make sure the keyboard can make sounds initially.
 
   // Create beat tracks which are kept track of in global 'Tracks'
-  for (i=0; (i < Noises.length); ++i) {
+  for (var i=0; (i < Noises.length); ++i) {
     Tracks.push(track = new Track(beats, ticks, measure, drumKit));
     track.elementName.innerText = Noises.fileName(i);
     track.setAllKeys(i);
-    track.elementName.onmousedown = (function(track, key) { return function () { track.play(key, 0); }})(track, i);
+    track.elementName.onmousedown = (function(track, key) { return function () {
+      track.play(key, 0);
+      track.elementName.style.color = "red";
+    }})(track, i);
     rythmDOM.appendChild(track.element);
     setupDrumTrack(track);
   }
@@ -829,7 +885,7 @@ var restoreTicks = function () {
   });
 
   synthTracks.map(function (track) {
-    for (i=0; i<track.tickLength; ++i) {
+    for (var i=0; i<track.tickLength; ++i) {
       track.setKey(i, ary.shift());
     }
   });
@@ -846,24 +902,42 @@ var Pause = false;
 var Beat = 0; // Forever incrementing
 var nextBeatTime = 0.00; // This should be initialized a bit beyond whatever ctx.currentTime is to allow for ramp-up of the code.
 
-/* Periodically highlight whatever beat (and all sub-beats) should be playing
+/* Periodically high-light whatever beat (and all sub-beats) should be playing
    currently.  It uses the web audio context's currentTime as a time reference.
 */
-var rendererLoop = (function (_lastBeat) { return function () {
+var rendererLoop = (function (_lastBeat, _lastTick) { return function () {
     if (Pause) return;
     var beat = (Floor(Beat - (nextBeatTime - ctx.currentTime) / BeatDuration) + (1000*Tracks.beats)) % Tracks.beats;
-    var t, track;
+    var t, track, note;
+    var tick = (Floor((Beat*Tracks.ticks) - (nextBeatTime - ctx.currentTime) / (BeatDuration / Tracks.ticks)) + (1000*Tracks.beats*Tracks.ticks)) % (Tracks.beats * Tracks.ticks);
 
-    if (_lastBeat == beat) { return; } // Nothing to do yet.
-
-    for (t=0; (t < Tracks.length); ++t) { // Over all tracks, highlight the current active beat.
+    // Over all tracks
+    for (t=0; (t < Tracks.length); ++t) {
       track = Tracks[t];
-      track.elementBeat(_lastBeat).style.backgroundColor = track.backgroundBeat(_lastBeat);
-      track.elementBeat(beat).style.backgroundColor = "green";
+      if (_lastBeat != beat) { // Highlight the current active beat
+        track.elementBeat(_lastBeat).style.backgroundColor = track.backgroundBeat(_lastBeat);
+        track.elementBeat(beat).style.backgroundColor = "green";
+      }
+
+      if (_lastTick != tick) {
+        // Highlight the track name
+        note = track.elementTick(tick).innerText;
+        if ('.' != note) {
+          track.elementName.style.color = track.playable.color // Update track name's high-light every tick
+
+          // Highlight synth's keyboard
+          if (track.playable instanceof Synthesizer) {
+            track.playable.highlight(track.key(tick));
+          }
+        } else {
+          track.elementName.style.color = "" // Unhighlight track's name every tick
+        }
+      }
     }
 
     _lastBeat = beat;
-};})(0);
+    _lastTick = tick;
+};})(0,0);
 
 
 /* Periodically tell the various tracks to send their audio out to the audio
@@ -878,7 +952,7 @@ var sequencerLoop = function () { // HACK: The sequencer
     if (0 == (Beat % Tracks.beats)) { saveTicks(); } //  On the initial beat, upate the URL's get string.
 
     for (var t=0; (t < Tracks.length); ++t) {
-      for (s=0; (s < Tracks.ticks); ++s) {
+      for (var s=0; (s < Tracks.ticks); ++s) {
         var note = Tracks[t].elementTick(Tracks.ticks*(Beat%Tracks.beats) + s).innerText;
         if ('.' != note ) {
             Tracks[t].play((Beat%Tracks.beats)*Tracks.ticks + s, // Calculate the track's tick to play
@@ -908,36 +982,24 @@ var reset = function (event) {
   if (Pause) {
     Pause = false;
     DB.post('pause', 'resume');
-    event.target.style.background = 'green';
   }
   Beat = 0;
   nextBeatTime = ctx.currentTime + 0.25;
 }
 
+var HideState=false;
+var hide = function (event) {
+  if (HideState) {
+    document.getElementById('rythm').style.display = "";
+    HideState = false;
+  } else {
+    document.getElementById('rythm').style.display = "none";
+    HideState = true;
+  }
+}
 
 
-/******************************************************************************
-
- Main
-
-******************************************************************************/
-window.onload = function () {
-  DB("::onload");
-
-  Keyboard = new PianoKeyboard("piano", 61, 0, 2, 95.4064); // Create a piano in the dom.  61 keys, starting at C in octave 2.  SID 4 EVR
-  //Keyboard = new PianoKeyboard("piano", 61, 0, 2, 65.4064); // Create a piano in the dom.  61 keys, starting at C in octave 2.  SID 4 EVR
-  Synth    = new Synthesizer(ctx, Keyboard);
-  Synth2   = new Synthesizer(ctx, Keyboard);
-  Synth3   = new Synthesizer(ctx, Keyboard);
-  DrumKit  = new Drumkit(ctx, Noises);
-  setupKeyboard(Keyboard); // Give the piano immediate playing capability
-  createTracks(16, 4, 4, [Synth, Synth2, Synth3], DrumKit);
-  setInterval(rendererLoop, 50);
-  setInterval(sequencerLoop, 50);
-  //Base64.test();
-
-  nextBeatTime = ctx.currentTime+1.2;
-
+var setupControls = function () {
   document.getElementById('speed').onkeypress = function (event) {
     setTimeout(function() { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
       if (event.charCode == 13) {
@@ -951,12 +1013,124 @@ window.onload = function () {
   document.getElementById('freq').onkeypress = function (event) {
     setTimeout(function () { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
       if (event.charCode == 13) {
-      
-      Keyboard.setStartFrequency(event.target.innerText = parseFloat(event.target.innerText.replace("\n","")));
-    
+        Keyboard.setStartFrequency(event.target.innerText = parseFloat(event.target.innerText.replace("\n","")));
       } // if
     }); // function
   } // function
+
+  // Let's make a few elements moveable between each other
+
+  /* I Shift has been pressed over a moveable block
+       * position:absolute  
+       * 
+       event.srcElement.parentElement
+            .clientX/Y
+                       .getBoundingClientRect().left/right
+  */
+  var ShiftClientX = 0;
+  var ShiftClientY = 0;
+  var Slots = [];
+  var tempElem = false;
+
+  /* As the mouse moves around the element, keep track of its relative location */
+  var createMover = function (moverId)
+  {
+
+  document.getElementById(moverId).onmousemove = function (event) {
+    if (!ShiftIsDown) {
+      event.srcElement.focus();
+      // The moveable element's offset from the mouse.
+      ShiftClientX = Floor(event.clientX - event.srcElement.getBoundingClientRect().left);
+      ShiftClientY = Floor(event.clientY - event.srcElement.getBoundingClientRect().top);
+      //DB("event.clientXY " + ShiftClientX + " " + ShiftClientY);
+    }
+  }
+
+  document.getElementById(moverId).onkeydown = function (event) {
+    if (ShiftClientX && !ShiftIsDown && event.shiftKey) {
+      var elem = event.srcElement;
+      var parent = elem.parentElement;
+      ShiftClientX += parent.getBoundingClientRect().left;
+      ShiftClientY += parent.getBoundingClientRect().top;
+      ShiftIsDown = true;
+      //DB(ShiftIsDown);
+      event.tabindex=1;
+      event.srcElement.style.left = event.offsetLeft + "px"
+      event.srcElement.style.top = event.offsetTop + "px"
+      event.srcElement.style.position = 'absolute'
+      event.srcElement.style.opacity = 0.7
+      event.srcElement.style.border = "solid 1px white";
+
+      // Create the slots this element can be moved to.
+      for (i=0; (i < parent.children.length); i++) {
+        var child = parent.children[i];
+        if (child != elem) Slots.push(child);
+      }
+      // Create the placeholder
+      tempElem = elem.cloneNode(true);
+      tempElem.style.position = 'static';
+
+      //event.srcElement.style.border = "solid thin white";
+      ShiftCallback = function (event) { // What to do when the mouse moves while shift is held down.
+        var shiftX = event.clientX - ShiftClientX;
+        var shiftY = event.clientY - ShiftClientY;
+        elem.style.left =  shiftX + "px";
+        elem.style.top =  shiftY + "px";
+        //DB("global:" + event.clientX + " " + event.clientY);
+        //Where to insert the place holder
+        for (i=0; (i < Slots.length); ++i) {
+          if (20 > Abs(Slots[i].offsetLeft - shiftX)) {
+            parent.insertBefore(tempElem, Slots[i]);
+          }
+        }
+      }
+      ShiftCallbackDone = function (event) {
+        event.srcElement.style.left = "";
+        event.srcElement.style.top = "";
+        event.srcElement.style.position = "";
+        event.srcElement.style.opacity = "";
+        event.srcElement.style.border = "";
+        ShiftClientX = ShiftClientY = false;
+        parent.insertBefore(elem, tempElem);
+        parent.removeChild(tempElem);
+        elem.outerHTML += " ";
+        createMover(moverId);
+        Slots = [];
+      }
+      ShiftCallback(event);
+    } // if
+  } // function
+  } // createMover
+
+  createMover('pause');
+  createMover('hide');
+  createMover('freq');
+  createMover('reset');
+}
+
+
+
+/******************************************************************************
+
+ Main
+
+******************************************************************************/
+window.onload = function () {
+  DB("::onload");
+
+  Keyboard = new PianoKeyboard("piano", 61, 0, 2, 65.4064); // Create a piano in the dom.  61 keys, starting at C in octave 2.  SID 4 EVR
+  Synth      = new Synthesizer(ctx, Keyboard, "red");
+  var Synth2 = new Synthesizer(ctx, Keyboard, "green");
+  var Synth3 = new Synthesizer(ctx, Keyboard, "cyan");
+  var DrumKit = new Drumkit(ctx, Noises);
+  setupKeyboard(Keyboard); // Give the piano immediate playing capability
+  createTracks(16, 4, 4, [Synth, Synth2, Synth3], DrumKit); // beatcount tickcount measurecount synths drumkit
+  setupControls();
+  setInterval(rendererLoop, 50);
+  setInterval(sequencerLoop, 50);
+  //Base64.test();
+
+  nextBeatTime = ctx.currentTime+1.2;
 
   DB("--onload [" + DB.status() + "]");
 }

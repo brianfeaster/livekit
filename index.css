@@ -37,23 +37,36 @@ h1 {
 
 .mainNav a { margin-left: 1em }
 
-.rythm { border:solid thin #0ff ; display:inline-block;}
+#rythmContainer {
+  min-width: 1em;
+  min-height: 1em;
+  border:solid 1px #ff0;
+  display:inline-block;
+}
+
+#rythm {
+}
+
 
 .track { border:0; padding:0; margin:0 }
 
-.beat  { border:thin solid black; padding:0; margin:0; height:2.1em; width:2.1em; text-align:center; display:inline-block; color:#999; vertical-align:top}
-.beat:hover { border: solid thin #a0a }
+.beat  { border:0; padding:0; margin:1px; height:2.0em; width:2.1em; display:inline-block; color:#999; }
+.beat:hover { border: solid 1px #a0a; margin:0 }
 
-.tick { border:0; padding:0; margin:0; height:1em; width:1em; display:inline-block; }
+.tick { border:0; padding:0; margin:0; height:1em; width:1em; display:flex; justify-content:center; align-items:center; }
+
+.beat .tick:nth-child(1) { float:left; }
+.beat .tick:nth-child(2) { float:left; clear:both; }
 
 .beat .tick:nth-child(1):hover { background-color:yellow}
 .beat .tick:nth-child(2):hover { background-color:yellow}
 .beat .tick:nth-child(3):hover { background-color:yellow}
 .beat .tick:nth-child(4):hover { background-color:yellow}
-.name  { display:inline-block; padding:0; margin:0; border: solid thin black; vertical-align:top; height:2em;}
-.name:hover { border: solid thin #a0a }
-.menu  { display:inline-block; padding:0; margin:0; border: solid thin black; vertical-align:top; height:2em;}
-.menu:hover { border: solid thin #a0a }
+
+.name  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; height:2em;}
+.name:hover { border: solid 1px #a0a }
+.menu  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; height:2em;}
+.menu:hover { border: solid 1px #a0a }
 
 #piano {
  font-family: serif;
@@ -73,7 +86,7 @@ h1 {
  width:1.5em;
  height:1em;
  padding:2em 0 0 0;
- border:solid thin black;
+ border:solid 1px black;
  margin:0;
 }
 
