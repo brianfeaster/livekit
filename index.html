@@ -44,6 +44,7 @@
 var Floor = Math.floor;
 var Pow   = Math.pow;
 var Abs   = Math.abs;
+var Rnd   = Math.random;
 var CreateAppendChild = function (name, element) { return element.appendChild(document.createElement(name)); }
 var CreateInsertBefore = function (name, element) { return element.insertBefore(document.createElement(name), element.firstChild); }
 
@@ -252,25 +253,24 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
   var _createDOM = function () {
     var notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     var sharps = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]; // Bool table of sharps in an octave, starting at C
-    var i, newKey, keyPair = false; // The piano DOM is composed of divs containing either just a div (white key) or div and p (white and black key)
+    var newKey, keyPair = false; // The piano DOM is composed of divs containing either just a div (white key) or div and p (white and black key)
     startKey += startOctave * 12; // Adjust initial key to account for octave
-    for (i=0; (i < keyCount); ++i) {
+    for (var k=0; (k < keyCount); ++k) {
 
-      if (sharps[(i + startKey)%12]) {
-        // Create the sharp key.  If this is the first key (corner case), the key pair element needs to also be created.
-        keyPair || (keyPair = CreateAppendChild('div', _pianoDOM));
-        newKey = CreateAppendChild('p', keyPair);
+      if (sharps[(k + startKey)%12]) {
+        // Create the sharp key
+        newKey = CreateAppendChild('p', _pianoDOM);
       } else {
-        // Create the natural key.
-        keyPair = CreateAppendChild('div', _pianoDOM);
-        var note   = (i + startKey) % 12;
-        var octave = Floor((i + startKey) / 12);
-        newKey = CreateAppendChild('div', keyPair)
+        // Create the natural key
+        var note   = (k + startKey) % 12;
+        var octave = Floor((k + startKey) / 12);
+        newKey = CreateAppendChild('div', _pianoDOM)
+        // add the note's textual label including the octave number.
         newKey.innerText = notes[note] + (note==0?octave:'');
       }
 
       _keysDOM.push(newKey); // Keep track of each created key.
-      _frequencies.push(startFrequency * Pow(2, i/12.0));
+      _frequencies.push(startFrequency * Pow(2, k/12.0));
       _highlights.push([]);
     }
   }
@@ -285,10 +285,9 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
 
   this.keyElements = _keysDOM;
   this.keyElement = function (i) { return _keysDOM[i]; }
-  this.freq = function (k) { return _frequencies[k]; }
+  this.freq = function (k) { return _frequencies[k] + Rnd(); } // Adding a random [0..1] value to the freq in an attempt to get rid of beating.  Ended up with a phaser effect when equal notes are played instead.
   this.setStartFrequency = function (newStartFrequency) {
-    var i;
-    for (i=0; (i < keyCount); ++i) _frequencies[i] = newStartFrequency * Pow(2, i/12.0);
+    for (var i=0; (i < keyCount); ++i) _frequencies[i] = newStartFrequency * Pow(2, i/12.0);
   }
   this.highlight = function (key, color)  {
     if ((0 <= key) && (key < keyCount)) {
@@ -387,10 +386,11 @@ var AudioBuffersDB = function (fileNames) {
                                        webaudio context time 'when' or immediately if
                                        when==0.
 ******************************************************************************/
-var Drumkit = function (ctx, audioBuffers) {
+var Drumkit = function (ctx, audioBuffers, color) {
   //// Local
   var bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
   //// Public
+  this.color = color
   this.play = function (drum, vol, when) {
     var audioBuffer = audioBuffers.audioBuffer(drum);
     if (!audioBuffer) return; // Do nothing if no audio buffer.
@@ -400,7 +400,7 @@ var Drumkit = function (ctx, audioBuffers) {
     source.buffer = audioBuffer;
     source.onended = function() { source.disconnect(); } // When the audio stops, remove it from the graph.
     var gain = ctx.createGain(); // Ramp
-  
+
     if (drum == 0) { // HACK: need to generalize a sound pipeline
       // Loop the bass noise for one second with a LPF and gain ramp.
       source.playbackRate.setValueAtTime(0.39, now);
@@ -408,15 +408,15 @@ var Drumkit = function (ctx, audioBuffers) {
       source.loop = true;
       source.start(when);
       source.stop(now + bassReleaseTime);
-  
+
       var lp = ctx.createBiquadFilter(); // LPF
       lp.type = "lowpass";
       lp.frequency.value = 120;
       lp.Q.value = 0.5;
-  
+
       gain.gain.setValueAtTime(vol, now);
       gain.gain.linearRampToValueAtTime(0, now+bassReleaseTime);
-  
+
       source.connect(lp);
       lp.connect(gain);
     } else {
@@ -478,11 +478,15 @@ var Synthesizer = function (ctx, keyboard, color) {
   this.waveformNext = function () {
     if (_waveforms.length == ++_waveformIdx) _waveformIdx=0;
   }
-  this.highlight = (function (lastKey) { return function (key) {
+  var lastKey = -1;
+  this.highlight = function (key) {
+      keyboard.unhighlight(lastKey, color); // Remove last high-light
+      keyboard.highlight(key, color); // Set new high-light
+      lastKey = key
+  };
+  this.unhighlight = function () {
     keyboard.unhighlight(lastKey, color); // Remove last high-light
-    keyboard.highlight(key, color); // Set new high-light
-    lastKey = key
-  }; })(-1, "");
+  };
   //this.tick = function (time) { }
 } // Synthesizer
 
@@ -627,7 +631,7 @@ var ctx = new (window.AudioContext || window.webkitAudioContext)();
 
 var Noises = new AudioBuffersDB( // Object containg AudioBuffers derived from remote files
  ["808.bass.raw",
-  "mom.raw",
+  "808.snare.drum.raw",
   "808.snare.noise.raw",
   "808.maracas.raw",
   "808.cowbell.raw",
@@ -638,7 +642,7 @@ var Noises = new AudioBuffersDB( // Object containg AudioBuffers derived from re
   "808.highhat.opened.raw",
   "808.cymbal.raw",
   "909.thump.raw",
-  "909.snare.noise.raw"
+  "909.snare.noise.raw",
 ]);
 
 var Keyboard;
@@ -652,7 +656,7 @@ var currentActiveTrack = false;  // This is the last track acted upon.
 var setTrackTickKey = false; // HACK: This becomes a function that sets the key of some track.  Move this functionality into the piano keyboard object.
 
 var ToggleButtonState = 1;
-var BeatDuration = .50 ; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.
+var BeatDuration = .40 ; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
@@ -827,7 +831,10 @@ var createTracks = function (beats, ticks, measure, synths, drumKit) {
     track.setAllKeys(i);
     track.elementName.onmousedown = (function(track, key) { return function () {
       track.play(key, 0);
-      track.elementName.style.color = "red";
+      track.elementName.style.color = "white";
+    }})(track, i);
+    track.elementName.onmouseup = (function(track) { return function () {
+      track.elementName.style.color = "";
     }})(track, i);
     rythmDOM.appendChild(track.element);
     setupDrumTrack(track);
@@ -925,12 +932,14 @@ var rendererLoop = (function (_lastBeat, _lastTick) { return function () {
         if ('.' != note) {
           track.elementName.style.color = track.playable.color // Update track name's high-light every tick
 
-          // Highlight synth's keyboard
-          if (track.playable instanceof Synthesizer) {
+          if (track.playable instanceof Synthesizer) { // Highlight this track's keyboard with it's synth's color
             track.playable.highlight(track.key(tick));
           }
         } else {
           track.elementName.style.color = "" // Unhighlight track's name every tick
+          if (track.playable instanceof Synthesizer) { // Unhighlight this track's keyboard highlight (if any)
+            track.playable.unhighlight();
+          }
         }
       }
     }
@@ -963,7 +972,6 @@ var sequencerLoop = function () { // HACK: The sequencer
     Beat += 1.0;
     nextBeatTime += BeatDuration;
   } // while
-  //DB.post('time', currentTime.toFixed(2) + "  nextTime" + nextBeatTime.toFixed(2) + " beat" + Beat);
 }
 
 
@@ -1036,83 +1044,88 @@ var setupControls = function () {
   var createMover = function (moverId)
   {
 
-  document.getElementById(moverId).onmousemove = function (event) {
-    if (!ShiftIsDown) {
-      event.srcElement.focus();
-      // The moveable element's offset from the mouse.
-      ShiftClientX = Floor(event.clientX - event.srcElement.getBoundingClientRect().left);
-      ShiftClientY = Floor(event.clientY - event.srcElement.getBoundingClientRect().top);
-      //DB("event.clientXY " + ShiftClientX + " " + ShiftClientY);
-    }
-  }
-
-  document.getElementById(moverId).onkeydown = function (event) {
-    if (ShiftClientX && !ShiftIsDown && event.shiftKey) {
-      var elem = event.srcElement;
-      var parent = elem.parentElement;
-      ShiftClientX += parent.getBoundingClientRect().left;
-      ShiftClientY += parent.getBoundingClientRect().top;
-      ShiftIsDown = true;
-      //DB(ShiftIsDown);
-      event.tabindex=1;
-      event.srcElement.style.left = event.offsetLeft + "px"
-      event.srcElement.style.top = event.offsetTop + "px"
-      event.srcElement.style.position = 'absolute'
-      event.srcElement.style.opacity = 0.7
-      event.srcElement.style.border = "solid 1px white";
-
-      // Create the slots this element can be moved to.
-      for (i=0; (i < parent.children.length); i++) {
-        var child = parent.children[i];
-        if (child != elem) Slots.push(child);
+    document.getElementById(moverId).onmousemove = function (event) {
+      if (!ShiftIsDown) {
+        event.srcElement.focus();
+        // The moveable element's offset from the mouse.
+        ShiftClientX = Floor(event.clientX - event.srcElement.getBoundingClientRect().left);
+        ShiftClientY = Floor(event.clientY - event.srcElement.getBoundingClientRect().top);
+        //DB("event.clientXY " + ShiftClientX + " " + ShiftClientY);
       }
-      // Create the placeholder
-      tempElem = elem.cloneNode(true);
-      tempElem.style.position = 'static';
+    }
 
-      //event.srcElement.style.border = "solid thin white";
-      ShiftCallback = function (event) { // What to do when the mouse moves while shift is held down.
-        var shiftX = event.clientX - ShiftClientX;
-        var shiftY = event.clientY - ShiftClientY;
-        elem.style.left =  shiftX + "px";
-        elem.style.top =  shiftY + "px";
-        //DB("global:" + event.clientX + " " + event.clientY);
-        //Where to insert the place holder
-        for (i=0; (i < Slots.length); ++i) {
-          if (20 > Abs(Slots[i].offsetLeft - shiftX)) {
-            parent.insertBefore(tempElem, Slots[i]);
+    document.getElementById(moverId).onkeydown = function (event) {
+      if (ShiftClientX && !ShiftIsDown && event.shiftKey) {
+        var elem = event.srcElement;
+        var parent = elem.parentElement;
+        ShiftClientX += parent.getBoundingClientRect().left;
+        ShiftClientY += parent.getBoundingClientRect().top;
+        ShiftIsDown = true;
+        //DB(ShiftIsDown);
+        event.tabindex=1;
+        event.srcElement.style.left = event.offsetLeft + "px"
+        event.srcElement.style.top = event.offsetTop + "px"
+        event.srcElement.style.position = 'absolute'
+        event.srcElement.style.opacity = 0.7
+        event.srcElement.style.border = "solid 1px white";
+
+        // Create the slots this element can be moved to.
+        for (i=0; (i < parent.children.length); i++) {
+          var child = parent.children[i];
+          if (child != elem) Slots.push(child);
+        }
+        // Create the placeholder
+        tempElem = elem.cloneNode(true);
+        tempElem.style.position = 'static';
+
+        //event.srcElement.style.border = "solid thin white";
+        ShiftCallback = function (event) { // What to do when the mouse moves while shift is held down.
+          var shiftX = event.clientX - ShiftClientX;
+          var shiftY = event.clientY - ShiftClientY;
+          elem.style.left =  shiftX + "px";
+          elem.style.top =  shiftY + "px";
+          //DB("global:" + event.clientX + " " + event.clientY);
+          //Where to insert the place holder
+          for (i=0; (i < Slots.length); ++i) {
+            if (20 > Abs(Slots[i].offsetLeft - shiftX)) {
+              parent.insertBefore(tempElem, Slots[i]);
+            }
           }
         }
-      }
-      ShiftCallbackDone = function (event) {
-        event.srcElement.style.left = "";
-        event.srcElement.style.top = "";
-        event.srcElement.style.position = "";
-        event.srcElement.style.opacity = "";
-        event.srcElement.style.border = "";
-        ShiftClientX = ShiftClientY = false;
-        parent.insertBefore(elem, tempElem);
-        parent.removeChild(tempElem);
-        elem.outerHTML += " ";
-        createMover(moverId);
-        Slots = [];
-      }
-      ShiftCallback(event);
-    } // if
-  } // function
+        ShiftCallbackDone = function (event) {
+          event.srcElement.style.left = "";
+          event.srcElement.style.top = "";
+          event.srcElement.style.position = "";
+          event.srcElement.style.opacity = "";
+          event.srcElement.style.border = "";
+          ShiftClientX = ShiftClientY = false;
+          parent.insertBefore(elem, tempElem);
+          parent.removeChild(tempElem);
+          elem.outerHTML += " ";
+          createMover(moverId);
+          Slots = [];
+        }
+        ShiftCallback(event);
+      } // if
+    } // function
   } // createMover
 
   createMover('pause');
   createMover('hide');
   createMover('freq');
   createMover('reset');
-}
+} // setupControls ()
 
 
 
 /******************************************************************************
 
  Main
+
+ TODO:
+  Moveable DOM elmeents 
+   shrinkable
+   raisable
 
 ******************************************************************************/
 window.onload = function () {
@@ -1122,7 +1135,7 @@ window.onload = function () {
   Synth      = new Synthesizer(ctx, Keyboard, "red");
   var Synth2 = new Synthesizer(ctx, Keyboard, "green");
   var Synth3 = new Synthesizer(ctx, Keyboard, "cyan");
-  var DrumKit = new Drumkit(ctx, Noises);
+  var DrumKit = new Drumkit(ctx, Noises, "white");
   setupKeyboard(Keyboard); // Give the piano immediate playing capability
   createTracks(16, 4, 4, [Synth, Synth2, Synth3], DrumKit); // beatcount tickcount measurecount synths drumkit
   setupControls();

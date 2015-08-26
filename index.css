@@ -69,38 +69,31 @@ h1 {
 .menu:hover { border: solid 1px #a0a }
 
 #piano {
- font-family: serif;
- color: black;
  display:inline-block;
  text-align:center; 
+ font-family: serif;
+ color: black;
 }
 
 #piano > div {
- position:relative;
- display:table-cell;
- width:1.5em;
-}
-
-#piano > div > div {
- background-color:white;
- width:1.5em;
- height:1em;
+ display:inline-block;
  padding:2em 0 0 0;
  border:solid 1px black;
  margin:0;
+ width:1.5em;
+ height:1em;
+ background-color:white;
 }
 
-#piano > div > p {
- background-color:#222;
+#piano > p {
+ display:inline-block;
  position:absolute;
- left:1.1em;
- top:0;
- z-index:1;
- width:1.0em;
- height:1em;
- padding:.6em 0 0 0;
+ padding:0;
  border:0;
- margin:0;
+ margin-left:-0.5em;
+ width:1.0em;
+ height:1.6em;
+ background-color:#222;
 }
 
 #piano > div > div:hover { background-color: #aaa }
