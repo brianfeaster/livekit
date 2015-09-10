@@ -3,7 +3,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
  <title>Digital Audio Workstation</title>
- <link rel="stylesheet" href="daw06.css" type="text/css" media="screen" title="Shrewm"/>
+ <link rel="stylesheet" href="index.css" type="text/css" media="screen" title="Shrewm"/>
 </head>
 <body Xoncontextmenu="return false;">
 
@@ -36,7 +36,6 @@
 </div>
 
 <script type="text/javascript">//<![CDATA[
-"use strict"
 /******************************************************************************
 
   Useful aliases and objects
@@ -341,10 +340,11 @@ var AudioBuffersDB = function (fileNames) {
       client.open('GET', fn);
       client.responseType = "arraybuffer";
       client.onreadystatechange = // Callback after remote file has been loaded
-        function () {
+        function (e) {
           if (4 != client.readyState) return;
-          DB.check(200 == client.status, "ERROR: AudioBuffersDB._loadRawAudioFiles:  Problem with file '" + client.responseURL + "'");
-          if (200 == client.status) {
+          var statusState = ((200 == client.status) || (0 == client.status) && (null != client.response)); // When loaded locally with --allow-file-access-from-files, status is 0 so must check client.response instead
+          DB.check(statusState, "ERROR: AudioBuffersDB._loadRawAudioFiles:  status:" + client.status + " Problem with file '" + (client.responseURL || fn) + "'");
+          if (statusState) {
             var samples = new Int16Array(client.response); // Consider u8 ary as s16 ary.
             // Normalized each s16 sample to f32 between -1 and 1.
             var Noise =  new Float32Array(samples.length);
