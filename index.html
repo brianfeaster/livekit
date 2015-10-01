@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="noDB" style="width:20em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="DB" style="width:20em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Digital Audio Workstation &#x2669; &#x266a; &#x266b; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -29,11 +29,12 @@
  <div id="piano"></div>
 </div>
 
-<div id="rythmContainer">
- <p id="hide" style="display:inline-block; background:gray; color:#eee" onmousedown="hide(event)">[.]</p>
- <div style="display:inline-block" id="sheet">................................................................</div>
- <div id="rythm">
- </div>
+<div id="mainRythm">
+ <p style="display:inline-block; background:gray; color:#eee" onmousedown="hide(event, 'rythm')">[.]</p>
+ <div class="tracklist" style="display:inline-block"></div>
+ <br/>
+ <div class="sheet" style="display:inline-block">................................................................</div>
+ <div class="rythm"></div>
 </div>
 
 <script type="text/javascript">//<![CDATA[
@@ -581,8 +582,8 @@ var Track = function (beatCount, subBeatCount, beatsPerMeasure, playable) {
       _volPad.style.display="block";
     }
     _volPad.onmousemove = function (event) {
-      var mx = (event.clientX - event.srcElement.getBoundingClientRect().left) / 87;
-      var my = (event.clientY - event.srcElement.getBoundingClientRect().top) / 183;
+      var mx = (event.clientX - event.target.getBoundingClientRect().left) / 87;
+      var my = (event.clientY - event.target.getBoundingClientRect().top) / 183;
       _vol = my * 0.9 + mx * 0.1;
     }
     _volPad.onmouseleave  = function () { _volPad.style.display="none"; }
@@ -730,7 +731,7 @@ function setupSynthTrack (track) {
         Keyboard.unhighlight(currentPianoKey, "yellow")
       }
       // Set this key's high-light
-      currentMouseOverElement = event.srcElement;
+      currentMouseOverElement = event.target;
       currentPianoKey = track.key(t);
       Keyboard.highlight(currentPianoKey, "yellow")
 
@@ -739,7 +740,7 @@ function setupSynthTrack (track) {
     }
 
     tickElement.onmouseleave = function (event) {
-      if (event.srcElement == currentMouseOverElement) { // Leaving a tick that we are still on.
+      if (event.target == currentMouseOverElement) { // Leaving a tick that we are still on.
         Keyboard.unhighlight(currentPianoKey, "yellow")
         currentMouseOverElement = false;
         currentPianoKey = -1;
@@ -782,7 +783,7 @@ function setupSynthTrack (track) {
       if (this.innerText=="X") track.playable.play(track.key(t), track.vol(), 0);
 
       // Update the sheet element with each note from this track.  Eventually this will be another way to edit/move notes of the active track.
-      var sheetElement = document.getElementById("sheet");
+      var sheetElement = document.getElementById("mainRythm").getElementsByClassName('sheet')[0];
       sheetElement.innerText = "";
       track.elementTicks.map(function (e){ sheetElement.innerText += e.innerText; });
 
@@ -815,7 +816,9 @@ function setupDrumTrack (track) {
 /* All tracks are kept in global 'Tracks'
 */
 var createTracks = function (beats, ticks, measure, synths, drumKit) {
-  var rythmDOM = document.getElementById("rythm"); // Consider the rythm block where the tracks will live.
+  var mainRythmDOM = document.getElementById("mainRythm");
+  var rythmDOM = mainRythmDOM.getElementsByClassName('rythm')[0]; // Consider the rythm block where the tracks will live.
+  var trackListDOM = mainRythmDOM.getElementsByClassName('tracklist')[0];
   var track;
 
   for (var c=0; (c < synths.length); ++c) {
@@ -827,6 +830,10 @@ var createTracks = function (beats, ticks, measure, synths, drumKit) {
     }})(track);
     rythmDOM.appendChild(track.element);
     setupSynthTrack(track);
+    // Clicking on the track button will toggle the actual track
+    var b = CreateAppendChild('b', trackListDOM);
+    b.innerText = c
+    b.onmousedown = function(e){ toggleElementDisplay(e);}.bind(null, track.element);
   }
 
   currentActiveTrack = Tracks[0]; // Make sure the keyboard can make sounds initially.
@@ -845,6 +852,10 @@ var createTracks = function (beats, ticks, measure, synths, drumKit) {
     }})(track, i);
     rythmDOM.appendChild(track.element);
     setupDrumTrack(track);
+    // Clicking on the track button will toggle the actual track
+    var b = CreateAppendChild('b', trackListDOM);
+    b.innerText =  c + i
+    b.onmousedown = function(e){ toggleElementDisplay(e);}.bind(null, track.element);
   }
 
   Tracks.beats = beats; // Make this info available along with the track objects themselves
@@ -1011,15 +1022,20 @@ var reset = function (event) {
 }
 
 var HideState=false;
-var hide = function (event) {
+var hide = function (event, classToHide) {
   if (HideState) {
-    document.getElementById('rythm').style.display = "";
+    event.target.parentElement.getElementsByClassName('rythm')[0].style.display = "";
     HideState = false;
   } else {
-    document.getElementById('rythm').style.display = "none";
+    event.target.parentElement.getElementsByClassName('rythm')[0].style.display = "none";
     HideState = true;
   }
 }
+
+var toggleElementDisplay = function (e) {
+  e.style.display = (e.style.display=="none" ? "" : "none");
+}
+
 
 
 var setupControls = function () {
@@ -1067,7 +1083,7 @@ var setupControls = function () {
   /* I Shift has been pressed over a moveable block
        * position:absolute  
        * 
-       event.srcElement.parentElement
+       event.target.parentElement
             .clientX/Y
                        .getBoundingClientRect().left/right
   */
@@ -1081,28 +1097,28 @@ var setupControls = function () {
 
     document.getElementById(moverId).onmousemove = function (event) {
       if (!ShiftIsDown) {
-        event.srcElement.focus();
+        event.target.focus();
         // The moveable element's offset from the mouse.
-        ShiftClientX = Floor(event.clientX - event.srcElement.getBoundingClientRect().left);
-        ShiftClientY = Floor(event.clientY - event.srcElement.getBoundingClientRect().top);
+        ShiftClientX = Floor(event.clientX - event.target.getBoundingClientRect().left);
+        ShiftClientY = Floor(event.clientY - event.target.getBoundingClientRect().top);
         //DB("event.clientXY " + ShiftClientX + " " + ShiftClientY);
       }
     }
 
     document.getElementById(moverId).onkeydown = function (event) {
       if (ShiftClientX && !ShiftIsDown && event.shiftKey) {
-        var elem = event.srcElement;
+        var elem = event.target;
         var parent = elem.parentElement;
         ShiftClientX += parent.getBoundingClientRect().left;
         ShiftClientY += parent.getBoundingClientRect().top;
         ShiftIsDown = true;
         //DB(ShiftIsDown);
         event.tabindex=1;
-        event.srcElement.style.left = event.offsetLeft + "px"
-        event.srcElement.style.top = event.offsetTop + "px"
-        event.srcElement.style.position = 'absolute'
-        event.srcElement.style.opacity = 0.7
-        event.srcElement.style.border = "solid 1px white";
+        event.target.style.left = event.offsetLeft + "px"
+        event.target.style.top = event.offsetTop + "px"
+        event.target.style.position = 'absolute'
+        event.target.style.opacity = 0.7
+        event.target.style.border = "solid 1px white";
 
         // Create the slots this element can be moved to.
         for (var i=0; (i < parent.children.length); i++) {
@@ -1113,7 +1129,7 @@ var setupControls = function () {
         tempElem = elem.cloneNode(true);
         tempElem.style.position = 'static';
 
-        //event.srcElement.style.border = "solid thin white";
+        //event.target.style.border = "solid thin white";
         ShiftCallback = function (event) { // What to do when the mouse moves while shift is held down.
           var shiftX = event.clientX - ShiftClientX;
           var shiftY = event.clientY - ShiftClientY;
@@ -1128,11 +1144,11 @@ var setupControls = function () {
           }
         }
         ShiftCallbackDone = function (event) {
-          event.srcElement.style.left = "";
-          event.srcElement.style.top = "";
-          event.srcElement.style.position = "";
-          event.srcElement.style.opacity = "";
-          event.srcElement.style.border = "";
+          event.target.style.left = "";
+          event.target.style.top = "";
+          event.target.style.position = "";
+          event.target.style.opacity = "";
+          event.target.style.border = "";
           ShiftClientX = ShiftClientY = false;
           parent.insertBefore(elem, tempElem);
           parent.removeChild(tempElem);

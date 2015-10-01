@@ -37,12 +37,14 @@ h1 {
 
 .mainNav a { margin-left: 1em }
 
-#rythmContainer {
+#mainRythm {
   min-width: 1em;
   min-height: 1em;
   border:solid 1px #ff0;
   display:inline-block;
 }
+
+.tracklist > b { display:inline-block; text-align:center; width:2em; padding:0; border:0; margin-right:.5em; color:#eee; background:gray }
 
 #rythm {
 }
