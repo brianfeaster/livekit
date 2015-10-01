@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="DB" style="width:20em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="noDB" style="width:20em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Digital Audio Workstation &#x2669; &#x266a; &#x266b; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -17,20 +17,21 @@
  <a href="http://jigsaw.w3.org/css-validator/tabindex="1" check/referer/">[CSS 2.1]</a>
 </p>
 
-<div id="piano"></div>
-
-
-<div style="display:inline-block; position:relative; border:solid blue">
- <p id="freq"  tabindex="0" style="display:inline-block; background:cyan"   contenteditable="true">65.4064</p>
- <p id="speed" tabindex="0" style="display:inline-block; background:blue"   contenteditable="true">120</p>
- <p id="pause" tabindex="0" style="display:inline-block; background:green"  onmousedown="pause(event)">pause</p>
- <p id="reset" tabindex="0" style="display:inline-block; background:purple" onmousedown="reset(event)">reset</p>
- <p id="hide"  tabindex="0" style="display:inline-block; background:red"    onmousedown="hide(event)">hide</p>
+<div class="knobs">
+ <p id="speed" ttabindex="0" contenteditable="true">120</p>
+ <p class="reset" onmousedown="reset(event)">|&lt;</p>
+ <p class="pause" onmousedown="pause(event)">||</p>
 </div>
 
-<div id="sheet"></div>
+<div style="display:inline-block; position:relative; border:solid 1px #ff0">
+ <p id="freq" ttabindex="0" style="float:left; display:inline-block; background:#00a; color:#eee" contenteditable="true">65.4064</p>
+ <br/>
+ <div id="piano"></div>
+</div>
 
 <div id="rythmContainer">
+ <p id="hide" style="display:inline-block; background:gray; color:#eee" onmousedown="hide(event)">[.]</p>
+ <div style="display:inline-block" id="sheet">................................................................</div>
  <div id="rythm">
  </div>
 </div>
@@ -513,7 +514,7 @@ var Synthesizer = function (ctx, keyboard, color) {
     track.elementTick(i)    Get the ith tick element
     track.elementName       Get the name element for this track
     track.backgroundBeat(i) Get ith beat's original background.
-    track.backgroundTick(i) Get ith tick's original background.
+    track.backgroundColor(i) Get ith tick's original background color.
     track.tickLength        Get number of ticks (notes, keys, whatever) this track contains.
     track.key(i)            Get the key at tick i.
     track.setKey(i, key)    Set the ith tick's key.
@@ -608,7 +609,7 @@ var Track = function (beatCount, subBeatCount, beatsPerMeasure, playable) {
   this.elementTick = function (i) { return _elementTicks[i]; }
   this.elementName = _elementName;
   this.backgroundBeat = function (i) { return _beatOriginalBackground[i]; }
-  this.backgroundTick = function (i) { return _tickOriginalBackground[i]; }
+  this.backgroundColor = function (i) { return _tickOriginalBackground[i]; }
   this.tickLength = _notes.length;
   this.key = function (k) { return _notes[k]; }
   this.setKey = function (tick, key) { _notes[tick] = key; }
@@ -654,7 +655,7 @@ var Tracks = [];
 Tracks.beats = 0;
 Tracks.ticks = 0;
 
-var currentActiveTrack = false;  // This is the last track acted upon.
+var currentActiveTrack = false;  // This is the last track acted upon.  Should be initialied at some point.
 var setTrackTickKey = false; // HACK: This becomes a function that sets the key of some track.  Move this functionality into the piano keyboard object.
 
 var ToggleButtonState = 1;
@@ -677,6 +678,7 @@ window.onkeyup = function (event) {
 }
 
 window.onkeydown = function (event) {
+  //DB("onkeydown global: " + event.keyCode)
   if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
 }
 
@@ -747,42 +749,45 @@ function setupSynthTrack (track) {
     tickElement.onmousedown = function (event) {
       MouseIsDown = true; // Set global state
 
+      // Unset keyboard key and track cursor (if active)
       if (0 <= currentActiveTrack.cursor()) {
         var c = currentActiveTrack.cursor();
         Keyboard.unhighlight(currentActiveTrack.key(c), "blue"); // Erase keyboard's tick high-light
-        currentActiveTrack.elementTick(c).style.backgroundColor = currentActiveTrack.backgroundTick(c); // Erase tick's high-light
+        currentActiveTrack.elementTick(c).style.backgroundColor = currentActiveTrack.backgroundColor(c); // Erase tick's high-light.
       }
 
       // At this point, no tick nor keyboard key is high-lighted with the blue
 
-      currentActiveTrack = track;
+      var sameHighlight = (currentActiveTrack == track) && (track.cursor() == t); // Is the same tick selected?
 
+      // Set keyboard keyand track tick cursor
+      Keyboard.highlight(track.key(t), "blue")
+      this.style.backgroundColor = "blue";
       track.setCursor(t)
 
-      // Set keyboard key to this active track's tick
-      Keyboard.highlight(track.key(t), "blue")
+      // Flip a tick's note if it's not selected or already highlighted.  That way an already selected note can be slected and immediately edited in the keybard.
+      if (sameHighlight || this.innerText==".") {
+        ToggleButtonState = this.innerText == "." ? 1 : 2;
+        this.innerText = ToggleButtonState == 1 ? "X" : "."
+      }
 
-      var c = track.cursor();
-
-      // If the note is active, keep it active, otherwise active it
-      ToggleButtonState = this.innerText == "." ? 1 : 2;
-      this.innerText = ToggleButtonState == 1 ? "X" : "."
-      this.style.backgroundColor = "blue";
- 
-      // Callback for the keyboard to set this current new track's tick's key/note value.
+      // Update Callback for the keyboard to set this current new track's tick's key/note value.
       setTrackTickKey = function (k) {
-        if (currentActiveTrack && 0 <= currentActiveTrack.cursor())
-          Keyboard.unhighlight(currentActiveTrack.key(currentActiveTrack.cursor()), "blue") // Erase old keyboard active tick key
+        Keyboard.unhighlight(track.key(track.cursor()), "blue") // Erase old keyboard active tick key
         track.setKey(t, k);
-        Keyboard.highlight(currentActiveTrack.key(t), "blue") // Set keyboard key to this active track's tick
+        Keyboard.highlight(track.key(t), "blue") // Set keyboard key to this active track's tick
       }
 
       // Play the note
       if (this.innerText=="X") track.playable.play(track.key(t), track.vol(), 0);
 
+      // Update the sheet element with each note from this track.  Eventually this will be another way to edit/move notes of the active track.
       var sheetElement = document.getElementById("sheet");
       sheetElement.innerText = "";
       track.elementTicks.map(function (e){ sheetElement.innerText += e.innerText; });
+
+      // Make sure the rest of the world knows about the latest track
+      currentActiveTrack = track;
     };
 
     tickElement.onmouseup = function (event) { }
@@ -977,12 +982,21 @@ var sequencerLoop = function () { // HACK: The sequencer
 
 
 var pause = function (event) {
+  var highlight = true;
+  var id = false; 
+  var color = '#f00';
   if (Pause = !Pause) {
     DB.post('pause', 'suspend');
-    event.target.style.background = 'red';
+    event.target.style.backgroundColor = color;
+    id = setInterval(function(){
+                       event.target.style.backgroundColor = (Pause && (highlight =! highlight)) ? color : '';
+                       if (!Pause) { clearInterval(id); }
+                     },
+                     500);
   } else {
     DB.post('pause', 'resume');
-    event.target.style.background = 'green';
+    event.target.style.backgroundColor = '';
+    clearInterval(id);
     if (nextBeatTime <= ctx.currentTime) { nextBeatTime = ctx.currentTime + 0.25; }
   }
 }
@@ -1009,9 +1023,27 @@ var hide = function (event) {
 
 
 var setupControls = function () {
+  //document.getElementById('speed').onmouseenter = function (event) { event.target.focus(); }
+  //document.getElementById('speed').onmouseleave = function (event) { event.target.blur(); }
+
+  document.getElementById('speed').onkeydown = function (event) {
+      DB("onkeydown speed: " + event.keyCode);
+      if (event.keyCode == 38) {
+        var newDuration = parseInt(event.target.innerText.replace("\n",""))+1;
+        event.target.innerText = newDuration;
+        BeatDuration = 60/newDuration;
+      } // if
+      if (event.keyCode == 40) {
+        var newDuration = parseInt(event.target.innerText.replace("\n",""))-1;
+        event.target.innerText = newDuration;
+        BeatDuration = 60/newDuration;
+      } // if
+  }
+
   document.getElementById('speed').onkeypress = function (event) {
+    DB("onkeypress speed: " + event.keyCode);
     setTimeout(function() { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
-      if (event.charCode == 13) {
+      if (event.keyCode == 13) {
         var newDuration = parseInt(event.target.innerText.replace("\n",""));
         event.target.innerText = newDuration;
         BeatDuration = 60/newDuration;
@@ -1019,9 +1051,12 @@ var setupControls = function () {
     }); // function
   } // function
 
+
+  document.getElementById('freq').onmouseenter = function (event) { event.target.focus(); }
+  document.getElementById('freq').onmouseleave = function (event) { event.target.blur(); }
   document.getElementById('freq').onkeypress = function (event) {
     setTimeout(function () { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
-      if (event.charCode == 13) {
+      if (event.keyCode == 13) {
         Keyboard.setStartFrequency(event.target.innerText = parseFloat(event.target.innerText.replace("\n","")));
       } // if
     }); // function
@@ -1042,8 +1077,7 @@ var setupControls = function () {
   var tempElem = false;
 
   /* As the mouse moves around the element, keep track of its relative location */
-  var createMover = function (moverId)
-  {
+  var createMover = function (moverId) {
 
     document.getElementById(moverId).onmousemove = function (event) {
       if (!ShiftIsDown) {
@@ -1111,10 +1145,8 @@ var setupControls = function () {
     } // function
   } // createMover
 
-  createMover('pause');
-  createMover('hide');
-  createMover('freq');
-  createMover('reset');
+  //createMover('freq');
+  //createMover('speed');
 } // setupControls ()
 
 
@@ -1139,7 +1171,7 @@ window.onload = function () {
   var DrumKit = new Drumkit(ctx, Noises, "white");
   setupKeyboard(Keyboard); // Give the piano immediate playing capability
   createTracks(16, 4, 4, [Synth, Synth2, Synth3], DrumKit); // beatcount tickcount measurecount synths drumkit
-  setupControls();
+  setupControls(); // Setup menus and moveable buttons.
   setInterval(rendererLoop, 50);
   setInterval(sequencerLoop, 50);
   //Base64.test();
@@ -1148,7 +1180,6 @@ window.onload = function () {
 
   DB("--onload [" + DB.status() + "]");
 }
-
 
 
 //]]></script>

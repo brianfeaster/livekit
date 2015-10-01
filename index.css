@@ -48,6 +48,14 @@ h1 {
 }
 
 
+.knobs { float:left; width:2.2em; border:solid 1px #ff0; color:#eee; text-align:center; margin-right:1em }
+.knobs > p { display:inline-block }
+.knobs > p:hover { border:solid thin #a0a }
+.knobs > .pause { background:gray; border:solid thin black } 
+.knobs > .reset { background:gray; border:solid thin black }
+.knobs > #speed { width:2em; background:#00a; border:solid thin black }
+
+
 .track { border:0; padding:0; margin:0 }
 
 .beat  { border:0; padding:0; margin:1px; height:2.0em; width:2.1em; display:inline-block; color:#999; }
@@ -78,9 +86,10 @@ h1 {
 #piano > div {
  display:inline-block;
  padding:2em 0 0 0;
- border:solid 1px black;
+ border-left:solid 1px black;
+ border-right:solid 1px black;
  margin:0;
- width:1.5em;
+ width:1.2em;
  height:1em;
  background-color:white;
 }
@@ -96,5 +105,5 @@ h1 {
  background-color:#222;
 }
 
-#piano > div > div:hover { background-color: #aaa }
-#piano > div > p:hover { background-color: #aaa }
+#piano > div:hover { background-color: #aaa }
+#piano > p:hover { background-color: #aaa }
