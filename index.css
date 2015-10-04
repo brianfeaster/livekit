@@ -40,11 +40,12 @@ h1 {
 #mainRythm {
   min-width: 1em;
   min-height: 1em;
-  border:solid 1px #ff0;
+  margin:1em;
+  border:solid thin #ff0;
   display:inline-block;
 }
 
-.tracklist > b { display:inline-block; text-align:center; width:2em; padding:0; border:0; margin-right:.5em; color:#eee; background:gray }
+.tracklist > b { font-weight:normal; display:inline-block; text-align:center; width:2em; padding:0; border:0; margin-right:.5em; color:#eee; background:gray }
 
 #rythm {
 }
@@ -58,7 +59,8 @@ h1 {
 .knobs > #speed { width:2em; background:#00a; border:solid thin black }
 
 
-.track { border:0; padding:0; margin:0 }
+.track { border:none; padding:0; margin:0 }
+.track > .trackid { display:inline-block; width:2em; vertical-align:top; text-align:center; background:#999; color:#eee}
 
 .beat  { border:0; padding:0; margin:1px; height:2.0em; width:2.1em; display:inline-block; color:#999; }
 .beat:hover { border: solid 1px #a0a; margin:0 }

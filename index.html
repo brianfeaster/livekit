@@ -23,17 +23,15 @@
  <p class="pause" onmousedown="pause(event)">||</p>
 </div>
 
-<div style="display:inline-block; position:relative; border:solid 1px #ff0">
+<div style="display:inline-block; position:relative; border:solid 1px #ff0; vertical-align:top">
  <p id="freq" ttabindex="0" style="float:left; display:inline-block; background:#00a; color:#eee" contenteditable="true">65.4064</p>
  <br/>
  <div id="piano"></div>
 </div>
 
 <div id="mainRythm">
- <p style="display:inline-block; background:gray; color:#eee" onmousedown="hide(event, 'rythm')">[.]</p>
+ <p style="display:inline-block; background:gray; color:#eee; padding:0; border-top:solid 1px #ff0; border-left:solid 1px #ff0; border-right:solid 1px #ff0; margin:0" onmousedown="hide(event, 'rythm')">[.]</p>
  <div class="tracklist" style="display:inline-block"></div>
- <br/>
- <div class="sheet" style="display:inline-block">................................................................</div>
  <div class="rythm"></div>
 </div>
 
@@ -499,9 +497,10 @@ var Synthesizer = function (ctx, keyboard, color) {
   Creates and maintains a sequence of keys to send a playable object over time.
 
   USAGE::
-    var track = new Track(beatCount, subBeatCount, beatsPerMeasure, playableObject);
+    var track = new Track(idElement, beatCount, subBeatCount, beatsPerMeasure, playableObject);
 
   CONSTRUCTOR PARAMETERS::
+    idElement         ID string
     beatCount         Number of bests (divided into subBeats)
     subBeatCount      Number of subbeats per beat
     beatsPerMeasure   Length of measure.  Used to determine beat highlighing in the tracks.
@@ -528,7 +527,7 @@ var Synthesizer = function (ctx, keyboard, color) {
     //track.tick(time)        Sequences all sounds from the web audio's context
                             current time through the specified 'time' parameter.
 ******************************************************************************/
-var Track = function (beatCount, subBeatCount, beatsPerMeasure, playable) {
+var Track = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playable) {
   //// Local
   var _beatCounter = 0;
   var _trackElement; // The DOM element
@@ -546,6 +545,9 @@ var Track = function (beatCount, subBeatCount, beatsPerMeasure, playable) {
     _trackElement = document.createElement('div'); // Track element
     _trackElement.className = "track";
     // Add beat elements to DOM
+
+    if (idElement) { _trackElement.appendChild(idElement); }
+
     for (var b=0; (b < beatCount); ++b) {
       var beatElement = CreateAppendChild('div', _trackElement); // Beat element added to track element
       beatElement.className = "beat";
@@ -815,14 +817,20 @@ function setupDrumTrack (track) {
 
 /* All tracks are kept in global 'Tracks'
 */
-var createTracks = function (beats, ticks, measure, synths, drumKit) {
+var createPhrase = function (beats, ticks, measure, synths, drumKit) {
   var mainRythmDOM = document.getElementById("mainRythm");
   var rythmDOM = mainRythmDOM.getElementsByClassName('rythm')[0]; // Consider the rythm block where the tracks will live.
   var trackListDOM = mainRythmDOM.getElementsByClassName('tracklist')[0];
   var track;
 
   for (var c=0; (c < synths.length); ++c) {
-    Tracks.push(track = new Track(beats, ticks, measure, synths[c]));
+
+    var id = document.createElement('b');
+    id.className = "trackid";
+    id.innerText = c;
+
+    Tracks.push(track = new Track(id, beats, ticks, measure, synths[c]));
+
     track.elementName.innerText = track.playable.waveform();
     track.elementName.onmousedown = (function (track) { return function () {
       track.playable.waveformNext();
@@ -832,15 +840,21 @@ var createTracks = function (beats, ticks, measure, synths, drumKit) {
     setupSynthTrack(track);
     // Clicking on the track button will toggle the actual track
     var b = CreateAppendChild('b', trackListDOM);
-    b.innerText = c
-    b.onmousedown = function(e){ toggleElementDisplay(e);}.bind(null, track.element);
+    b.innerText = c;
+    b.style.display = "none";
+    b.onmousedown = function(e, be){ toggleElementDisplay(e, be);}.bind(null, track.element, b);
+    id.onmousedown = function(e, be){ toggleElementDisplay(e, be);}.bind(null, track.element, b);
   }
 
   currentActiveTrack = Tracks[0]; // Make sure the keyboard can make sounds initially.
 
   // Create beat tracks which are kept track of in global 'Tracks'
   for (var i=0; (i < Noises.length); ++i) {
-    Tracks.push(track = new Track(beats, ticks, measure, drumKit));
+    var id = document.createElement('b');
+    id.className = "trackid";
+    id.innerText = c+i;
+
+    Tracks.push(track = new Track(id, beats, ticks, measure, drumKit));
     track.elementName.innerText = Noises.fileName(i);
     track.setAllKeys(i);
     track.elementName.onmousedown = (function(track, key) { return function () {
@@ -854,15 +868,18 @@ var createTracks = function (beats, ticks, measure, synths, drumKit) {
     setupDrumTrack(track);
     // Clicking on the track button will toggle the actual track
     var b = CreateAppendChild('b', trackListDOM);
-    b.innerText =  c + i
-    b.onmousedown = function(e){ toggleElementDisplay(e);}.bind(null, track.element);
+    b.innerText =  c + i;
+    b.style.fontWeight = "normal";
+    b.style.display = "none";
+    b.onmousedown = function(e, be){ toggleElementDisplay(e, be);}.bind(null, track.element, b);
+    id.onmousedown = function(e, be){ toggleElementDisplay(e, be);}.bind(null, track.element, b);
   }
 
   Tracks.beats = beats; // Make this info available along with the track objects themselves
   Tracks.ticks = ticks;
 
   restoreTicks();
-} // createTracks
+} // createPhrase
 
 
 var saveTicks = function () {
@@ -976,7 +993,7 @@ var sequencerLoop = function () { // HACK: The sequencer
 
   while (nextBeatTime <= (currentTime + 1.0)) { // Try to keep 1 second of audio rendered ahead of the current time.
     if (0 == (Beat % Tracks.beats)) { saveTicks(); } //  On the initial beat, upate the URL's get string.
-
+    // Over all the track in this measure
     for (var t=0; (t < Tracks.length); ++t) {
       for (var s=0; (s < Tracks.ticks); ++s) {
         var note = Tracks[t].elementTick(Tracks.ticks*(Beat%Tracks.beats) + s).innerText;
@@ -1032,8 +1049,9 @@ var hide = function (event, classToHide) {
   }
 }
 
-var toggleElementDisplay = function (e) {
+var toggleElementDisplay = function (e, be) {
   e.style.display = (e.style.display=="none" ? "" : "none");
+  be.style.display = (e.style.display == "none" ? "" : "none");
 }
 
 
@@ -1176,6 +1194,21 @@ var setupControls = function () {
    shrinkable
    raisable
 
+ CONCEPTS
+
+
+  Phrase of two measures. Measures of four beats. Beats divided into 4 ticks
+    x, xx x. .. x, x. xx x.       Tick order: 13
+    ,, .. x. .. ,, .. .x .x                   24
+
+  Official      Me
+  ------------- -----
+  Part          track
+  Quarter note  beat
+
+  The only thing the sequencer needs to keep track of are ticks.  Everything
+  else is for visual grouping and rendering.
+
 ******************************************************************************/
 window.onload = function () {
   DB("::onload");
@@ -1186,7 +1219,7 @@ window.onload = function () {
   var Synth3 = new Synthesizer(ctx, Keyboard, "cyan");
   var DrumKit = new Drumkit(ctx, Noises, "white");
   setupKeyboard(Keyboard); // Give the piano immediate playing capability
-  createTracks(16, 4, 4, [Synth, Synth2, Synth3], DrumKit); // beatcount tickcount measurecount synths drumkit
+  createPhrase(16, 4, 4, [Synth, Synth2, Synth3], DrumKit); // beatcount tickcount measurecount synths drumkit
   setupControls(); // Setup menus and moveable buttons.
   setInterval(rendererLoop, 50);
   setInterval(sequencerLoop, 50);
