@@ -501,7 +501,7 @@ var Synthesizer = function (ctx, keyboard, color) {
 
   CONSTRUCTOR PARAMETERS::
     idElement         ID string
-    beatCount         Number of bests (divided into subBeats)
+    beatCount         Number of total beats (measures * beatspermeasure)
     subBeatCount      Number of subbeats per beat
     beatsPerMeasure   Length of measure.  Used to determine beat highlighing in the tracks.
     playableObject    An object that makes sound
@@ -672,6 +672,7 @@ window.onmouseup = function () { MouseIsDown = false; }
 var ShiftIsDown = false;
 var ShiftCallback = false; // Called when mouse moves and shift is down
 var ShiftCallbackDone  = false;
+
 window.onkeyup = function (event) {
   if (ShiftIsDown && !event.shiftKey) {
     if (ShiftCallbackDone) ShiftCallbackDone(event);
@@ -681,8 +682,12 @@ window.onkeyup = function (event) {
 }
 
 window.onkeydown = function (event) {
-  //DB("onkeydown global: " + event.keyCode)
+  DB("onkeydown global: " + event.keyCode)
   if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
+  if (event.keyCode == 80) {
+    pause(event); // Pressing '/' will clear the DB (debug console) element.
+    event.stopPropagation(); // TODO This doesn't prevent space from scrolling the main window.
+  }
 }
 
 window.onmousemove = function (event) {
@@ -784,8 +789,8 @@ function setupSynthTrack (track) {
       // Play the note
       if (this.innerText=="X") track.playable.play(track.key(t), track.vol(), 0);
 
-      // Update the sheet element with each note from this track.  Eventually this will be another way to edit/move notes of the active track.
-      var sheetElement = document.getElementById("mainRythm").getElementsByClassName('sheet')[0];
+      // Update the tracklist element with each note from this track.  Eventually this will be another way to edit/move notes of the active track.
+      var sheetElement = document.getElementById("mainRythm").getElementsByClassName('tracklist')[0];
       sheetElement.innerText = "";
       track.elementTicks.map(function (e){ sheetElement.innerText += e.innerText; });
 
@@ -815,9 +820,9 @@ function setupDrumTrack (track) {
   }); // map function
 }
 
-/* All tracks are kept in global 'Tracks'
+/* All tracks are kept in global 'Tracks' TODO get rid of the single global tracks table in favor of phrase objects
 */
-var createPhrase = function (beats, ticks, measure, synths, drumKit) {
+var createPhrase = function (measures, beatsper, ticksper, synths, drumKit) {
   var mainRythmDOM = document.getElementById("mainRythm");
   var rythmDOM = mainRythmDOM.getElementsByClassName('rythm')[0]; // Consider the rythm block where the tracks will live.
   var trackListDOM = mainRythmDOM.getElementsByClassName('tracklist')[0];
@@ -825,11 +830,12 @@ var createPhrase = function (beats, ticks, measure, synths, drumKit) {
 
   for (var c=0; (c < synths.length); ++c) {
 
+    // The track toggle button
     var id = document.createElement('b');
     id.className = "trackid";
     id.innerText = c;
 
-    Tracks.push(track = new Track(id, beats, ticks, measure, synths[c]));
+    Tracks.push(track = new Track(id, measures*beatsper, ticksper, beatsper, synths[c]));
 
     track.elementName.innerText = track.playable.waveform();
     track.elementName.onmousedown = (function (track) { return function () {
@@ -854,7 +860,7 @@ var createPhrase = function (beats, ticks, measure, synths, drumKit) {
     id.className = "trackid";
     id.innerText = c+i;
 
-    Tracks.push(track = new Track(id, beats, ticks, measure, drumKit));
+    Tracks.push(track = new Track(id, measures*beatsper, ticksper, beatsper, drumKit));
     track.elementName.innerText = Noises.fileName(i);
     track.setAllKeys(i);
     track.elementName.onmousedown = (function(track, key) { return function () {
@@ -875,10 +881,10 @@ var createPhrase = function (beats, ticks, measure, synths, drumKit) {
     id.onmousedown = function(e, be){ toggleElementDisplay(e, be);}.bind(null, track.element, b);
   }
 
-  Tracks.beats = beats; // Make this info available along with the track objects themselves
-  Tracks.ticks = ticks;
+  Tracks.beats = measures*beatsper; // Make this info available along with the track objects themselves
+  Tracks.ticks = ticksper;
 
-  restoreTicks();
+  restoreTicks(); // Parse get string
 } // createPhrase
 
 
@@ -910,6 +916,8 @@ var saveTicks = function () {
 }
 
 
+/* Parse GET string
+*/
 var restoreTicks = function () {
   var ary = Base64(window.location.search.substring(1));
   if (0 == ary.length) return;
@@ -1013,17 +1021,18 @@ var pause = function (event) {
   var highlight = true;
   var id = false; 
   var color = '#f00';
+  var e = document.getElementsByClassName('pause')[0];
   if (Pause = !Pause) {
     DB.post('pause', 'suspend');
-    event.target.style.backgroundColor = color;
+    e.style.backgroundColor = color;
     id = setInterval(function(){
-                       event.target.style.backgroundColor = (Pause && (highlight =! highlight)) ? color : '';
+                       e.style.backgroundColor = (Pause && (highlight =! highlight)) ? color : '';
                        if (!Pause) { clearInterval(id); }
                      },
                      500);
   } else {
     DB.post('pause', 'resume');
-    event.target.style.backgroundColor = '';
+    e.style.backgroundColor = '';
     clearInterval(id);
     if (nextBeatTime <= ctx.currentTime) { nextBeatTime = ctx.currentTime + 0.25; }
   }
@@ -1214,12 +1223,12 @@ window.onload = function () {
   DB("::onload");
 
   Keyboard = new PianoKeyboard("piano", 61, 0, 2, 65.4064); // Create a piano in the dom.  61 keys, starting at C in octave 2.  SID 4 EVR
+  setupKeyboard(Keyboard); // Give the piano immediate playing capability
   Synth      = new Synthesizer(ctx, Keyboard, "red");
   var Synth2 = new Synthesizer(ctx, Keyboard, "green");
   var Synth3 = new Synthesizer(ctx, Keyboard, "cyan");
   var DrumKit = new Drumkit(ctx, Noises, "white");
-  setupKeyboard(Keyboard); // Give the piano immediate playing capability
-  createPhrase(16, 4, 4, [Synth, Synth2, Synth3], DrumKit); // beatcount tickcount measurecount synths drumkit
+  createPhrase(4, 4, 4, [Synth, Synth2, Synth3], DrumKit); // measures beats ticks measurecount synths drumkit
   setupControls(); // Setup menus and moveable buttons.
   setInterval(rendererLoop, 50);
   setInterval(sequencerLoop, 50);
