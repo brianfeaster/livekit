@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="DB" style="width:20em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="nDB" style="width:20em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Digital Audio Workstation &#x2669; &#x266a; &#x266b; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -23,25 +23,56 @@
  <p class="pause" onmousedown="pause(event)">||</p>
 </div>
 
-<div style="display:inline-block; position:relative; border:solid 1px #ff0; vertical-align:top">
- <p id="freq" ttabindex="0" style="float:left; display:inline-block; background:#00a; color:#eee" contenteditable="true">65.4064</p>
- <br/>
- <div id="piano"></div>
+<div style="display:inline-block">
+  <div style="display:inline-block; border:0; background:#888">
+    KEYBOARD
+  </div>
+<br/>
+  <div style="display:inline-block; margin-left:1em; margin-top:-2px; border:solid 2px #888">
+  <p id="freq" ttabindex="0" style="display:inline-block; background:#00a; color:#eee" contenteditable="true">65.4064</p>
+    <div>
+      <div id="piano1" class="piano"></div>
+    </div>
+  </div>
 </div>
 
-<div id="mainRythm">
- <p style="display:inline-block; background:gray; color:#eee; padding:0; border-top:solid 1px #ff0; border-left:solid 1px #ff0; border-right:solid 1px #ff0; margin:0" onmousedown="hide(event, 'rythm')">[.]</p>
- <div class="tracklist" style="display:inline-block"></div>
- <div class="rythm"></div>
+<div>
+  <div style="display:inline-block; background:#00f">
+    SHEET
+  </div>
+<br/>
+  <div id="sheet" class="sheet">
+
+    <div>
+     <div>phrase1</div>
+     <div><p>1/0</p><p>phrase1</p></div>
+    </div>
+
+    <div>
+     <div>phrase2</div>
+     <div><p>1/1</p><p>phrase1</p></div>
+    </div>
+
+  </div>
+</div>
+
+<div>
+  <div style="display:inline-block; background:#880" onmousedown="hide(event, 'rythm')">
+    PHRASE
+  </div>
+<br/>
+  <div id="phraseMain" class="phrase">
+    <div class="phraselist">_</div>
+    <div class="ticklist">_</div>
+    <div class="rythm"></div>
+  </div>
 </div>
 
 <script type="text/javascript">//<![CDATA[
+
 /******************************************************************************
-
   Useful aliases and objects
-
 ******************************************************************************/
-
 var Floor = Math.floor;
 var Pow   = Math.pow;
 var Abs   = Math.abs;
@@ -152,10 +183,10 @@ var Base64 = (function () {
     var str = ""; // The encoded string
     while (ary1.length) {
       str +=
-        base64table[(0 == octet) ? ary1[0] >> 2 :                                  // [000000..]
-                    (1 == octet) ? ((ary1.shift() & 3) << 4) + (ary1[0] >> 4) : // [......00][1111....]
+        base64table[(0 == octet) ? ary1[0] >> 2 :                              // [000000..]
+                    (1 == octet) ? ((ary1.shift() & 3) << 4) + (ary1[0] >> 4) :// [......00][1111....]
                     (2 == octet) ? ((ary1.shift() & 15) << 2) + (ary1[0] >> 6) //           [....1111][22......]
-                   /*3 == octet*/: ary1.shift() & 63];                       //                     [..222222]
+                   /*3 == octet*/: ary1.shift() & 63];                         //                     [..222222]
       octet = ++octet & 3;
     }
     return str;
@@ -789,8 +820,8 @@ function setupSynthTrack (track) {
       // Play the note
       if (this.innerText=="X") track.playable.play(track.key(t), track.vol(), 0);
 
-      // Update the tracklist element with each note from this track.  Eventually this will be another way to edit/move notes of the active track.
-      var sheetElement = document.getElementById("mainRythm").getElementsByClassName('tracklist')[0];
+      // Update the ticklist element with each note from this track.  Eventually this will be another way to edit/move notes of the active track.
+      var sheetElement = document.getElementById("phraseMain").getElementsByClassName('ticklist')[0];
       sheetElement.innerText = "";
       track.elementTicks.map(function (e){ sheetElement.innerText += e.innerText; });
 
@@ -820,12 +851,22 @@ function setupDrumTrack (track) {
   }); // map function
 }
 
+
 /* All tracks are kept in global 'Tracks' TODO get rid of the single global tracks table in favor of phrase objects
+
+  CALLS
+    setupSynthTrack
+    setupDrumTrack
+
+  SETS
+    Tracks
+    currentActiveTrack
+    restoreTicks        (loads ticks from GET string)
 */
 var createPhrase = function (measures, beatsper, ticksper, synths, drumKit) {
-  var mainRythmDOM = document.getElementById("mainRythm");
+  var mainRythmDOM = document.getElementById("phraseMain");
   var rythmDOM = mainRythmDOM.getElementsByClassName('rythm')[0]; // Consider the rythm block where the tracks will live.
-  var trackListDOM = mainRythmDOM.getElementsByClassName('tracklist')[0];
+  var trackListDOM = mainRythmDOM.getElementsByClassName('phraselist')[0];
   var track;
 
   for (var c=0; (c < synths.length); ++c) {
@@ -1206,14 +1247,16 @@ var setupControls = function () {
  CONCEPTS
 
 
-  Phrase of two measures. Measures of four beats. Beats divided into 4 ticks
-    x, xx x. .. x, x. xx x.       Tick order: 13
-    ,, .. x. .. ,, .. .x .x                   24
-
+  Sheet of one phrases.  Phrase of two measures. Measures/bars of four beats. Beats divided into X number of notes/ticks.
+    x, xx x. .. x, x. xx x.       Tick order:  1 3 
+    ,, .. x. .. ,, .. .x .x                    |/| 
+                                               2 4 
   Official      Me
   ------------- -----
-  Part          track
+  Part / Voice  track
   Quarter note  beat
+  Shortest note tick
+  
 
   The only thing the sequencer needs to keep track of are ticks.  Everything
   else is for visual grouping and rendering.
@@ -1222,12 +1265,13 @@ var setupControls = function () {
 window.onload = function () {
   DB("::onload");
 
-  Keyboard = new PianoKeyboard("piano", 61, 0, 2, 65.4064); // Create a piano in the dom.  61 keys, starting at C in octave 2.  SID 4 EVR
+  Keyboard = new PianoKeyboard("piano1", 61, 0, 2, 65.4064); // Create a piano in the dom.  61 keys, starting at C in octave 2.  SID 4 EVR
   setupKeyboard(Keyboard); // Give the piano immediate playing capability
   Synth      = new Synthesizer(ctx, Keyboard, "red");
   var Synth2 = new Synthesizer(ctx, Keyboard, "green");
   var Synth3 = new Synthesizer(ctx, Keyboard, "cyan");
   var DrumKit = new Drumkit(ctx, Noises, "white");
+  // TODO refactor this so as to instantiate multiple phrases
   createPhrase(4, 4, 4, [Synth, Synth2, Synth3], DrumKit); // measures beats ticks measurecount synths drumkit
   setupControls(); // Setup menus and moveable buttons.
   setInterval(rendererLoop, 50);
