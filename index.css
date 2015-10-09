@@ -108,8 +108,8 @@ h1 {
 }
 
 
-.track { border:none; padding:0; margin:0 }
-.track > .trackid { display:inline-block; width:2em; vertical-align:top; text-align:center; background:#888 }
+.part { border:none; padding:0; margin:0 }
+.part > .trackid { display:inline-block; width:2em; vertical-align:top; text-align:center; background:#888 }
 
 .beat  { border:0; padding:0; margin:1px; height:2.0em; width:2.1em; display:inline-block; color:#999; }
 .beat:hover { border: solid 1px #a0a; margin:0 }
