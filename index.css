@@ -47,16 +47,22 @@ h1 {
   display:inline-block;
 }
 
-.window > div:first-child > p:first-child {
+.window > div:first-child > * {
   display:inline-block;
 }
 
-.knobs { margin-left:1em; margin-top:-2px; display:inline-block; width:2.2em; border:solid 2px #088; text-align:center }
+.window > div:first-child > p:first-child {
+  background:#00f;
+  display:inline-block;
+}
+
+.knobs { margin-left:1em; margin-top:-2px; display:inline-block; border:solid 2px #088; text-align:center }
 .knobs > p { display:inline-block }
+.knobs > p:first-child { display:block }
 .knobs > p:hover { border:solid thin #a0a }
 .knobs > .pause { background:gray; border:solid thin black } 
 .knobs > .reset { background:gray; border:solid thin black }
-.knobs > #speed { width:2em; background:#00a; border:solid thin black }
+.knobs > #speed { background:#00a; border:solid thin black; padding-left:1ch; padding-right:1ch }
 
 .piano {
  display:inline-block;
@@ -90,10 +96,22 @@ h1 {
 .piano > div:hover { background-color: #aaa }
 .piano > p:hover { background-color: #aaa }
 
+#freq {
+  padding-left:1ch;
+  padding-right:1ch;
+}
+
 .sheet { display:inline-block; margin-left:1em; margin-top:-2px; border:solid 2px #00f; padding:.25em }
 .sheet > div { display:inline-block ; margin-left:.25em }
 .sheet > div > div:nth-child(1) { display:inline-block; background:#880 }
 .sheet > div > div:nth-child(2) { margin-top:-2px; border:solid 2px #880 }
+
+.addphrase > div:nth-child(2) > p {
+  background:#00f;
+  display:inline-block;
+  padding-left:1ch;
+  padding-right:1ch;
+}
 
 .phrases { border:solid 2px #00f }
 .phrases > div { margin:.25em }
