@@ -1,7 +1,7 @@
 html {
 }
 
-body > div { background:#111; margin:.25em }
+body > div { background:#000; margin:.25em }
 
 body {
   margin:4px;
@@ -24,6 +24,8 @@ a:hover   {color: #0ff}
 p   { margin:0 }
 hr  { margin:0 }
 
+
+
 h1 {
  margin:0;
  color:#b93;
@@ -40,7 +42,16 @@ h1 {
 
 .mainNav a { margin-left: 1em }
 
-.knobs { display:inline-block; width:2.2em; border:solid 1px #0ff; text-align:center }
+.window {
+  vertical-align:top;
+  display:inline-block;
+}
+
+.window > div:first-child > p:first-child {
+  display:inline-block;
+}
+
+.knobs { margin-left:1em; margin-top:-2px; display:inline-block; width:2.2em; border:solid 2px #088; text-align:center }
 .knobs > p { display:inline-block }
 .knobs > p:hover { border:solid thin #a0a }
 .knobs > .pause { background:gray; border:solid thin black } 
@@ -80,18 +91,23 @@ h1 {
 .piano > p:hover { background-color: #aaa }
 
 .sheet { display:inline-block; margin-left:1em; margin-top:-2px; border:solid 2px #00f; padding:.25em }
-.sheet > div { display:inline-block }
+.sheet > div { display:inline-block ; margin-left:.25em }
 .sheet > div > div:nth-child(1) { display:inline-block; background:#880 }
 .sheet > div > div:nth-child(2) { margin-top:-2px; border:solid 2px #880 }
-.sheet > div p { display:inline-block; margin-left:.25em; background:#00a } 
 
-.phrase {
+.phrases { border:solid 2px #00f }
+.phrases > div { margin:.25em }
+.phrases > div > p:nth-child(1) { display:inline-block; background:#880 }
+.phrases > div > div:nth-child(2) { display:inline-block; margin-left:1em; }
+.phrases > div > div:nth-child(3) { margin-top:-2px; border:solid 2px #880 }
+
+.phrases {
   display:inline-block;
   min-width: 1em;
   min-height: 1em;
   margin-left:1em;
   margin-top:-2px;
-  border:solid 2px #880;
+  border:solid 2px #00f;
   padding:0;
 }
 
