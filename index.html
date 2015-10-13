@@ -59,7 +59,7 @@
 
 <div id="save" style="width:320ch; overflow-wrap:break-word"></div>
 
-<img id="pauseicon" style="display:none; position:fixed; border-radius:50%" src="catpause.gif"/>
+<img id="pauseicon" alt=" P A U S E " style="background:#800; display:none; position:fixed; border-radius:50%" src="catpause.gif"/>
 
 <script type="text/javascript">//<![CDATA[
 "use strict"
@@ -923,43 +923,158 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
 } // Phrase
 
 
-// TODO New save mechanism
-var saveSong = function () {
+/******************************************************************************
+  Reference an actual phrase.
 
-  var pattern = "daw0\n";
+  USAGE::
+    var ref = new PhraseReference(parentPhrase)
 
-  for (var i=0; i<Sheet0.length(); ++i) {
-    var phrase = Sheet0.phrase(i);
-    pattern += phrase.id + " " + phrase.measureCount + " " + phrase.beatCount + " " + phrase.tickCount;
-    phrase.parts.map(function(part, i){
-      pattern += "\n" + part.elementName.innerText + " ";
+  CONSTRUCTOR PARAMETERS::
+    parentPhrase  Parent phrase object
 
-      var byte=0;
-      part.elementTicks.map(function (te, i) {
-        byte = (byte >> 1) + ("." == te.innerText ? 0 : 128);
-        if (7==i%8) {
-          pattern += ("0"+byte.toString(16)).slice(-2);
-          byte=0;
-        }
-      });
+  METHODS::
+    .elementIcon   The DOM element representing a minimized view.
+    .beatcount     Number of beats of parent.
+    .parent        The parent phrase
+******************************************************************************/
+var PhraseReference = function (parent) {
+  //// Local
+  // Create the iconified view DOM element
+  var elementIcon = document.createElement('div');
+  var _e = CreateAppendChild('div', elementIcon);
+  _e.innerText = "(" + parent.id + ")";
+  _e = CreateAppendChild('div', elementIcon);
+  _e.innerText = "(" + parent.measureCount + ") (" + parent.beatCount/parent.measureCount + ") (" + parent.tickCount/parent.beatCount + ")";
+  _e.style.width = parent.beatCount + "ch";
 
-      pattern += " ";
+  document.getElementById('sheet').appendChild(elementIcon);
 
-      if (part.playable instanceof Synthesizer) {
-        for (var i=0; i<part.tickLength; ++i) { 
-          pattern += ("0"+part.key(i).toString(16)).slice(-2);
-        }
-      } else {
-        pattern += part.key(0);
-      }
-    });
-    pattern += "\n";
+  elementIcon.onmousedown = function () {
+    toggleElementDisplay(parent.element);
+    if (parent.element.style.display == "none") {
+      elementIcon.children[0].style.background = "#440";
+    } else {
+      elementIcon.children[0].style.background = "";
+    }
   }
 
-  document.getElementById('save').innerText = pattern;
-
+  //// Public
+  this.elementIcon = elementIcon;
+  this.beatCount = parent.beatCount;
+  this.parent = parent;
 }
 
+
+/*
+ Base-64 encoding of bytes
+
+  HEADER
+  "daw" 01  version
+  
+  PHRASE...
+    00              Type phrase
+    0a "phrasename" Length, Label
+    04 04 04        measures, beatspermeasure, ticksperbeat
+
+     PART...
+     08 "partname" Length, Label
+     00...         4*4*4 bits representing on/off tick
+     00 || 00...   1 or 4*4*4 bytes.  If the first byte has 8bit set then this is the note to use for each tick.
+                   Otherwise this and 4*4*4-1 more bytes represent the notes for each tick.
+  -OR-
+  PHRASE REFERENCE...
+    01              Type phrase_reference
+    0a "phrasename" Length, Label to referenced phrase.
+
+*/
+var saveSong = function () {
+
+  var bytes = [76,75,1] // "LK" 0  Live Kit DAW Version 1
+
+  for (var i=0; i<Sheet0.length(); ++i) {
+
+    var phrase = Sheet0.index(i);
+
+    if (phrase instanceof PhraseReference) {
+      phrase = phrase.parent; // Consider actual phrase
+		// TYPE LENGTH "REFERENCED PHRASE LABLE"
+		bytes.push(1);
+		bytes.push(phrase.id.length);
+		phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+    } else {
+		// TYPE LENGTH "PHRASE LABLE"
+		bytes.push(0);
+		bytes.push(phrase.id.length);
+		phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+		// MEASURES BEATS COUNT
+		bytes.push(phrase.measureCount);
+		bytes.push(phrase.beatCount/phrase.measureCount);
+		bytes.push(phrase.tickCount/phrase.beatCount);
+
+		phrase.parts.map(function(part, i){
+		  // LENGTH "PART LABLE"
+		  bytes.push(part.elementName.innerText.length);
+		  part.elementName.innerText.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+
+		  // TICK BITS
+		  var bit = 1
+		  var byte=0;
+		  part.elementTicks.map(function (te, i) {
+			 if ("." != te.innerText) byte = byte | bit;
+			 if (128 == bit) {
+				bytes.push(byte);
+				bit = 1;
+				byte = 0;
+			 } else {
+				bit = bit<<1
+			 }
+		  });
+		  if (bit != 1) { bytes.push(byte); }
+
+		  // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
+		  if (part.playable instanceof Synthesizer) {
+			 for (var i=0; i<part.tickLength; ++i) { 
+				bytes.push(part.key(i));
+			 }
+		  } else {
+			 bytes.push(128 + part.key(0));
+		  }
+
+		});
+    }
+  }
+
+  //document.getElementById('save').innerText = bytes;
+  window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
+}
+
+/* Old encoding:
+-- 427 character base-64 encoding
+0G410K44GGGH4H4H4H4H4KLHH1H5H5HP00000000000000000000000000000000CpCpCpCpCpC000000000000000000000pCpCpCpCpCp1KL0KGH34LG000000000000000000000100400G014H4H4H4H4H4H00000000000400002m4B0GG2408E0mC310G411852mK41X064mS71m8820W92H892WeE2WmB2mi030mC3GqG3GuE30uF3myF700001S10G4S0W827WC30ny410GN1GK57mO61YC71mSX20W85ma92I4A2WeZ2miB7mmC31SD3GqV3WuE7WyF3pG0Bm0h0IW18m8U0Xm35mCX12O41GKe1IC69WOX1mS79WWX22e9A0aZ2YyAAWig2oeCA0mq3JSDEmusDZSsDWy
+-- Of 320 bytes
+010101014104410411111111111111114551441445445459000000000000000000000000000000000000000000000000333333333333333300000000000000000000000000000000ccccccccccccccccc15150144110c45500000000000000000000000000000000010001000100011111111111111111110000000000000000040000000b010b01040210020e0303030404040412050b05040610061307070702080808090912090a0a0e0a0c0b0b0b000c0c0c0d0d100d0e0e0c0e0f0f0f0f1c000000170101011c0202021e0303031f040404170505051f060606230707072108080817090909210a0a0a230b0b0b1f0c0c0c170d0d0d1f0e0e0e1e0f0f0f34002f002b01280123021e021c03170321042604050528052306260621070707260821082a092809230a2f0a2a0b2a0b2a0c280c340d370d3b0e36363736360f
+-- 16 parts each encoded as 8 bytes which represent the 64 binary ticks ----
+0101010141044104
+1111111111111111
+4551441445445459
+0000000000000000
+0000000000000000
+0000000000000000
+3333333333333333
+0000000000000000
+0000000000000000
+cccccccccccccccc
+c15150144110c455
+0000000000000000
+0000000000000000
+0100010001000111
+1111111111111111
+0000000000000000
+-- First three parts are synths which require an extra note per tick encoded as bytes ----
+040000000b010b01040210020e0303030404040412050b05040610061307070702080808090912090a0a0e0a0c0b0b0b000c0c0c0d0d100d0e0e0c0e0f0f0f0f
+1c000000170101011c0202021e0303031f040404170505051f060606230707072108080817090909210a0a0a230b0b0b1f0c0c0c170d0d0d1f0e0e0e1e0f0f0f
+34002f002b01280123021e021c03170321042604050528052306260621070707260821082a092809230a2f0a2a0b2a0b2a0c280c340d370d3b0e36363736360f
+*/
 var saveSongAlpha = function () {
   var pattern=[];
   var synthParts=[]; 
@@ -1026,7 +1141,13 @@ var restoreTicksAlpha = function () {
     .length()    Get number of phraes (actual and referenced)
     .beatCount() Get number of total playable beats
     .add(p)      Append phrase p
-    .phrase(i)   Get indexed phrase
+    .phrase(i)   Return whatever is in the internal array.
+                 Can be Phrase or PhraseReference.
+    .phrase(i)   Get indexed phrase or actual reference phrase.
+
+  TODO:
+    * Phrase move, delete
+    * Deleting a phrase should first replace the next reference, if any.  If not then actually delete it.
 ******************************************************************************/
 var Sheet = function () {
   //// Local
@@ -1035,12 +1156,20 @@ var Sheet = function () {
   //// Public
   this.length    = function ()  { return _phrases.length; }
   this.beatCount = function ()  { return _beatCount; }
-  this.add       = function (p) {
+  this.add       = function (p) { // Can add a Phrase or PhraseReference object
     _beatCount += p.beatCount;
     DB.post("beatCount", _beatCount);
-    return _phrases.push(p);
+    _phrases.push(p);
   }
-  this.phrase    = function (i) { return _phrases[i]; }
+  this.index = function (i) {
+    return _phrases[i];
+  }
+  this.phrase    = function (i) {
+    var p = _phrases[i];
+    if (p instanceof Phrase) return _phrases[i];
+    else if (p instanceof PhraseReference) return _phrases[i].parent;
+    else DB("ERROR: Sheet.phrase: Invalid phrase object.");
+  }
 } // Sheet
 
 
@@ -1508,6 +1637,11 @@ window.onload = function () {
   //phrase2.addPart(new Synthesizer(ctx, 0, keyboard, "magenta"));
   //phrase2.addPartFixed(DrumKit, 4);
   //Sheet0.add(phrase2);
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Reference the first phrase for fun
+  //var refPhrase = new PhraseReference(phrase);
+  //Sheet0.add(refPhrase);
 
   // Setup menus and moveable buttons.
   setupControls(keyboard);
