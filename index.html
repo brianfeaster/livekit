@@ -31,7 +31,7 @@
   <div style="display:inline-block; margin-left:1em; margin-top:-2px; border:solid 2px #888">
     <p id="freq" Ztabindex="0" style="display:inline-block; background:#00a; color:#eee" contenteditable="true">65.4064</p>
     <div>
-      <div id="piano1" class="piano"></div>
+      <div id="piano1" class="piano" style="white-space:nowrap"></div>
     </div>
   </div>
 </div>
@@ -56,6 +56,8 @@
   <div><p>PHRASE EDITOR</p></div>
   <div id="phrases" class="phrases"></div>
 </div></div>
+
+<div id="save" style="width:320ch; overflow-wrap:break-word"></div>
 
 <img id="pauseicon" style="display:none; position:fixed; border-radius:50%" src="catpause.gif"/>
 
@@ -255,14 +257,14 @@ var Base64 = (function () {
   oscillator.
 
   USAGE::
-    var Keyboard = new PianoKeyboard('piano', 37, 0, 1, 130.813);
+    var Keyboard = new PianoKeyboard(id, keyCount, startKey, startOctave, startFrequency);
 
   CONSTRUCTOR PARAMETERS::
-    DOM element id to add the new piano element.
-    number of keys
-    starting key (0==C, 1==C#, ... 11=B)
-    octave
-    first specified key's frequency
+    id             DOM element id to add the new piano element.
+    keyCount       Number of keys
+    startKey       Initial key (0==C, 1==C#, ... 11=B)
+    startOctave    Initial octave
+    startFrequency First specified key's frequency
 
   METHODS::
     Keyboard.keyElements           All key DOM elements in an array
@@ -378,7 +380,7 @@ var AudioBuffers = function (ctx, filenames) {
           var statusState = ((200 == client.status) || (0 == client.status) && (null != client.response)); // When loaded locally with --allow-file-access-from-files, status is 0 so must check client.response instead
           DB.check(statusState, "ERROR: AudioBuffers: " + client.status + " '" + (client.responseURL || fn) + "'");
           if (statusState) {
-            DB.log("LOADED " + fn);
+            //DB.log("LOADED " + fn);
             var samples = new Int16Array(client.response); // Consider u8 ary as s16 ary.
             // Normalized each s16 sample to f32 between -1 and 1.
             var Noise =  new Float32Array(samples.length);
@@ -540,56 +542,56 @@ var Synthesizer = function (ctx, type, keyboard, color) {
     var part = new Part(idElement, beatCount, subBeatCount, beatsPerMeasure, playableObject);
 
   CONSTRUCTOR PARAMETERS::
-    idElement         ID string
-    beatCount         Number of total beats (measures * beatspermeasure)
-    subBeatCount      Number of subbeats per beat
-    beatsPerMeasure   Length of measure.  Used to determine beat highlighing in the tracks.
-    playableObject    An object that makes sound
+    idElement        ID string
+    beatCount        Number of total beats (measures * beatspermeasure)
+    subBeatCount     Number of subbeats per beat
+    beatsPerMeasure  Length of measure.  Used to determine beat highlighing in the tracks.
+    playableObject   An object that makes sound
 
   METHODS::
-    part.playable          Get the playable object
-    part.element           Get the part's full DOM element
-    part.elementBeat(i)    Get the ith beat element
-    part.ticksPerBeat      Return ticks per beat count / subBeatCount
-    part.elementTicks      get array of all tick elements.
-    part.elementTick(i)    Get the ith tick element
-    part.elementName       Get the name element for this part
-    part.backgroundBeat(i) Get ith beat's original background.
-    part.backgroundColor(i)Get ith tick's original background color.
-    part.tickLength        Get number of ticks (notes, keys, whatever) this part contains.
-    part.key(i)            Get the key at tick i.
-    part.setKey(i, key)    Set the ith tick's key.
-    part.setAllKeys        Set the default key or drum index.
-    part.cursor()          Get the "cursor" representing one of the tick indices.
-    part.setCursor(i)      Set the "cursor" tick index.
-    part.vol()             Get volume (default = 0.5).
-    part.setVol(v)         Get volume.
-    part.play(tick, when)  Play the key or pad at tick 'tick'
-    part.playTicks(beat, when) Play the ticks at the specified beat starting at when.
+    .playable          Get the playable object
+    .element           Get the part's full DOM element
+    .elementBeat(i)    Get the ith beat element
+    .ticksPerBeat      Return ticks per beat count / subBeatCount
+    .elementTicks      get array of all tick elements.
+    .elementTick(i)    Get the ith tick element
+    .elementName       Get the name element for this part
+    .backgroundBeat(i) Get ith beat's original background.
+    .backgroundColor(i)Get ith tick's original background color.
+    .tickLength        Get number of ticks (notes, keys, whatever) this part contains.
+    .key(i)            Get the key at tick i.
+    .setKey(i, key)    Set the ith tick's key.
+    .setAllKeys        Set the default key or drum index.
+    .cursor()          Get the "cursor" representing one of the tick indices.
+    .setCursor(i)      Set the "cursor" tick index.
+    .vol()             Get volume (default = 0.5).
+    .setVol(v)         Get volume.
+    .play(tick, when)  Play the key or pad at tick 'tick'
+    .playTicks(beat, when) Play the ticks at the specified beat starting at when.
 ******************************************************************************/
 var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playable) {
   //// Local
   var _beatCounter = 0;
-  var _trackElement; // The DOM element  TODO rename this
+  var _element; // The DOM element  TODO rename this
   var _elementBeats = [];
   var _elementTicks = [];
-  var _volPad, _elementMenu, _elementName;
+  var _volPad, _elementVolume, _elementName;
   var _notes = []; // Each tick (beatCount * subBeatCount) gets its own key.
   var _beatOriginalBackground = [];
   var _tickOriginalBackground = [];
   var _cursor = -1;
   var _vol = 0.4;
 
-  var _createElements = function () {
+  var _createPhraseElement = function () {
     var p;
-    _trackElement = document.createElement('div'); // DOM element
-    _trackElement.className = "part";
+    _element = document.createElement('div'); // DOM element
+    _element.className = "part";
     // Add beat elements to DOM
 
-    if (idElement) { _trackElement.appendChild(idElement); }
+    if (idElement) { _element.appendChild(idElement); }
 
     for (var b=0; (b < beatCount); ++b) {
-      var beatElement = CreateAppendChild('div', _trackElement); // Beat element added to part element
+      var beatElement = CreateAppendChild('div', _element); // Beat element added to part element
       beatElement.className = "beat";
       beatElement.style.backgroundColor = (0 == (_beatCounter++ % beatsPerMeasure)) ? "#333" : "#222";
       // Keep track of the beat DOM element and its default background color.
@@ -606,12 +608,12 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
       }
     }
     // Add an edit/menu element.
-    _elementMenu = CreateAppendChild('p', _trackElement);
-    _elementMenu.className = "menu"
-    _elementMenu.style.position = "relative"
-    _elementMenu.innerText = "[V]"
+    _elementVolume = CreateAppendChild('p', _element);
+    _elementVolume.className = "menu"
+    _elementVolume.style.position = "relative"
+    _elementVolume.innerText = "[V]"
 
-    _volPad = CreateAppendChild('p', _elementMenu);
+    _volPad = CreateAppendChild('p', _elementVolume);
     _volPad.style.position = "absolute"
     _volPad.style.top = 0;
     _volPad.style.left = 0;
@@ -619,7 +621,7 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
     _volPad.style.display="none";
     _volPad.style.background="#242";
     _volPad.style.zIndex = "1";
-    _elementMenu.onmousedown = function () {
+    _elementVolume.onmousedown = function () {
       MouseIsDown = true;
       _volPad.style.display="block";
     }
@@ -633,7 +635,7 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
     _volPad.onmouseup = function () { if (!MouseIsDown) { event.stopPropagation(); _volPad.style.display="none";} }
     
     // Add sound name element to this part DOM element
-    _elementName = CreateAppendChild('p', _trackElement);
+    _elementName = CreateAppendChild('p', _element);
     _elementName.className = "name"
   }
 
@@ -642,11 +644,11 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
   }
 
   // Construct
-  _createElements();
+  _createPhraseElement();
 
   //// Public
   this.playable = playable;
-  this.element = _trackElement;
+  this.element = _element;
   this.elementBeat = function (i) { return _elementBeats[i]; }
   this.ticksPerBeat = subBeatCount;
   this.elementTicks = _elementTicks;
@@ -676,7 +678,7 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
 
 
 /******************************************************************************
- Keyboard, Synthesizer, and Phrases
+ keyboard, synthesizer, and phrases
 ******************************************************************************/
 
 var setupKeyboard = function (keyboard) {
@@ -808,56 +810,60 @@ function setupDrumTrack (part) {
     keyboard  The keyboard object used by synths
 
   METHODS::
-    .id                                Identification
-    .elementIcon                       The DOM element representing a minimized view.
-    .element                           The main DOM element representing this phrase.
-    .beatCount                         Number of beats of the longest part. TODO fixed for now
-    .tickCount                         Number of ticks of the longest part. TODO fixed for now
-    .partCount()                       Return number of parts
-    .parts                             Return all parts in an array.
-    .part(p)                           Return part p.
-    .addPart(playable)                 Appends a part to the phrase and associates it with a playable object which implements .play(note, vol, when).
-    .addPartFixed(playable, fixedNote) Appends a part to the phrase and associates it with a playable object that will be called with a fixedNote.
+    .id                      Identification
+    .elementIcon             The DOM element representing a minimized view.
+    .element                 The main DOM element representing this phrase.
+    .measureCount            Number of measures of each part.
+    .beatCount               Number of beats of each part.
+    .tickCount               Number of ticks of each part.
+    .partCount()             Return number of parts
+    .parts                   Return all parts in an array.
+    .part(p)                 Return part p.
+    .addPart(playable)       Appends a new part to the phrase and associates it with a playable object which implements .play(note, vol, when).
+    .addPartFixed(playable,  Appends a new part to the phrase and associates it with a playable object that will be called with a fixedNote.
+                  fixedNote)
 
   NOTES::
 
     Calls:              Sets:
-      setupSynthPart()    window.Parts
-      setupDrumTrack()    window.currentActiveSynthPart
-                          window.restoreTicks (loads ticks from GET string)
-  TODO::
-    A phrase object will create two DOM elements.  One as a sheet placeholder
-    (inserted as a child into the id="sheet" element), the other an editable
-  p  hrase element inserted into the phrase.
+      setupSynthPart()    window.currentActiveSynthPart
+      setupDrumTrack()
+
 ******************************************************************************/
 var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   //// Local
-  var _e, _partlistDOM, _partsDOM, _parts = [];
+  var _partlistDOM, _partsDOM, _parts = [];
 
   // Create the iconified view DOM element
   var elementIcon = document.createElement('div');
-  _e = CreateAppendChild('div', elementIcon);
+  var _e = CreateAppendChild('div', elementIcon);
   _e.innerText = id;
   _e = CreateAppendChild('div', elementIcon);
   _e.innerText = measures + " " + beatsper + " " + ticksper;
   _e.style.width = measures*beatsper + "ch";
 
   // Create the DOM element representing this object.
-  var element = document.createElement('div');
-  _e = CreateAppendChild('p', element);
-  _e.innerText = id;
-  _partlistDOM = CreateAppendChild('div', element);
+  var _element = document.createElement('div');
+  var _elementId = CreateAppendChild('p', _element);
+  _elementId.innerText = id;
+  _partlistDOM = CreateAppendChild('div', _element);
   _partlistDOM.className = "partlist";
-  _partsDOM = CreateAppendChild('div', element);
+  _partsDOM = CreateAppendChild('div', _element);
 
-  // When the phase icon is clicked on, toggle the main editable element.
-  elementIcon.onmousedown = function () {
-    toggleElementDisplay(element);
+  // When the phase icon element or phase element itself is clicked on, toggle the main editable element.
+  elementIcon.onmousedown =
+  _elementId.onmousedown = function () {
+    toggleElementDisplay(_element);
+    if (_element.style.display == "none") {
+      elementIcon.children[0].style.background = "#440";
+    } else {
+      elementIcon.children[0].style.background = "";
+    }
   }
 
   // [TODO: remove eventually] Automatically insert into DOM.
   document.getElementById('sheet').appendChild(elementIcon);
-  document.getElementById('phrases').appendChild(element);
+  document.getElementById('phrases').appendChild(_element);
 
   // Add a new part to this phrase object. It requires a playable object
   var _createPart = function (playable, idx) { // idx can be undefined
@@ -883,8 +889,9 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
 
   //// Public
   this.id        = id;
-  this.element     = element;
+  this.element   = _element;
   this.elementIcon = elementIcon;
+  this.measureCount = measures;
   this.beatCount = measures * beatsper;
   this.tickCount = measures * beatsper * ticksper;
   this.partCount = function () { return _parts.length; }
@@ -916,7 +923,44 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
 } // Phrase
 
 
-var saveTicks = function () {
+// TODO New save mechanism
+var saveSong = function () {
+
+  var pattern = "daw0\n";
+
+  for (var i=0; i<Sheet0.length(); ++i) {
+    var phrase = Sheet0.phrase(i);
+    pattern += phrase.id + " " + phrase.measureCount + " " + phrase.beatCount + " " + phrase.tickCount;
+    phrase.parts.map(function(part, i){
+      pattern += "\n" + part.elementName.innerText + " ";
+
+      var byte=0;
+      part.elementTicks.map(function (te, i) {
+        byte = (byte >> 1) + ("." == te.innerText ? 0 : 128);
+        if (7==i%8) {
+          pattern += ("0"+byte.toString(16)).slice(-2);
+          byte=0;
+        }
+      });
+
+      pattern += " ";
+
+      if (part.playable instanceof Synthesizer) {
+        for (var i=0; i<part.tickLength; ++i) { 
+          pattern += ("0"+part.key(i).toString(16)).slice(-2);
+        }
+      } else {
+        pattern += part.key(0);
+      }
+    });
+    pattern += "\n";
+  }
+
+  document.getElementById('save').innerText = pattern;
+
+}
+
+var saveSongAlpha = function () {
   var pattern=[];
   var synthParts=[]; 
 
@@ -946,10 +990,10 @@ var saveTicks = function () {
 
 /* Parse GET string
 */
-var restoreTicks = function () {
+var restoreTicksAlpha = function () {
   var ary = Base64(window.location.search.substring(1));
   if (320 != ary.length) {
-    if (0 < ary.length) DB("WARNING: restoreTicks: GET string phrase not detected.");
+    if (0 < ary.length) DB("WARNING: restoreTicksAlpha: GET string phrase not detected.");
     return;
   }
   DB("Scanning phrase via GET string...");
@@ -999,33 +1043,6 @@ var Sheet = function () {
   this.phrase    = function (i) { return _phrases[i]; }
 } // Sheet
 
-
-var saveTicks = function () {
-  var pattern=[];
-  var synthParts=[]; 
-
-  // Over each part...
-  Sheet0.phrase(0).parts.map(function (part) {
-    var byte=0;
-    if (part.playable instanceof Synthesizer) synthParts.push(part); // Keep track of synth parts.
-    part.elementTicks.map(function (te, i) {
-      byte = (byte >> 1) + ("." == te.innerText ? 0 : 128);
-      if (7==i%8) {
-        pattern.push(byte);
-        byte=0;
-      }
-    });
-  });
-
-  // The synth part's tick keys
-  synthParts.map(function (part) {
-    for (var i=0; i<part.tickLength; ++i) {
-      pattern.push(part.key(i))
-    }
-  });
-
-  window.history.replaceState("ohhai", "Digital Audio Workstation", document.location.href.split('?')[0] + '?'  + Base64(pattern));
-}
 
 var setupControls = function (keyboard) {
   //document.getElementById('speed').onmouseenter = function (event) { event.target.focus(); }
@@ -1349,7 +1366,7 @@ var sequencerLoop = function () {
 
     var _beat = (Beat - beatTally);
 
-    if (0 == _beat) { saveTicks(); } // On the initial beat, upate the URL's get string.  TODO: Storage to be rewritten.
+    if (0 == _beat) { saveSong(); } // On the initial beat, upate the URL's get string.  TODO: Storage to be rewritten.
 
     // Over each part in the current phrase, play the ticks associated with specific phrase-beat.
     for (var i=0; (i < phrase.partCount()); ++i) {
@@ -1391,6 +1408,9 @@ var sequencerLoop = function () {
   Quarter note  Beat
   Shortest note Tick
 
+3/4 song -- paste the following into daw07 console
+[18, 21, 25, 18, 21, 25, 18, 21, 26, 16, 20, 23, 16, 20, 23, 16, 20, 25, 13, 18, 20, 13, 18, 20, 13, 17, 20, 18, 21, 25, 18, 21, 25, 18, 25, 30, 25, 29, 32, 30, 33, 37, 30, 37, 41, 42, 45, 30].map(function(n,i){Sheet0.phrase(0).part(2).setKey(i,n-12);})
+
 ******************************************************************************/
 DB.check((window.AudioContext || window.webkitAudioContext), "Audio context not found.  Use Chrome browser.");
 var ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1398,10 +1418,10 @@ var ctx = new (window.AudioContext || window.webkitAudioContext)();
 var Sheet0; // New hotness
 
 var currentActiveSynthPart = false;  // This is the last track acted upon.  Should be initialied at some point.
-var SetPartTick = false; // HACK: This becomes a function that sets the key in some synth phrase.  Move this functionality into the piano keyboard object.
+vaa SetPartTick = false; // HACK: This becomes a function that sets the key in some synth phrase.  Move this functionality into the piano keyboard object.
 
 var ToggleButtonState = 1;
-var BeatDuration = 1.0; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
+var BeatDuration = 0.25; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
@@ -1441,11 +1461,11 @@ document.body.addEventListener('touchstart', function (event) {if (event.touches
 
 
 /******************************************************************************
-
   onload
-3/4 song -- paste the following into daw07 console
-[18, 21, 25, 18, 21, 25, 18, 21, 26, 16, 20, 23, 16, 20, 23, 16, 20, 25, 13, 18, 20, 13, 18, 20, 13, 17, 20, 18, 21, 25, 18, 21, 25, 18, 25, 30, 25, 29, 32, 30, 33, 37, 30, 37, 41, 42, 45, 30].map(function(n,i){Sheet0.phrase(0).part(2).setKey(i,n-12);})
-
+Phrase0 4 16 64
+0:30 33 37 30 33 37 30 33 38 28 32 35 28 32 35 28 32 37 25 30 32 25 30 32 25 29 32 30 33 37 30 33 37 30 37 42 37 41 44 42 45 49 42 49 53 54 57 42 37 33 32 30 33 35 37 38 40 41 42 37 33 30 25 21
+1:18 21 25 18 21 25 18 21 26 16 20 23 16 20 23 16 20 25 13 18 20 13 18 20 13 17 20 18 21 25 18 21 25 18 25 30 25 29 32 30 33 37 30 37 41 42 45 30 25 21 25 23 20 23 25 18 23 14 14 14 15 15 15 15
+2:6 9 13 6 9 13 6 9 14 4 8 11 4 8 11 4 8 13 1 6 8 1 6 8 1 5 8 6 9 13 6 9 13 6 13 18 13 17 20 18 21 25 18 25 29 30 33 18 12 12 12 12 13 13 13 13 14 14 14 14 15 15 15 60
 ******************************************************************************/
 var addphrase;
 
@@ -1455,7 +1475,8 @@ window.onload = function () {
   Sheet0 = new Sheet(); // Global sheet object
 
   // Create a piano in the dom.  61 keys, starting at C in octave 2.
-  var keyboard = new PianoKeyboard("piano1", 61, 0, 2, 65.4064);
+  var keyboard = new PianoKeyboard("piano1", 61, 0, 1, 65.4064);
+  //var keyboard = new PianoKeyboard("piano1", 88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
   setupKeyboard(keyboard); // Give the piano immediate playing capability
 
   // Create a phrase with 4 measures, 4 beats per measure, and 4 ticks per beat.
@@ -1472,7 +1493,7 @@ window.onload = function () {
   var DrumKit = new Drumkit(ctx, "orange", new AudioBuffers(ctx, filenames));
   for (var n=0; n<filenames.length; ++n) { phrase.addPartFixed(DrumKit, n) }
 
-  restoreTicks(); // Parse get string
+  restoreTicksAlpha(); // Parse get string
 
   /////////////////////////////////////////////////////////////////////////////
   // A second phrase for fun
