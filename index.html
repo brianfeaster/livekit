@@ -20,7 +20,7 @@
 <div class="window">
   <div><p style="background:#088">TIMING</p></div>
   <div class="knobs">
-	<p id="speed" Ztabindex="0" contenteditable="true">120</p>
+	<p id="speed" Ztabindex="0" contenteditable="true">160</p>
 	<p class="reset" onmousedown="reset(event)">|&lt;</p>
 	<p class="pause" onmousedown="pause(event)">||</p>
   </div>
@@ -1052,11 +1052,13 @@ var setupControls = function (keyboard) {
       //DB("onkeydown speed: " + event.keyCode);
       if (event.keyCode == 38) {
         var newDuration = parseInt(event.target.innerText.replace("\n",""))+1;
+        if (666 < newDuration) return;
         event.target.innerText = newDuration;
         BeatDuration = 60/newDuration;
       } // if
       if (event.keyCode == 40) {
         var newDuration = parseInt(event.target.innerText.replace("\n",""))-1;
+        if (newDuration < 1) return;
         event.target.innerText = newDuration;
         BeatDuration = 60/newDuration;
       } // if
@@ -1067,8 +1069,12 @@ var setupControls = function (keyboard) {
     setTimeout(function() { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
       if (event.keyCode == 13) {
         var newDuration = parseInt(event.target.innerText.replace("\n",""));
-        event.target.innerText = newDuration;
-        BeatDuration = 60/newDuration;
+        if (1 < newDuration && newDuration <= 666) {
+          event.target.innerText = newDuration;
+          BeatDuration = 60/newDuration;
+        } else {
+          event.target.innerText =  60/BeatDuration;
+        }
       } // if
     }); // function
   } // function
@@ -1418,10 +1424,11 @@ var ctx = new (window.AudioContext || window.webkitAudioContext)();
 var Sheet0; // New hotness
 
 var currentActiveSynthPart = false;  // This is the last track acted upon.  Should be initialied at some point.
-vaa SetPartTick = false; // HACK: This becomes a function that sets the key in some synth phrase.  Move this functionality into the piano keyboard object.
+var SetPartTick = false; // HACK: This becomes a function that sets the key in some synth phrase.  Move this functionality into the piano keyboard object.
 
 var ToggleButtonState = 1;
-var BeatDuration = 0.25; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
+ 0.375; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
+var BeatDuration =60/ parseInt(document.getElementById('speed').innerText);
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
