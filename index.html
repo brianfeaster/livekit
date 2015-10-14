@@ -7,7 +7,7 @@
 </head>
 <body Zoncontextmenu="return false;">
 
-<p id="noDB" style="width:30em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="DB" style="width:30em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Digital Audio Workstation bEtA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -822,6 +822,7 @@ function setupDrumTrack (part) {
     .addPart(playable)       Appends a new part to the phrase and associates it with a playable object which implements .play(note, vol, when).
     .addPartFixed(playable,  Appends a new part to the phrase and associates it with a playable object that will be called with a fixedNote.
                   fixedNote)
+    .referenceIncrement      Keep track of my references.
 
   NOTES::
 
@@ -832,15 +833,36 @@ function setupDrumTrack (part) {
 ******************************************************************************/
 var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   //// Local
+  var self = this;
   var _partlistDOM, _partsDOM, _parts = [];
+  var _referencees = 0;
 
   // Create the iconified view DOM element
   var elementIcon = document.createElement('div');
+
   var _e = CreateAppendChild('div', elementIcon);
   _e.innerText = id;
+
   _e = CreateAppendChild('div', elementIcon);
-  _e.innerText = measures + " " + beatsper + " " + ticksper;
   _e.style.width = measures*beatsper + "ch";
+
+  var _f = CreateAppendChild('span', _e);
+  _f.innerText = measures + " " + beatsper + " " + ticksper + " ";
+
+  _referencees = CreateAppendChild('span', _e);
+  _referencees.innerText = 0;
+
+  // A button to create a reference phrase
+  var _e = CreateAppendChild('span', _e);
+  _e.style.float = "right";
+  _e.style.background = "#880";
+  _e.innerText = "*";
+
+  _e.onclick = function (event) {
+    var refPhrase = new PhraseReference(self);
+    Sheet0.add(refPhrase);
+    DB("hi");
+  }
 
   // Create the DOM element representing this object.
   var _element = document.createElement('div');
@@ -920,6 +942,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
     setupDrumTrack(_part);
   } // addPartFixed
 
+  this.referenceIncrement = function () { _referencees.innerText = parseInt(_referencees.innerText)+1; }
 } // Phrase
 
 
@@ -939,6 +962,9 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
 ******************************************************************************/
 var PhraseReference = function (parent) {
   //// Local
+
+  parent.referenceIncrement();
+
   // Create the iconified view DOM element
   var elementIcon = document.createElement('div');
   var _e = CreateAppendChild('div', elementIcon);
@@ -947,6 +973,7 @@ var PhraseReference = function (parent) {
   _e.innerText = "(" + parent.measureCount + ") (" + parent.beatCount/parent.measureCount + ") (" + parent.tickCount/parent.beatCount + ")";
   _e.style.width = parent.beatCount + "ch";
 
+  // [TODO: remove eventually] Automatically insert into DOM.
   document.getElementById('sheet').appendChild(elementIcon);
 
   elementIcon.onmousedown = function () {
@@ -997,12 +1024,12 @@ var saveSong = function () {
 
     if (phrase instanceof PhraseReference) {
       phrase = phrase.parent; // Consider actual phrase
-		// TYPE LENGTH "REFERENCED PHRASE LABLE"
+		// TYPE LENGTH "REFERENCED PHRASE LABEL"
 		bytes.push(1);
 		bytes.push(phrase.id.length);
 		phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
     } else {
-		// TYPE LENGTH "PHRASE LABLE"
+		// TYPE LENGTH "PHRASE LABEL"
 		bytes.push(0);
 		bytes.push(phrase.id.length);
 		phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
@@ -1012,7 +1039,7 @@ var saveSong = function () {
 		bytes.push(phrase.tickCount/phrase.beatCount);
 
 		phrase.parts.map(function(part, i){
-		  // LENGTH "PART LABLE"
+		  // LENGTH "PART LABEL"
 		  bytes.push(part.elementName.innerText.length);
 		  part.elementName.innerText.split('').map(function(b){bytes.push(b.charCodeAt(0))});
 
