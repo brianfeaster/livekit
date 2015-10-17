@@ -1,19 +1,14 @@
-html {
-}
-
-body > div { background:#000; margin:.25em }
-
 body {
-  margin:4px;
-  background:#000;
-  color:#ddd;
-  font-family: monospace;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
+ margin:0;
+ background:#000;
+ color:#ccc;
+ font-family: monospace;
+ -webkit-touch-callout: none;
+ -webkit-user-select: none;
+ -khtml-user-select: none;
+ -moz-user-select: none;
+ -ms-user-select: none;
+ user-select: none;
 }
 
 a         {text-decoration: none}
@@ -21,53 +16,70 @@ a:link    {color: #bbf}
 a:visited {color: #aaa}
 a:hover   {color: #0ff}
 
-p   { margin:0 }
-hr  { margin:0 }
-
-
+h1, hr, p { margin:0 }
 
 h1 {
- margin:0;
- color:#b93;
  font-family:sans-serif;
- font-size:larger;
- letter-spacing: .25em;
+ font-size:inherit;
+ white-space:nowrap;
 }
 
-.mainNav {
+.mustshift { margin-left:1ch; background:#066 }
+.mustshift:hover { background:red }
+
+.headerNav {
  text-align:right;
- font-family: sans-serif;
+ font-family:sans-serif;
  font-size:x-small;
 }
 
-.mainNav a { margin-left: 1em }
+.headerNav > a {
+  margin-left:1ch;
+  white-space:nowrap;
+}
+
 
 .window {
+  display:inline-block;
+  margin:.25ch;
   vertical-align:top;
-  display:inline-block;
 }
 
-.window > div:first-child > * {
-  display:inline-block;
+.window > div:nth-child(1) {
+  float:left;
+  padding-left:.5ch;
+  padding-right:.5ch;
+  border:solid 1px #444;
 }
 
-.window > div:first-child > p:first-child {
-  background:#00f;
-  display:inline-block;
+.window > div:nth-child(2) {
+  overflow:hidden;
+  border-bottom:solid 1px #444
 }
 
-.knobs { margin-left:1em; margin-top:-2px; display:inline-block; border:solid 2px #088; text-align:center }
-.knobs > p { display:inline-block }
-.knobs > p:first-child { display:block }
-.knobs > p:hover { border:solid thin #a0a }
-.knobs > .pause { background:gray; border:solid thin black } 
-.knobs > .reset { background:gray; border:solid thin black }
-.knobs > #speed { background:#00a; border:solid thin black; padding-left:1ch; padding-right:1ch }
+.window > div:nth-child(3) {
+  display:block;
+  position:relative;
+  margin-left:1ch;
+  margin-top:0px;
+  border: solid 1px #444;
+  border-top: solid 1px black
+}
+
+
+.knobs > p {
+  display:inline-block;
+  background:#066;
+  border:solid 1px black
+}
+
+.knobs > p:hover {
+  border:solid 1px #f0f
+}
+
 
 .piano {
- display:inline-block;
  text-align:center; 
- font-family: serif;
  color: black;
 }
 
@@ -93,39 +105,76 @@ h1 {
  background-color:#222;
 }
 
-.piano > div:hover { background-color: #aaa }
-.piano > p:hover { background-color: #aaa }
-
-#freq {
-  padding-left:1ch;
-  padding-right:1ch;
+.piano > div:hover,
+.piano > p:hover   {
+  background-color: #088
 }
 
-.sheet { display:inline-block; margin-left:1em; margin-top:-2px; border:solid 2px #00f; padding:.25em }
-.sheet > div { display:inline-block ; margin-left:.25em }
-.sheet > div > div:nth-child(1) { display:inline-block; background:#880 }
-.sheet > div > div:nth-child(2) { margin-top:-2px; border:solid 2px #880 }
 
-.addphrase > div:nth-child(2) > p {
-  background:#00f;
+.windowphrase {
   display:inline-block;
-  padding-left:1ch;
-  padding-right:1ch;
+  vertical-align:top;
 }
 
-.phrases { border:solid 2px #00f }
-.phrases > div { margin:.25em }
+.windowphrase > div:nth-child(1) {
+  float:left;
+  border:solid 1px #880;
+  border-bottom:solid 1px black
+}
+
+.windowphrase > div:nth-child(2) {
+  overflow:hidden;
+}
+
+.windowphrase > div:nth-child(3) {
+  margin-top:1px;
+  border: solid 1px #880;
+}
+
+
+.windowphrasealias {
+  display:inline-block;
+  vertical-align:top;
+}
+
+.windowphrasealias > div:nth-child(1) {
+  float:left;
+  border:dashed 1px #888;
+  border-bottom:solid 1px black
+}
+
+.windowphrasealias > div:nth-child(2) {
+  overflow:hidden;
+}
+
+.windowphrasealias > div:nth-child(3) {
+  margin-top:1px;
+  border: dashed 1px #888;
+}
+
+
+
+.addphrase {
+  display:inline-block;
+  border:0;
+}
+
+.addphrase p { background:#066; display:inline; border: solid 1px black }
+.addphrase p:hover { border:solid 1px #f0f }
+  
+.addphrase span { background:#066; border: solid 1px black }
+.addphrase span:hover { border:solid 1px #f0f }
+
+
+.phrases > div { margin:1ch; }
 .phrases > div > p:nth-child(1) { display:inline-block; background:#880 }
-.phrases > div > div:nth-child(2) { display:inline-block; margin-left:1em; }
-.phrases > div > div:nth-child(3) { margin-top:-2px; border:solid 2px #880 }
+.phrases > div > div:nth-child(2) { display:inline-block ; padding-left:1ch; }
+.phrases > div > div:nth-child(3) { border:solid 1px #880 }
 
 .phrases {
   display:inline-block;
   min-width: 1em;
   min-height: 1em;
-  margin-left:1em;
-  margin-top:-2px;
-  border:solid 2px #00f;
   padding:0;
 }
 
@@ -134,10 +183,7 @@ h1 {
   display:inline-block;
   text-align:center;
   width:2em;
-  padding:0;
-  border:0;
   margin-right:.5em;
-  color:#eee;
   background:gray
 }
 
@@ -162,4 +208,3 @@ h1 {
 .name:hover { border: solid 1px #a0a }
 .menu  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; height:2em;}
 .menu:hover { border: solid 1px #a0a }
-
