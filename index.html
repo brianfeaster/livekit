@@ -7,7 +7,7 @@
 </head>
 <body Zoncontextmenu="return false;">
 
-<p id="noDB" style="width:30em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="DB" style="width:30em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -326,7 +326,7 @@ var GetStringBase64 = function (get) {
   }
 
   this.nextByte = function () {
-   return (0 < _gs.length) ? _gs.splice(0,1) : null;
+   return (0 < _gs.length) ? _gs.splice(0,1)[0] : null;
   }
 
   this.examine = function () { return _gs; }
@@ -349,7 +349,7 @@ var GetStringBase64 = function (get) {
     _gs = __gs;
   }
 
-  //_test();
+  _test();
   this.reset();
 }
 
@@ -1263,6 +1263,7 @@ var PhraseReference = function (parent) {
   -HEADER-
   "LK" 01  version
   00        main volume
+  00 00     bear duration
   
   -PHRASE OR PHRASE_REFERENCE...-
     -PHRASE-
@@ -1285,10 +1286,10 @@ var saveSong = function () {
 
   var bytes = [76,75,1] // "LK" 01  LiveKa7 DAW Version 1 Header
 
-  bytes.push(parseInt(Volume*255.0));
+  bytes.push((Volume*255.0).toFixed(0));
   // BMP saved as fixed point to two decimal places in little endian.  So convert the duration in seconds to microseconds then split.
-  bytes.push(parseInt(6000/BeatDuration & 255));
-  bytes.push(parseInt(6000/BeatDuration >> 8));
+  bytes.push(parseInt((6000/BeatDuration) & 255));
+  bytes.push(parseInt((6000/BeatDuration) >> 8));
 
   for (var i=0; i<Sheet0.length(); ++i) {
 
@@ -1346,7 +1347,46 @@ var saveSong = function () {
   }
 
   document.getElementById('save').innerText = bytes;
-  //window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
+  window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
+}
+
+
+/*
+*/
+var restoreSongLK1 = function (keyboard, drumKit) {
+  var gs = new GetStringBase64();
+  var b;
+  if (!gs.assertString("LK") || !gs.assertBytes([1])) {
+    DB("Not LK1")
+    return false;
+  }
+
+  DB("Is LK1")
+
+  b = gs.nextByte();
+  Volume = b / 255.0;
+  document.getElementById('volume').innerText = (100.0 * Volume).toFixed(0);
+
+  b = gs.nextByte() + (gs.nextByte()<<8);
+  BeatDuration = 6000.0/b;
+  document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
+
+  if (0 == gs.nextByte()) { // Phrase
+    b = gs.nextByte();
+    var label = gs.nextString(b);
+    var measures = gs.nextByte();
+    var beatsper = gs.nextByte();
+    var ticksper = gs.nextByte();
+    var count = gs.nextByte();
+    var phrase = new Phrase(label, measures, beatsper, ticksper, keyboard);
+    Sheet0.add(phrase);
+    phrase.addPart(new Synthesizer(ctx, 1, keyboard, "red"));
+    phrase.addPart(new Synthesizer(ctx, 2, keyboard, "green"));
+    phrase.addPart(new Synthesizer(ctx, 3, keyboard, "magenta"));
+    for (var n=0; n<drumKit.length; ++n) { phrase.addPartFixed(drumKit, n) }
+  }
+
+  return true;
 }
 
 /* Old encoding:
@@ -2050,6 +2090,7 @@ window.onload = function () {
   var drumKit = new Drumkit(ctx, "orange", audioBuffers);
 
   restoreTicksAlpha(keyboard, drumKit); // Parse get string
+  restoreSongLK1(keyboard, drumKit);
 
   // Begin event loops
   setInterval(rendererLoop, 50);
