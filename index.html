@@ -941,6 +941,8 @@ function setupDrumTrack (part) {
                   fixedNote)
     .toggleEditView          Toggle my main editable DOM element display:none.
     .referenceAdd(child)     Keep track of referencee objects (children) used to repeat phrases in sheets.
+    .highlightBeat(b)        Set beat high-light marker.
+    .unhighlightBeat()       Disable cursor
 
   NOTES::
 
@@ -1014,7 +1016,14 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   }
 
   _e = CreateAppendChild('div', elementIcon);
+  _e.style.position = "relative";
   _e.style.width = measures*beatsper + "ch";
+
+  var cursor = CreateAppendChild('span', _e);
+  cursor.style.position = "absolute";
+  cursor.style.display = "none";
+  cursor.style.background = "#0f0";
+  cursor.innerHTML = "&nbsp;";
 
   var _f = CreateAppendChild('span', _e);
   _f.innerText = measures + " " + beatsper + " " + ticksper + " ";
@@ -1135,6 +1144,13 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
       DB("WARNING: attempting to delete nonexistent phrase reference from parent phrase.");
     }
   }
+  this.highlightBeat = function (b) {
+    cursor.style.display = "";
+    cursor.style.left = b + "ch";
+  }
+  this.unhighlightBeat = function () {
+    cursor.style.display = "none";
+  }
 } // Phrase
 
 
@@ -1148,9 +1164,11 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
     parentPhrase  Parent phrase object
 
   METHODS::
-    .elementIcon   The DOM element representing a minimized view.
-    .beatcount     Number of beats of parent.
-    .parent        The parent phrase
+    .elementIcon      The DOM element representing a minimized view.
+    .beatcount        Number of beats of parent.
+    .parent           The parent phrase
+    .highlightBeat(b) Set beat high-light marker.
+    .unhighlightBeat()       Disable cursor
 ******************************************************************************/
 var PhraseReference = function (parent) {
   //// Local
@@ -1161,6 +1179,7 @@ var PhraseReference = function (parent) {
   var elementIcon = document.createElement('div');
   elementIcon.className = "windowphrasealias";
 
+
   var elementTitle = CreateAppendChild('div', elementIcon);
   elementTitle.style.color = "#888";
   elementTitle.innerText = parent.id;
@@ -1169,9 +1188,9 @@ var PhraseReference = function (parent) {
     elementTitle.style.background="#444";
   }
 
-  var _e = CreateAppendChild('div', elementIcon);
-  _e.innerHTML = "&nbsp;"
-  _e = CreateAppendChild('span', _e);
+  var _menuElement = CreateAppendChild('div', elementIcon);
+  _menuElement.innerHTML = "&nbsp;"
+  var _e = CreateAppendChild('span', _menuElement);
   _e.className = "mustshift";
   _e.innerText = "X"
   _e.onmousedown = function (event) {
@@ -1181,9 +1200,41 @@ var PhraseReference = function (parent) {
     }
   }
 
+  _e = CreateAppendChild('span', _menuElement);
+  _e.style.background = "#066";
+  _e.style.marginLeft = "1ch"
+  _e.innerText = "<"
+  _e.onmousedown = function (event) {
+    var sib = elementIcon.previousSibling;
+    if (sib) {
+      document.getElementById('sheet').insertBefore(elementIcon, elementIcon.previousSibling); // [TODO: remove eventually] Automatically insert into DOM.
+      Sheet0.shift(self, -1);
+    }
+  }
+
+  _e = CreateAppendChild('span', _menuElement);
+  _e.style.background = "#066";
+  _e.style.marginLeft = "1ch"
+  _e.innerText = ">"
+  _e.onmousedown = function (event) {
+    var sib = elementIcon.nextSibling;
+    if (sib) {
+      document.getElementById('sheet').insertBefore(elementIcon.nextSibling, elementIcon); // [TODO: remove eventually] Automatically insert into DOM.
+      Sheet0.shift(self, 1);
+    }
+  }
+
+
   _e = CreateAppendChild('div', elementIcon);
-  _e.innerHTML = "_"
+  _e.style.position = "relative";
   _e.style.width = parent.beatCount + "ch";
+  _e.innerHTML = "_"
+
+  var cursor = CreateAppendChild('span', _e);
+  cursor.style.position = "absolute";
+  cursor.style.display = "none";
+  cursor.style.background = "#0f0";
+  cursor.innerHTML = "&nbsp;";
 
   // [TODO: remove eventually] Automatically insert into DOM.
   document.getElementById('sheet').appendChild(elementIcon);
@@ -1196,29 +1247,36 @@ var PhraseReference = function (parent) {
   this.elementIcon = elementIcon;
   this.beatCount = parent.beatCount;
   this.parent = parent;
-}
+  this.highlightBeat = function (b) {
+    cursor.style.display = "";
+    cursor.style.left = b + "ch";
+  }
+  this.unhighlightBeat = function () {
+    cursor.style.display = "none";
+  }
+} // PhraseReference
 
 
 /*
  Base-64 encoding of bytes
 
-  HEADER
-  "daw" 01  version
+  -HEADER-
+  "LK" 01  version
   00        main volume
   
-  PHRASE OR PHRASE_REFERENCE...
-    PHRASE
+  -PHRASE OR PHRASE_REFERENCE...-
+    -PHRASE-
     00                Type Phrase
     0a"phrasename"    label
     04 04 04 10       measures, beatspermeasure, ticksperbeat, partcount
-    PART...
-    08"partname" 00   label, Volume
+    -PART...-
+    08"partname" 00   label, part volume
     00...             4*4*4 bits representing on/off tick
-    NOTE OR NOTES
+    -NOTE OR NOTES-
       80              If 8th bit set then this&7f is the note to use for each tick.
-      00...           Otherwise 4*4*4 bytes represent the notes for each tick.
+      00...           Otherwise {number of son ticks} bytes represent the notes for each tick.
 
-    PHRASE REFERENCE
+    -PHRASE REFERENCE-
     01                Type PhraseReference
     0a"phrasename"    Label referring to actual phrase
 
@@ -1277,7 +1335,7 @@ var saveSong = function () {
         // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
         if (part.playable instanceof Synthesizer) {
           for (var i=0; i<part.tickLength; ++i) { 
-            bytes.push(part.key(i));
+            if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
           }
         } else {
           bytes.push(128 + part.key(0));
@@ -1734,11 +1792,17 @@ var reset = function (event) {
   currentTime------^
                 | beatf |
               | beat |
+
+  Context
+  Time  -------------v    v------------ NextBeatTime, NextBeat=3
+
+  Beat  |--0--|--1--|--2--|--3--|--0--|--1--|--2--|--...
+
    TODO:
      TWo sections to highlight:  Sheet and Phrase
      Phrase objects shold have a method for highlighting beats
 */
-var rendererLoop = (function (_lastPhrase, _lastBeat, _lastTick) { return function () {
+var rendererLoop = (function (_lastActual, _lastPhrase, _lastBeat, _lastTick) { return function () {
   if (nextBeatTime <= ctx.currentTime) return;
   if (0 == Sheet0.length()) return;
 
@@ -1776,6 +1840,7 @@ var rendererLoop = (function (_lastPhrase, _lastBeat, _lastTick) { return functi
       var part = _lastPhrase.part(p);
       part.elementBeat(_lastBeat).style.backgroundColor = part.backgroundBeat(_lastBeat);
     }
+    _lastActual.unhighlightBeat();
   }
 
   // Over all parts highlight beat and part labels
@@ -1802,12 +1867,14 @@ var rendererLoop = (function (_lastPhrase, _lastBeat, _lastTick) { return functi
     }
   }
 
-  actual.elementIcon.children[2].style.background = Rnd()<.5 ? "#200" : "#020";
+  // Tell elementIcon to highlight its beat marker
+  actual.highlightBeat(beat);
 
+  _lastActual = actual;
   _lastPhrase = phrase;
   _lastBeat = beat;
   _lastTick = tick;
-};})(0, 0,0);
+};})(null, null, null, null);
 
 
 /*
