@@ -7,7 +7,7 @@
 </head>
 <body Zoncontextmenu="return false;">
 
-<p id="DB" style="width:30em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="noDB" style="width:30em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -275,6 +275,7 @@ var Base64 = (function () {
     .nextString(l)   Return next bytes as string of length l.
     .nextBools(c)    Consume and return next c bits as array of bytes.  Unused bits ignored.
     .nextByte()      Consume and return next byte as byte.
+    .peekByte()      Return next byte as byte.
     .examine()       Return current internal unBased64 getstring.
     .length()        Return current length of decoded GET string.
 ******************************************************************************/
@@ -327,6 +328,10 @@ var GetStringBase64 = function (get) {
 
   this.nextByte = function () {
    return (0 < _gs.length) ? _gs.splice(0,1)[0] : null;
+  }
+
+  this.peekByte = function () {
+   return (0 < _gs.length) ? _gs[0] : null;
   }
 
   this.examine = function () { return _gs; }
@@ -1103,6 +1108,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
     }
     setupSynthPart(_part, keyboard);
     currentActiveSynthPart = _part; // Make sure the keyboard can make sounds initially so assign it the last instantiate part.
+    return _part;
   } // addPart
 
   this.addPartFixed = function (drumKit, fixedNote) {
@@ -1116,6 +1122,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
       _part.elementName.style.color = "";
     }
     setupDrumTrack(_part);
+    return _part;
   } // addPartFixed
 
   this.toggleEditView = function () { // Toggle the editable DOM element.
@@ -1263,7 +1270,7 @@ var PhraseReference = function (parent) {
   -HEADER-
   "LK" 01  version
   00        main volume
-  00 00     bear duration
+  00 00     beat duration
   
   -PHRASE OR PHRASE_REFERENCE...-
     -PHRASE-
@@ -1275,7 +1282,7 @@ var PhraseReference = function (parent) {
     00...             4*4*4 bits representing on/off tick
     -NOTE OR NOTES-
       80              If 8th bit set then this&7f is the note to use for each tick.
-      00...           Otherwise {number of son ticks} bytes represent the notes for each tick.
+      00...           Otherwise {number of ticks} bytes represent the notes for each tick.
 
     -PHRASE REFERENCE-
     01                Type PhraseReference
@@ -1346,7 +1353,7 @@ var saveSong = function () {
     }
   }
 
-  document.getElementById('save').innerText = bytes;
+  //document.getElementById('save').innerText = bytes;
   window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
 }
 
@@ -1355,13 +1362,15 @@ var saveSong = function () {
 */
 var restoreSongLK1 = function (keyboard, drumKit) {
   var gs = new GetStringBase64();
-  var b;
+  var b, label;
+  var waveforms = ["sine", "square", "sawtooth", "triangle"];
+  var color = ["#f00", "#0f0", "#f0f"];
   if (!gs.assertString("LK") || !gs.assertBytes([1])) {
     DB("Not LK1")
     return false;
   }
 
-  DB("Is LK1")
+  DB("Decoding LK1...")
 
   b = gs.nextByte();
   Volume = b / 255.0;
@@ -1371,19 +1380,40 @@ var restoreSongLK1 = function (keyboard, drumKit) {
   BeatDuration = 6000.0/b;
   document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
 
-  if (0 == gs.nextByte()) { // Phrase
-    b = gs.nextByte();
-    var label = gs.nextString(b);
+  while (null != gs.peekByte()) if (0 == gs.nextByte()) { // Phrase
+    label = gs.nextString(gs.nextByte());
+    DB(label);
     var measures = gs.nextByte();
     var beatsper = gs.nextByte();
     var ticksper = gs.nextByte();
-    var count = gs.nextByte();
+    var partCount = gs.nextByte();
     var phrase = new Phrase(label, measures, beatsper, ticksper, keyboard);
     Sheet0.add(phrase);
-    phrase.addPart(new Synthesizer(ctx, 1, keyboard, "red"));
-    phrase.addPart(new Synthesizer(ctx, 2, keyboard, "green"));
-    phrase.addPart(new Synthesizer(ctx, 3, keyboard, "magenta"));
-    for (var n=0; n<drumKit.length; ++n) { phrase.addPartFixed(drumKit, n) }
+    for (var i=0; i<partCount; ++i) {
+      var part;
+      label = gs.nextString(gs.nextByte());
+      var vol = gs.nextByte();
+      var bools = gs.nextBools(phrase.tickCount);
+      if (gs.peekByte() & 128) {
+        part = phrase.addPartFixed(drumKit, gs.nextByte()&127);
+      } else {
+        part = phrase.addPart(new Synthesizer(ctx, waveforms.indexOf(label), keyboard, color[i%3]));
+        bools.map(function(n,i){if (n) { part.setKey(i, gs.nextByte());}});
+      }
+      part.setVol(vol/255.0); // Volume
+      bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
+    }
+  } else { // Phrase reference
+    label = gs.nextString(gs.nextByte());
+    for (var i=0; i<Sheet0.length(); ++i) {
+      var phrase = Sheet0.phrase(i)
+      if (phrase.id == label) {
+        var refPhrase = new PhraseReference(phrase);
+        Sheet0.add(refPhrase);
+        DB(label + " reference");
+        break;
+      }
+    }
   }
 
   return true;
@@ -1512,7 +1542,7 @@ var restoreTicksAlpha = function (keyboard, drumKit) {
     .shift(p, d) Move phrase p left d=-1 or right d=1 in the sheet;
     .index(i)    Return whatever is in the internal array.
                  Can be Phrase or PhraseReference.
-    .phrase(i)   Get indexed phrase or actual reference phrase.
+    .phrase(i)   Get indexed phrase, actual reference phrase if a phrase-reference.
 
   TODO:
     * Phrase move, delete
@@ -1527,7 +1557,6 @@ var Sheet = function () {
   this.beatCount = function ()  { return _beatCount; }
   this.add       = function (p) { // Can add a Phrase or PhraseReference object
     _beatCount += p.beatCount;
-    DB.post("beatCount", _beatCount);
     _phrases.push(p);
   }
   this.del       = function (p) { // Can add a Phrase or PhraseReference object
@@ -1535,7 +1564,6 @@ var Sheet = function () {
     if (0 <= i) {
       _phrases.splice(i, 1);
       _beatCount -= p.beatCount;
-      DB.post("beatCount", _beatCount);
     } else {
       DB("WARNING: attempting to delete nonexistent phrase from sheet.");
     }
