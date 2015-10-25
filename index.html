@@ -7,7 +7,7 @@
 </head>
 <body Zoncontextmenu="return false;">
 
-<p id="noDB"style="width:30em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="noDB" style="width:30em; background:black; z-index:2; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -1135,8 +1135,10 @@ var PhraseReference = function (parent) {
       } else {
         newPhrase.addPartFixed(playable, part.key(0));
       }
-      // Copy over ticks and notes
       var newPart = newPhrase.part(i);
+      // Copy volume
+      newPart.setVol(part.vol());
+      // Copy over ticks and notes
       part.elementTicks.map(function(e, i) { newPart.elementTick(i).innerText = e.innerText; }); // Copy ticks
       if (playable instanceof Synthesizer) { // Copy notes on synth phrases
         for (var n=0; n<part.tickLength; ++n) { newPart.setKey(n, part.key(n)); }
@@ -1144,7 +1146,6 @@ var PhraseReference = function (parent) {
     });
     Sheet0.add(new PhraseReference(newPhrase));
   }
-
 
   var _e = CreateAppendChild('span', _menuElement);
   _e.className = "mustshift";
