@@ -33,9 +33,15 @@ h1 {
  font-size:x-small;
 }
 
+.headerNav > div { display:inline-block }
+
 .headerNav > a {
   margin-left:1ch;
   white-space:nowrap;
+}
+
+.songList > p:hover {
+  background:#808
 }
 
 
@@ -111,35 +117,15 @@ h1 {
 }
 
 
-.windowphrase {
-  display:inline-block;
-  vertical-align:top;
-}
-
-.windowphrase > div:nth-child(1) {
-  float:left;
-  border:solid 1px #880;
-  border-bottom:solid 1px black
-}
-
-.windowphrase > div:nth-child(2) {
-  overflow:hidden;
-}
-
-.windowphrase > div:nth-child(3) {
-  margin-top:1px;
-  border: solid 1px #880;
-}
-
-
 .windowphrasealias {
   display:inline-block;
   vertical-align:top;
+  margin-top:.5ch;
 }
 
 .windowphrasealias > div:nth-child(1) {
   float:left;
-  border:dashed 1px #888;
+  border:solid 1px #888;
   border-bottom:solid 1px black
 }
 
@@ -149,7 +135,7 @@ h1 {
 
 .windowphrasealias > div:nth-child(3) {
   margin-top:1px;
-  border: dashed 1px #888;
+  border: solid 1px #888;
 }
 
 
@@ -169,7 +155,8 @@ h1 {
 .phrases > div { margin:1ch; }
 .phrases > div > p:nth-child(1) { display:inline-block; background:#880 }
 .phrases > div > div:nth-child(2) { display:inline-block ; padding-left:1ch; }
-.phrases > div > div:nth-child(3) { border:solid 1px #880 }
+.phrases > div > div:nth-child(3) { display:inline-block ; padding-left:1ch; }
+.phrases > div > div:nth-child(4) { border:solid 1px #880 }
 
 .phrases {
   display:inline-block;
