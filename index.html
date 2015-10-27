@@ -853,7 +853,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   var _partlistDOM, _partsDOM, _parts = [];
   var _children = [];
 
-  id = id + (++PhraseGlobalCounter);
+  if (!id) { id = "P" + ++PhraseGlobalCounter; }
 
   // Create the DOM element representing this object.
   var _element = document.createElement('div');
@@ -1126,7 +1126,7 @@ var PhraseReference = function (parent) {
   _e.innerText = "C"
   _e.onmousedown = function (event) {
     // Create new empty phrase.
-    var newPhrase = new Phrase("Phrase", parent.measureCount, parent.beatCount/parent.measureCount, parent.tickCount/parent.beatCount, Keyboard0);
+    var newPhrase = new Phrase(false, parent.measureCount, parent.beatCount/parent.measureCount, parent.tickCount/parent.beatCount, Keyboard0);
     // Create empty parts
     parent.parts.map(function (part, i) {
       var playable = part.playable;
@@ -1218,6 +1218,7 @@ var PhraseReference = function (parent) {
     .shift(p, d) Move phrase p left d=-1 or right d=1 in the sheet;
     .index(i)    Return phrase reference.
     .phrase(i)   Get actual phrase referenced by ith phrase reference.
+    .phraseCount() Get number of live phrases.
 
 ******************************************************************************/
 var Sheet = function () {
@@ -1280,6 +1281,7 @@ var Sheet = function () {
 
   this.index = function (i) { return _phraseReferences[i]; }
   this.phrase = function (i) { return _phraseReferences[i].parent; }
+  this.phraseCount = function() { return _phrases.length; }
 } // Sheet
 
 
@@ -2062,6 +2064,8 @@ window.onload = function () {
   restoreTicksAlpha(keyboard, drumKit); // Parse get string
   restoreSongLK1(keyboard, drumKit);
 
+  PhraseGlobalCounter = Sheet0.phraseCount();
+
   // Begin event loops
   setInterval(rendererLoop, 50);
   setInterval(sequencerLoop, 50);
@@ -2075,7 +2079,7 @@ window.onload = function () {
     var measures = e.target.nextElementSibling.innerText;
     var beats    = e.target.nextElementSibling.nextElementSibling.innerText;
     var ticks    = e.target.nextElementSibling.nextElementSibling.nextElementSibling.innerText;
-    var phrase = new Phrase("Phrase", measures, beats, ticks, keyboard);
+    var phrase = new Phrase(false, measures, beats, ticks, keyboard);
     phrase.addPart(new Synthesizer(ctx, 1, keyboard, "red"));
     phrase.addPart(new Synthesizer(ctx, 2, keyboard, "green"));
     phrase.addPart(new Synthesizer(ctx, 3, keyboard, "magenta"));
