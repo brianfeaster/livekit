@@ -116,6 +116,23 @@ h1 {
   background-color: #088
 }
 
+#sheetbuttons > div {
+  display: inline-block;
+  margin-left: 1ch;
+  background: #066;
+}
+
+.addphrase {
+  display:inline-block;
+  border:0;
+}
+
+.addphrase p { display:inline; border: solid 1px black }
+.addphrase p:hover { border:solid 1px #f0f }
+  
+.addphrase span { border: solid 1px black }
+.addphrase span:hover { border:solid 1px #f0f }
+
 
 .windowphrasealias {
   display:inline-block;
@@ -143,17 +160,6 @@ h1 {
 }
 
 
-
-.addphrase {
-  display:inline-block;
-  border:0;
-}
-
-.addphrase p { background:#066; display:inline; border: solid 1px black }
-.addphrase p:hover { border:solid 1px #f0f }
-  
-.addphrase span { background:#066; border: solid 1px black }
-.addphrase span:hover { border:solid 1px #f0f }
 
 
 .phrases > div { margin:1ch; }

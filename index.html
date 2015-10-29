@@ -12,7 +12,7 @@
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
 <div class="headerNav">
- <div style="position:relative" onmouseleave="event.currentTarget.children[0].style.display='none'" onmousedown="toggleElementDisplay(event.currentTarget.children[0])">
+ <div style="position:relative" onmouseleave="event.currentTarget.children[0].style.display='none'" onmousedown="ToggleElementDisplay(event.currentTarget.children[0])">
    Songs
    <div class="songList" style="z-index:1; text-align:center; display:none; position:absolute; background:black; border:solid thin #f0f">
      <p onmousedown="window.location.href=window.location.pathname+''">*Empty*</p>
@@ -53,12 +53,7 @@
 
 <div><div class="window">
   <div>MAIN SHEET </div>
-  <div>&nbsp;<div class="addphrase">
-      <p onmousedown="addphrase(event)">new</p>
-      <span contenteditable="true">4</span>
-      <span contenteditable="true">4</span>
-      <span contenteditable="true">4</span></div>
-  </div>
+  <div id="sheetbuttons"></div>
   <div id="sheet"></div>
 </div></div>
 
@@ -95,12 +90,12 @@ var Rnd   = Math.random;
 var Mod   = function (n,d) { return n - d * Math.floor(n/d); }
 var CreateAppendChild = function (name, element) { return element.appendChild(document.createElement(name)); }
 var CreateInsertBefore = function (name, element) { return element.insertBefore(document.createElement(name), element.firstChild); }
-var toggleElementDisplay = function (e1, e2) {
-  // Toggle e1's display:none style
-  e1.style.display = (e1.style.display=="none" ? "" : "none");
-  // e2's style is opposite.
-  if (e2) { e2.style.display = (e1.style.display == "none" ? "" : "none"); }
+var ToggleElementDisplay = function (e1, e2) {
+  var off = e1.style.display == "none"; // 'none' implies not displayed.  '' implies the default CSS value.
+  e1.style.display = off ? "" : "none"; // Toggle e1's display state.
+  if (e2) { e2.style.display = off ? "none" : ""; } // e2's style is opposite e1.
 }
+var ElementById = function(id) { return document.getElementById(id); }
 
 
 /******************************************************************************
@@ -835,9 +830,10 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
     .addPart(playable)       Appends a new part to the phrase and associates it with a playable object which implements .play(note, vol, when).
     .addPartFixed(playable,  Appends a new part to the phrase and associates it with a playable object that will be called with a fixedNote.
                   fixedNote)
-    .togglePhraseElement     Toggle my main editable DOM element display:none.
+    .toggleElement           Toggle my main editable DOM element display:none.
     .referenceCount()        Number of current references.
     .referenceAdd(child)     Keep track of referencee objects (children) used to repeat phrases in sheets.
+    .referenceDel(ref)       Remove reference from my set.
     .highlightBeat(b)        Set beat high-light marker.
     .unhighlightBeat()       Disable cursor
 
@@ -852,7 +848,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   //// Local
   var self = this; // Because this is assigned dynamically when functions are called.
   var _partlistDOM, _partsDOM, _parts = [];
-  var _children = [];
+  var _references = [];
 
   if (!id) { id = "P" + ++PhraseGlobalCounter; }
 
@@ -869,7 +865,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
 
   // When the phase icon element or phase element itself is clicked on, toggle the main editable element.
   _elementId.onmousedown = function () {
-    self.togglePhraseElement();
+    self.toggleElement();
   }
 
   // Add a new part to this phrase object. It requires a playable object
@@ -901,11 +897,11 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
         }
       } else {
         be.style.background = "";
-        toggleElementDisplay(e, be);
+        ToggleElementDisplay(e, be);
         _partsDOM.insertBefore(e, _partsDOM.children[0]);
       }
     }.bind(null, _part.element, b);
-    id.onmousedown = function(e, be){ toggleElementDisplay(e, be);}.bind(null, _part.element, b);
+    id.onmousedown = function(e, be){ ToggleElementDisplay(e, be);}.bind(null, _part.element, b);
     return _part;
   }
 
@@ -946,30 +942,27 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
     return _part;
   } // addPartFixed
 
-  this.togglePhraseElement = function () { // Toggle the editable DOM element.
-    toggleElementDisplay(_element);
-    if (_element.style.display == "none") {
-      _children.map(function (c) { c.elementIcon.children[0].style.background = "";});
-    } else {
-      _children.map(function (c) { c.elementIcon.children[0].style.background = "#880";});
-    }
+  this.toggleElement = function () { // Toggle the editable DOM element.
+    ToggleElementDisplay(_element);
+    var off = _element.style.display == "none";  // 'none' implies off.  '' implies on
+    _references.map(function(c){ c.highlightElement(!off); }); // Also toggle my references' sheet element.
   }
   this.referenceCount = function () {
     return parseInt(_countDOM.innerText);
   }
   this.referenceAdd = function (ref) {
-    _children.push(ref); // Keep track of references
+    _references.push(ref); // Keep track of reference objects
     // Update reference counts on all references and the parent phrase itself.
-    _countDOM.innerText = _children.length;
-    _children.map(function(r){r.setRefCount(_children.length);});
+    _countDOM.innerText = _references.length;
+    _references.map(function(r){r.setRefCount(_references.length);});
   }
   this.referenceDel = function (ref) {
-    var i = _children.indexOf(ref);
+    var i = _references.indexOf(ref);
     if (0 <= i) {
-      _children.splice(i, 1);
+      _references.splice(i, 1);
       // Update my reference count as well as on all reference DOM elements
-      _countDOM.innerText = _children.length;
-      _children.map(function(r){r.setRefCount(_children.length);});
+      _countDOM.innerText = _references.length;
+      _references.map(function(r){r.setRefCount(_references.length);});
     } else {
       DB("WARNING: attempting to delete nonexistent phrase reference from parent phrase.");
     }
@@ -1086,20 +1079,24 @@ function setupDrumTrack (part) {
     phrase  Parent phrase object
 
   METHODS::
-    .elementIcon        The DOM element representing a minimized view
-    .setRefCount        Set the reference count for this node WRT to the parent phrase.
-    .beatCount          Number of beats of parent phrase.
-    .phrase             The parent phrase
-    .highlightBeat(b)   Set beat high-light marker
-    .unhighlightBeat()  Disable cursor
+    .elementIcon         The DOM element representing a minimized view
+    .highlightElement(b) High-light (or unhighligh) the element, implying its
+                         phrase is also visible.
+    .setFocus(b)         Set the focus style.  Only one reference will be in
+                         focus at a time and acted on by sheet button elements.
+    .setRefCount         Set the reference count for this node WRT to the
+                         parent phrase.
+    .beatCount           Number of beats of parent phrase.
+    .phrase              The parent phrase
+    .highlightBeat(b)    Set beat high-light marker
+    .unhighlightBeat()   Disable cursor
 ******************************************************************************/
 var PhraseReference = function (phrase) {
   //// Local
   var self = this;
 
   /* Create the sheet-view DOM element: [[Title] [Buttons]
-                                         [Beats and Info ]]
-  */
+                                         [Beats and Info ]] */
   var elementIcon = document.createElement('div');
   elementIcon.className = "windowphrasealias";
 
@@ -1112,12 +1109,14 @@ var PhraseReference = function (phrase) {
   }
 
   elementTitle.onmousedown = function () {
-    phrase.togglePhraseElement ();
+    if (self == currentReference || phrase.element.style.display=="none") { phrase.toggleElement(); }
+    // Make this reference the current reference seen by sheet actions.
+    if (currentReference) { currentReference.setFocus(false); }
+    (currentReference = self).setFocus(true);
   }
 
-  // Button element
+  // Buttons element
   var _menuElement = CreateAppendChild('div', elementIcon);
-  _menuElement.innerHTML = "&nbsp;"
 
   // Copy phrase-reference button element
   var _referencees = CreateAppendChild('span', _menuElement);
@@ -1164,20 +1163,9 @@ var PhraseReference = function (phrase) {
     if (event.shiftKey) {
       phrase.referenceDel(self);
       Sheet0.del(self);
+      if (self == currentReference) { currentReference == false; }
     }
   }
-
-  _e = CreateAppendChild('span', _menuElement); // Shift phrase left button element
-  _e.style.background = "#066";
-  _e.style.marginLeft = "1ch"
-  _e.innerText = "<"
-  _e.onmousedown = function (event) { Sheet0.shift(self, -1); }
-
-  _e = CreateAppendChild('span', _menuElement); // Shift phrase right button element
-  _e.style.background = "#066";
-  _e.style.marginLeft = "1ch"
-  _e.innerText = ">"
-  _e.onmousedown = function (event) { Sheet0.shift(self, 1); }
 
   // Beat and info element
   _e = CreateAppendChild('div', elementIcon);
@@ -1193,6 +1181,16 @@ var PhraseReference = function (phrase) {
 
   //// Public
   this.elementIcon = elementIcon;
+  this.highlightElement = function (on) { elementTitle.style.background = on ? "#880" : ""; }
+  this.setFocus = function (on) {
+    elementTitle.style.borderTop  =
+    elementTitle.style.borderRight=
+    elementTitle.style.borderLeft =
+    _menuElement.style.borderBottom =
+    _e.style.borderRight =
+    _e.style.borderBottom =
+    _e.style.borderLeft = on ? "solid 1px #fff" : "";
+  }
   this.setRefCount = function (c) { _referencees.innerText = c; }
   this.beatCount = phrase.beatCount;
   this.phrase = phrase;
@@ -1220,8 +1218,8 @@ var PhraseReference = function (phrase) {
     .beatCount() Get number of total playable beats
     .add(r)      Append a phrase reference object while updating the relevant
                  phrase and reference DOM elements.
-    .del(r)      Remove phrase r while updating relevant phrase and ref DOM
-                 elements.
+    .del(r)      Remove phrase reference r while updating relevant phrase and
+                 ref DOM elements.
     .shift(p, d) Move phrase p left d=-1 or right d=1 in the sheet;
     .index(i)    Return phrase reference.
     .phrase(i)   Get actual phrase referenced by ith phrase reference.
@@ -1233,6 +1231,31 @@ var Sheet = function () {
   var _phrases = [];
   var _phraseReferences = [];
   var _beatCount = 0;
+
+  // Consider the sheet's buttons element ...
+  var _button = ElementById("sheetbuttons");
+
+  // The "add phrase" button
+  var _add = CreateAppendChild('div', _button);
+  _add.className = "addphrase";
+  var _e = CreateAppendChild('p', _add);
+  _e.innerText = "new";
+  _e.onmousedown = function () { addphrase(event); };
+  _e = CreateAppendChild('span', _add); _e.innerText = "4"; _e.contentEditable="true";
+  _e = CreateAppendChild('span', _add); _e.innerText = "4"; _e.contentEditable="true";
+  _e = CreateAppendChild('span', _add); _e.innerText = "4"; _e.contentEditable="true";
+
+  // Move current reference phrase left button
+  _e = CreateAppendChild('div', _button); // Shift phrase left button element
+  _e.innerText = "<"
+  _e.onmousedown = function (event) { if (currentReference) Sheet0.shift(currentReference, -1); }
+
+  // Move current reference phrase right button
+  _e = CreateAppendChild('div', _button); // Shift phrase right button element
+  _e.innerText = ">"
+  _e.onmousedown = function (event) { if (currentReference) Sheet0.shift(currentReference, 1); }
+
+
   //// Public
   this.length    = function ()  { return _phraseReferences.length; }
   this.beatCount = function ()  { return _beatCount; }
@@ -1998,6 +2021,7 @@ var Sheet0; // New hotness
 var Keyboard0;
 var DrumKit0;
 
+var currentReference = false;
 var currentActiveSynthPart = false;  // This is the last track acted upon.  Should be initialied at some point.
 var SetPartTick = false; // HACK: This becomes a function that sets the key in some synth phrase.  Move this functionality into the piano keyboard object.
 
