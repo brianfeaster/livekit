@@ -125,17 +125,21 @@ h1 {
 
 .windowphrasealias > div:nth-child(1) {
   float:left;
-  border:solid 1px #888;
-  border-bottom:solid 1px black
+  border-top:dashed 1px #444;
+  border-right:dashed 1px #444;
+  border-left:dashed 1px #444;
 }
 
 .windowphrasealias > div:nth-child(2) {
   overflow:hidden;
+  border-bottom: dashed 1px #444;
 }
 
 .windowphrasealias > div:nth-child(3) {
   margin-top:1px;
-  border: solid 1px #888;
+  border-right: dashed 1px #444;
+  border-bottom: dashed 1px #444;
+  border-left: dashed 1px #444;
 }
 
 

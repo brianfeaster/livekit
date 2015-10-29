@@ -15,6 +15,7 @@
  <div style="position:relative" onmouseleave="event.currentTarget.children[0].style.display='none'" onmousedown="toggleElementDisplay(event.currentTarget.children[0])">
    Songs
    <div class="songList" style="z-index:1; text-align:center; display:none; position:absolute; background:black; border:solid thin #f0f">
+     <p onmousedown="window.location.href=window.location.pathname+''">*Empty*</p>
      <p onmousedown="window.location.href=window.location.pathname+'?J4i1W80-00TGQ79XSsKm10G440PpSNLXScLcGGH11444KL4060m060m060m001W031W8Ss5tT6zlT6XcGGH11444KL4060m060m060m001W032G8T79fOMvdR6LcGGH11444KL4C31WC31WC91WC30mC62GCE30uBc9XStCkSc5tPW440GG11040W18uC3WkSsvXScKkP79rRIvoONTc410G410G4D614pWmE2vpRc5oPIvkRsbpPIvoONTc00000000H0I23pWmE2vjON9XOs5pBd9XTsO0m03F0Cy0M8CFE30uBcDlTs9bR6mkSc5tPW0000000000X0iuC3WkScbjBd9XTsO00000000008KME30uBcXfPsXeONGkOsnlSsLaBd9XTsPLLTTNLtrrzuOEE30uBcDiONPbSovoONTc00000000002733WmE2vZR65mBd9XTsO00000000008WME30uBcXfPsXeONGkRt1bRcLaBd9XTsO10000000008aEE30uBcDvRM9XR2voONTc00000000002A3JamEIvqQ7LjS2voONTcGHH1544KGHIB4pamEIvpRc5oPIvkRsbpPIvoONTc00000000002C'">Beat</p>
      <p onmousedown="window.location.href=window.location.pathname+'?J4i1W12a00TGQ79XSsKm10G440PpSNLXScLc0H0G4H4H4H4F4XOF6nOI3GW10mOA27DXTtHlRtHePX0W828Y8Y8Y5X8F5WqI5XiW9I8U6mXqScbXRcTiPMO1400101000GyA0mOR33WmE2vYONDpBd9XT_G000000000080IE30uBdDkON9bBcHoTMqkSc5tPW0000000000WHCuC3WkSsvXScKkRczfSsKkSc5tPW000G000040WWyuC3WkRM5oOMDXSovoONTc0000000000233pWmE2vZRtTYPMniBd9XTsO00000000008GBE30uBd9fRIvoONTc0000000000255ZWmE2veQMTeQ65qBcDiRtDbP2voONTc4H4H4H4H4H663ZWmE2vZR65sPNCkSc5tPW000m0000C0XmmuC3WkOsnXS2voONTc0000000000285ZWmE2veQMTeQ65qBczmPMvbP2voONTc0000000000293ZWmE2vZUMrYOMmkSc5tPW0000000000YWqvC3akT6XrRN0kSc5tPW4G40000H40YnCvC3akSsvXScKkRczfSsKkSc5tPW000G000040Z0i'">Derezzed</p>
      <p onmousedown="window.location.href=window.location.pathname+'?J4i1W80-00TGQ79XSsKm10G440PpSNLXScLc051L5G0GKHGS71mQ6XeQ7nmS71eO5nK8Ss5tT6zlT6Xc4H4H4H4H4H492Ga910G410K51GK0000B27HoQM5kPsnbPW00GG050000BoqlC0muC3WkOc5pSovoONTc0000000000204ZWmE2vpRc5oPIvaSdLjBd9XTsOG410G410G484JE30uBdDkON9bBcvlQNDbBd9XTsO000000000088FE30uBcrXSc5ZONCkSc5tPbTLLrLNLLTLWmyuC3WkOsztOcLiR2voONTc0000000000242pWmE2voQMqkSc5tPX1G450GK11GXHOuC3WkQ6bdQ6XXT2vZR6zpPMGkSc5tPW0000000000XWuuC3WkOsnXTcLpBd9XTsO00000000008SCE30uBcDiON0kSc5tPW0000000000Y1OuC3WkQ6bdQ6XXT2vlS6LkPMGkSc5tPW0000000000YGuuC3WkOtbjOc5iBd9XTsO00000000008eDEJ0vBdHeTMrmBd9XTsO110440GG118iJEJ0vBdDkON9bBcvlQNDbBd9XTsO00000000008m'">Drift</p>
@@ -72,7 +73,7 @@
 <div id="save" style="font-size:xx-small; overflow-wrap:break-word"></div>
 
 <div>
-  <div id="skeuomorph" style="display:none; padding:50px; width:700px; min-height:200px; background-image:url('brushedMetalBackground.jpg')" onmousedown="popupToggle('skeuomorph')">
+  <div id="skeuomorph" style="display:none; padding:50px; width:700px; min-height:200px; background-color:#444; background-image:url('brushedMetalBackground.jpg')" onmousedown="popupToggle('skeuomorph')">
     <b style="position:absolute; right:1ch; top:1ch">[X]</b>
     <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
   </div>
@@ -857,6 +858,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
 
   // Create the DOM element representing this object.
   var _element = document.createElement('div');
+  //_element.style.display = "none"; // Default to off
   var _elementId = CreateAppendChild('p', _element);
   _elementId.innerText = id;
   var _countDOM = CreateAppendChild('div', _element); // Reference count
@@ -1081,54 +1083,62 @@ function setupDrumTrack (part) {
     var ref = new PhraseReference(parentPhrase)
 
   CONSTRUCTOR PARAMETERS::
-    parentPhrase  Parent phrase object
+    phrase  Parent phrase object
 
   METHODS::
     .elementIcon        The DOM element representing a minimized view
     .setRefCount        Set the reference count for this node WRT to the parent phrase.
-    .beatCount          Number of beats of parent
-    .parent             The parent phrase
+    .beatCount          Number of beats of parent phrase.
+    .phrase             The parent phrase
     .highlightBeat(b)   Set beat high-light marker
     .unhighlightBeat()  Disable cursor
 ******************************************************************************/
-var PhraseReference = function (parent) {
+var PhraseReference = function (phrase) {
   //// Local
   var self = this;
 
-  // Create the iconified view DOM element
+  /* Create the sheet-view DOM element: [[Title] [Buttons]
+                                         [Beats and Info ]]
+  */
   var elementIcon = document.createElement('div');
   elementIcon.className = "windowphrasealias";
 
+  // Title element
   var elementTitle = CreateAppendChild('div', elementIcon);
-  elementTitle.innerText = parent.id;
+  elementTitle.innerText = phrase.id;
 
-  if (parent.element.style.display == "") {
+  if (phrase.element.style.display == "") { // High-light matches phrase's high-light.
     elementTitle.style.background="#880";
   }
 
+  elementTitle.onmousedown = function () {
+    phrase.togglePhraseElement ();
+  }
+
+  // Button element
   var _menuElement = CreateAppendChild('div', elementIcon);
   _menuElement.innerHTML = "&nbsp;"
 
-  // A button to create another reference
+  // Copy phrase-reference button element
   var _referencees = CreateAppendChild('span', _menuElement);
   _referencees.style.background = "#066";
   _referencees.innerText = "0";
 
   _referencees.onclick = function (event) {
-    var refPhrase = new PhraseReference(parent);
+    var refPhrase = new PhraseReference(phrase);
     Sheet0.add(refPhrase);
   }
 
-  // Button to copy this phrase
+  // Copy phrase button element
   var _e = CreateAppendChild('span', _menuElement);
   _e.style.background = "#066";
   _e.style.marginLeft = "1ch"
   _e.innerText = "C"
   _e.onmousedown = function (event) {
     // Create new empty phrase.
-    var newPhrase = new Phrase(false, parent.measureCount, parent.beatCount/parent.measureCount, parent.tickCount/parent.beatCount, Keyboard0);
+    var newPhrase = new Phrase(false, phrase.measureCount, phrase.beatCount/phrase.measureCount, phrase.tickCount/phrase.beatCount, Keyboard0);
     // Create empty parts
-    parent.parts.map(function (part, i) {
+    phrase.parts.map(function (part, i) {
       var playable = part.playable;
       if (playable instanceof Synthesizer) {
         newPhrase.addPart(playable);
@@ -1147,48 +1157,45 @@ var PhraseReference = function (parent) {
     Sheet0.add(new PhraseReference(newPhrase));
   }
 
-  var _e = CreateAppendChild('span', _menuElement);
+  var _e = CreateAppendChild('span', _menuElement); // Delete phrase button element
   _e.className = "mustshift";
   _e.innerText = "X"
   _e.onmousedown = function (event) {
     if (event.shiftKey) {
-      parent.referenceDel(self);
+      phrase.referenceDel(self);
       Sheet0.del(self);
     }
   }
 
-  _e = CreateAppendChild('span', _menuElement);
+  _e = CreateAppendChild('span', _menuElement); // Shift phrase left button element
   _e.style.background = "#066";
   _e.style.marginLeft = "1ch"
   _e.innerText = "<"
   _e.onmousedown = function (event) { Sheet0.shift(self, -1); }
 
-  _e = CreateAppendChild('span', _menuElement);
+  _e = CreateAppendChild('span', _menuElement); // Shift phrase right button element
   _e.style.background = "#066";
   _e.style.marginLeft = "1ch"
   _e.innerText = ">"
   _e.onmousedown = function (event) { Sheet0.shift(self, 1); }
 
+  // Beat and info element
   _e = CreateAppendChild('div', elementIcon);
   _e.style.position = "relative";
-  _e.style.width = (4<parent.beatCount?parent.beatCount:5) + "ch";
-  _e.innerText = parent.measureCount + " " + (parent.beatCount/parent.measureCount) + " " + (parent.tickCount/parent.beatCount);
+  _e.style.width = (4<phrase.beatCount?phrase.beatCount:5) + "ch";
+  _e.innerText = phrase.measureCount + " " + (phrase.beatCount/phrase.measureCount) + " " + (phrase.tickCount/phrase.beatCount);
 
-  var cursor = CreateAppendChild('span', _e);
+  var cursor = CreateAppendChild('span', _e); // Beat marker element
   cursor.style.position = "absolute";
   cursor.style.display = "none";
   cursor.style.background = "#0f0";
   cursor.innerHTML = "&nbsp;";
 
-  elementTitle.onmousedown = function () {
-    parent.togglePhraseElement ();
-  }
-
   //// Public
   this.elementIcon = elementIcon;
   this.setRefCount = function (c) { _referencees.innerText = c; }
-  this.beatCount = parent.beatCount;
-  this.parent = parent;
+  this.beatCount = phrase.beatCount;
+  this.phrase = phrase;
   this.highlightBeat = function (b) {
     cursor.style.display = "";
     cursor.style.left = b + "ch";
@@ -1197,7 +1204,7 @@ var PhraseReference = function (parent) {
     cursor.style.display = "none";
   }
 
-  parent.referenceAdd(this);
+  phrase.referenceAdd(this);
 } // PhraseReference
 
 
@@ -1234,15 +1241,15 @@ var Sheet = function () {
     _beatCount += r.beatCount;
     _phraseReferences.push(r);
     // Keep track of actual phrase objects as well
-    if (_phrases.indexOf(r.parent) < 0) {
-      _phrases.push(r.parent);
+    if (_phrases.indexOf(r.phrase) < 0) {
+      _phrases.push(r.phrase);
     }
     // Add the reference's DOM element to the DOM sheet element.
     document.getElementById('sheet').appendChild(r.elementIcon);
 
     var phrases = document.getElementById('phrases')
-    if (phrases != r.parent.element.parent) {
-      document.getElementById('phrases').appendChild(r.parent.element);
+    if (phrases != r.phrase.element.phrase) {
+      document.getElementById('phrases').appendChild(r.phrase.element);
     }
 
     //DB("Sheet phrase count: " + _phrases.length);
@@ -1254,9 +1261,9 @@ var Sheet = function () {
       _phraseReferences.splice(i, 1); // Remove the phrase reference object.
       _beatCount -= r.beatCount;
       document.getElementById('sheet').removeChild(r.elementIcon); // Remove reference DOM element
-      if (0 == r.parent.referenceCount()) { // Remove phrase object if this is the last reference (or there are no references).
-        _phrases.splice(_phrases.indexOf(r.parent), 1);
-        document.getElementById('phrases').removeChild(r.parent.element);
+      if (0 == r.phrase.referenceCount()) { // Remove phrase object if this is the last reference (or there are no references).
+        _phrases.splice(_phrases.indexOf(r.phrase), 1);
+        document.getElementById('phrases').removeChild(r.phrase.element);
       }
     } else {
       DB("WARNING: attempting to delete nonexistent phrase from sheet.");
@@ -1280,7 +1287,7 @@ var Sheet = function () {
   }
 
   this.index = function (i) { return _phraseReferences[i]; }
-  this.phrase = function (i) { return _phraseReferences[i].parent; }
+  this.phrase = function (i) { return _phraseReferences[i].phrase; }
   this.phraseCount = function() { return _phrases.length; }
 } // Sheet
 
@@ -1329,7 +1336,7 @@ var saveSong = function () {
   for (var i=0; i<Sheet0.length(); ++i) {
 
     var ref = Sheet0.index(i);
-    var phrase = ref.parent;
+    var phrase = ref.phrase;
 
     if (0 <= writtenPhrases.indexOf(phrase)) { // Write phrase if first reference to it
       // TYPE LENGTH "REFERENCED PHRASE LABEL"
