@@ -1783,7 +1783,7 @@ var sequencerLoop = function () {
     _phrase.parts.map(function(p){ p.playTicks(_phraseBeat, nextBeatTime); });
     // Increment beat state
     nextBeatTime += BeatDuration;
-    if (BeatFinal < (Beat += 1)) { Beat = BeatInitial; }
+    if (BeatFinal < (Beat += 1)) { Beat = BeatInitial + (Beat - BeatFinal - 1); }
     if (Beat == BeatInitial) { saveSong(); } // On the initial beat, upate the URL's get string.
   } // while
 } // sequencerLoop()
@@ -1797,7 +1797,7 @@ var rendererLoop = (function (_lastRef, _lastPhrase, _lastBeat, _lastTick) { ret
   var beatf = (Beat - (nextBeatTime - ctx.currentTime) / BeatDuration);
 
   // Figure out actual beat within initial/final range
-  var beat = Mod(Floor(beatf)-BeatInitial, BeatFinal-BeatInitial)+BeatInitial;
+  var beat = Mod(Floor(beatf)-BeatInitial, BeatFinal-BeatInitial+1)+BeatInitial;
 
   // Determine the realtime phrase and beat for the sheet (TODO implement multiple sheets)
   var _phrasebeat = Sheet0.phraseRefAndLocalBeat(beat);
