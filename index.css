@@ -44,7 +44,6 @@ h1 {
   background:#808
 }
 
-
 .window {
   display:inline-block;
   margin:.25ch;
@@ -119,20 +118,13 @@ h1 {
 #sheetbuttons > div {
   display: inline-block;
   margin-left: 1ch;
-  background: #066;
+  background-color:#066;
 }
 
 .addphrase {
   display:inline-block;
   border:0;
 }
-
-.addphrase p { display:inline; border: solid 1px black }
-.addphrase p:hover { border:solid 1px #f0f }
-  
-.addphrase span { border: solid 1px black }
-.addphrase span:hover { border:solid 1px #f0f }
-
 
 .windowphrasealias {
   display:inline-block;
@@ -148,7 +140,6 @@ h1 {
 }
 
 .windowphrasealias > div:nth-child(2) {
-  overflow:hidden;
   border-bottom: dashed 1px #444;
 }
 
