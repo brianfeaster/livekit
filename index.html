@@ -5,9 +5,9 @@
  <title>Liveka7 DAW</title>
  <link rel="stylesheet" href="index.css" type="text/css" media="screen" title="Shrewm"/>
 </head>
-<body oncontextmenu="return false;">
+<body Xoncontextmenu="return false;">
 
-<p id="noDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="DB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -37,14 +37,15 @@
     vol <p id="volume" class="actor" contenteditable="true">50</p>
     <br/>
     temp<p id="speed" class="actor" contenteditable="true">160</p>
-    <br/>
-    <p class="actor reset" onmousedown="reset(event)">|&lt;</p>
-    <p class="actor pause" onmousedown="pause(event)">||</p>
+    <div>
+     <p class="actor reset" onmousedown="reset(event)">|&lt;</p>
+     <p class="actor pause" onmousedown="pause(event)">||</p>
+    </div>
   </div>
 </div>
 
 <div class="window">
-  <div contenteditable="true">KEYBOARD</div>
+  <div>KEYBOARD</div>
   <div class="knobs">&nbsp;<p id="freq" class="actor" contenteditable="true">65.4064</p></div>
   <div>
     <div id="piano1" class="piano" style="white-space:nowrap"></div>
@@ -61,7 +62,7 @@
         <input id="addbeats" value="4" type="number" style="width:3ch"/>Beats<br/>
         <input id="addticks" value="4" type="number" style="width:3ch"/>ticks<br/>
       </div>
-      <div class="actor" >new</div>
+      <div class="actor">new</div>
     </div>
   </div>
   <div id="sheet"></div>
@@ -75,15 +76,12 @@
   </div>
 </div></div>
 
-<div id="save" style="font-size:xx-small; overflow-wrap:break-word"></div>
-
-<div>
-  <div id="skeuomorph" style="display:none; padding:50px; width:700px; min-height:200px; background-color:#444; background-image:url('brushedMetalBackground.jpg')" onmousedown="popupToggle('skeuomorph')">
-    <b style="position:absolute; right:1ch; top:1ch">[X]</b>
-    <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
-  </div>
-  <img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%" src="catpause.gif"/>
+<div id="skeuomorph" style="display:none; padding:50px; width:700px; min-height:200px; background-color:#444; background-image:url('brushedMetalBackground.jpg')" onmousedown="popupToggle('skeuomorph')">
+  <b style="position:absolute; right:1ch; top:1ch">[X]</b>
+  <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
 </div>
+
+<img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%" src="catpause.gif"/>
 
 
 <script type="text/javascript">//<![CDATA[
@@ -740,22 +738,25 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
 
     _volPad = CreateAppendChild('p', _elementVolume);
     _volPad.style.position = "absolute"
-    _volPad.style.top = 0;
+    _volPad.style.top = "-1.5ch";
     _volPad.style.left = 0;
-    _volPad.innerText = "@@00OOoo.._\n@@00OOoo.._";
+    _volPad.style.width="11ch";
+    _volPad.innerHTML = "<p>|----|----|</p><p style='text-align:center'>0</p><p>|----|----|</p>";
     _volPad.style.display="none";
     _volPad.style.background="#066";
+    _volPad.style.zIndex=1;
     var _mouseMoved;
-    _elementVolume.onmousedown = function () {
+    _elementVolume.onmousedown = function (event) {
       MouseIsDown = true;
       _mouseMoved = false;
-      _volPad.style.left = (-((1.0-_vol)*11).toFixed()) + "ch";
+      _volPad.style.left = (-((1.0-_vol)*11) + (3.0*event.offsetX/event.target.clientWidth)).toFixed(0) +"ch" ;
       _volPad.style.display="block";
     }
     _volPad.onmousemove = function (event) {
      _mouseMoved = true;
       var box = event.target.getBoundingClientRect();
       _vol = 1.0-((event.clientX - box.left) / box.width + .005).toFixed(2);
+      event.target.parentElement.children[1].innerText = _vol.toFixed(2);
     }
     _volPad.onmouseleave  = function () {
       if (_mouseMoved) _volPad.style.display="none";
@@ -1512,7 +1513,6 @@ var saveSong = function () {
     }
   }
 
-  //document.getElementById('save').innerText = bytes;
   window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
 }
 
