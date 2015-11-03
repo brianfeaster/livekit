@@ -1089,8 +1089,9 @@ function setupDrumTrack (part) {
 
   METHODS::
     .elementIcon         The DOM element representing a minimized view
-    .highlightElement(b) High-light (or unhighligh) the element, implying its
-                         phrase is also visible.
+    .highlightElement(b) High-light (or unhighligh) the top element, implying it
+                         is selected for certain actions and that its phrase is
+                         also visible.
     .setFocus(b)         Set the focus style.  Only one reference will be in
                          focus at a time and acted on by sheet button elements.
     .setRefCount         Set the reference count for this node WRT to the
@@ -1099,6 +1100,9 @@ function setupDrumTrack (part) {
     .phrase              The parent phrase
     .highlightBeat(b)    Set beat high-light marker
     .unhighlightBeat()   Disable cursor
+    .setMarks()          Re-render the playback styles.  Was just a > and <
+                         character but now high-lighting the background of all
+                         beats within the playable range.
 ******************************************************************************/
 var PhraseReference = function (phrase) {
   //// Local
@@ -1187,10 +1191,10 @@ var PhraseReference = function (phrase) {
      var rect = _e.getBoundingClientRect();
      // Sheet0 beat index
      var idx = Floor(((event.clientX - rect.left)/rect.width)*self.beatCount) + Sheet0.beatsBefore(self); // TODO: global Sheet0 hack
-     if (idx <= BeatInitial) BeatInitial = idx;
-     else if (BeatFinal <= idx) BeatFinal = idx;
+     if (idx < BeatInitial) BeatInitial = idx;
+     else if (BeatFinal < idx) BeatFinal = idx;
      else {
-       if (event.shiftKey) BeatFinal = idx;
+       if (event.which==3 || event.shiftKey) BeatFinal = idx;
        else BeatInitial = idx;
      }
      Sheet0.updateBeatMarkers();
@@ -1214,8 +1218,13 @@ var PhraseReference = function (phrase) {
   cursor.style.background = "#0f0";
   cursor.innerHTML = "&nbsp;";
 
-  var _ee = CreateAppendChild('p', _e);
-  _ee.innerText = phrase.measureCount + " " + (phrase.beatCount/phrase.measureCount) + " " + (phrase.tickCount/phrase.beatCount);
+  var _beatTicks = CreateAppendChild('p', _e);
+  _beatTicks.className = "beatmarks";
+  //_ee.innerText = phrase.measureCount + " " + (phrase.beatCount/phrase.measureCount) + " " + (phrase.tickCount/phrase.beatCount); // Just show measure beat tick count for this phrase
+  for (var b=0; (b < phrase.beatCount); ++b) {
+    var _ee = CreateAppendChild('b', _beatTicks);
+    _ee.innerText = (0==Mod(b, phrase.measureCount)) ? 1+Floor(b/phrase.measureCount) : "-";
+  }
 
   //// Public
   this.elementIcon = elementIcon;
@@ -1240,8 +1249,10 @@ var PhraseReference = function (phrase) {
     cursor.style.display = "none";
   }
   this.setMarks = function (initial, final) {
+    // Consider the global beat values for the first and last beat of this phrase.
     var beatFirst = Sheet0.beatsBefore(self);
     var beatLast = beatFirst + self.beatCount-1;
+/*
     if ((beatFirst <= initial) && (initial <= beatLast)) {
       markInitial.style.display = "";
       markInitial.style.left = (initial - beatFirst) + "ch";
@@ -1254,6 +1265,16 @@ var PhraseReference = function (phrase) {
       markFinal.style.left = (final-beatFirst) + "ch";
     } else {
       markFinal.style.display = "none";
+    }
+*/
+
+    // Color the currently playing beats
+    for (var b=0; (b < self.beatCount); ++b) {
+      if ((initial <= (beatFirst+b)) && ((beatFirst+b) <= final)) {
+        _beatTicks.children[b].style.background = "#040";
+      } else {
+        _beatTicks.children[b].style.background = "";
+      }
     }
   }
   phrase.referenceAdd(this);
