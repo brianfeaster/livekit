@@ -46,7 +46,7 @@ h1 {
 
 .window {
   display:inline-block;
-  margin:.25ch;
+  margin-top:1ch;
   vertical-align:top;
 }
 
@@ -55,31 +55,36 @@ h1 {
   padding-left:.5ch;
   padding-right:.5ch;
   border:solid 1px #444;
+  height:1.3em;
 }
 
 .window > div:nth-child(2) {
   overflow:hidden;
-  border-bottom:solid 1px #444
+  border-bottom:solid 1px #444;
+  height:1.3em;
 }
 
 .window > div:nth-child(3) {
-  display:block;
-  position:relative;
-  margin-left:1ch;
-  margin-top:0px;
+  display: block;
+  position: relative;
+  margin-left: 1ch;
+  margin-top: 0px;
   border: solid 1px #444;
   border-top: solid 1px black
+}
+
+.actor {
+  border:1px solid black;
+}
+
+.actor:hover {
+  border:solid 1px #f0f
 }
 
 
 .knobs > p {
   display:inline-block;
   background:#066;
-  border:solid 1px black
-}
-
-.knobs > p:hover {
-  border:solid 1px #f0f
 }
 
 
@@ -112,7 +117,7 @@ h1 {
 
 .piano > div:hover,
 .piano > p:hover   {
-  background-color: #088
+  background-color: #e0e
 }
 
 #sheetbuttons > div {
@@ -130,6 +135,7 @@ h1 {
   display:inline-block;
   vertical-align:top;
   margin-top:.5ch;
+  margin-left:.5ch;
 }
 
 .windowphrasealias > div:nth-child(1) {

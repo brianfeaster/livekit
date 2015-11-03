@@ -34,18 +34,18 @@
   <div>CONTROL</div>
   <div>&nbsp;</div>
   <div class="knobs">
-    vol <p id="volume" contenteditable="true">50</p>
+    vol <p id="volume" class="actor" contenteditable="true">50</p>
     <br/>
-    temp<p id="speed" contenteditable="true">160</p>
+    temp<p id="speed" class="actor" contenteditable="true">160</p>
     <br/>
-    <p class="reset" onmousedown="reset(event)">|&lt;</p>
-    <p class="pause" onmousedown="pause(event)">||</p>
+    <p class="actor reset" onmousedown="reset(event)">|&lt;</p>
+    <p class="actor pause" onmousedown="pause(event)">||</p>
   </div>
 </div>
 
 <div class="window">
-  <div>KEYBOARD</div>
-  <div class="knobs">&nbsp;<p id="freq" contenteditable="true">65.4064</p></div>
+  <div contenteditable="true">KEYBOARD</div>
+  <div class="knobs">&nbsp;<p id="freq" class="actor" contenteditable="true">65.4064</p></div>
   <div>
     <div id="piano1" class="piano" style="white-space:nowrap"></div>
   </div>
@@ -61,7 +61,7 @@
         <input id="addbeats" value="4" type="number" style="width:3ch"/>Beats<br/>
         <input id="addticks" value="4" type="number" style="width:3ch"/>ticks<br/>
       </div>
-      <div>new</div>
+      <div class="actor" >new</div>
     </div>
   </div>
   <div id="sheet"></div>
@@ -398,7 +398,7 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
   var _keysDOM = []; // Keeps track of the DOM elements which represent the white and black keys in order.
   var _frequencies = [];
   var _highlights = []; // Array of stacks.  An empty stack implies no high-light.
-  var _highlightColor = "#0ff"
+  var _highlightColor = "#f8f"
 
   // Helpers to play and set and unset key's high-light
   var _setHighlightAndPlay = function(key) {
@@ -865,6 +865,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   var _element = document.createElement('div');
   //_element.style.display = "none"; // Default to off
   var _elementId = CreateAppendChild('p', _element);
+  _elementId.className = "actor";
   _elementId.innerText = id;
   var _countDOM = CreateAppendChild('div', _element); // Reference count
   _countDOM.innerText = "0";
@@ -881,7 +882,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   var _createPart = function (playable, idx) { // idx can be undefined
     // The part toggle button
     var id = document.createElement('b');
-    id.className = "trackid";
+    id.className = "actor trackid";
     id.innerText = _parts.length;
     id.style.fontWeight = "normal";
     // Create new part/voice object
@@ -891,6 +892,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
     _partsDOM.appendChild(_part.element);
     // Clicking on the part button will toggle the part's DOM element
     var b = CreateInsertBefore('b', _partlistDOM);
+    b.className = "actor";
     b.innerText =  id.innerText;
     b.style.fontWeight = "normal";
     b.style.display = "none";
@@ -1314,11 +1316,13 @@ var Sheet = function () {
 
   // Move current reference phrase left button
   var _e = CreateAppendChild('div', _buttons); // Shift phrase left button element
+  _e.className = "actor";
   _e.innerText = "<"
   _e.onmousedown = function (event) { if (currentReference) Sheet0.shift(currentReference, -1); }
 
   // Move current reference phrase right button
   _e = CreateAppendChild('div', _buttons); // Shift phrase right button element
+  _e.className = "actor";
   _e.innerText = ">"
   _e.onmousedown = function (event) { if (currentReference) Sheet0.shift(currentReference, 1); }
 
@@ -1516,7 +1520,7 @@ var restoreSongLK1 = function (keyboard, drumKit, encodedSong) {
   var gs = new GetStringBase64(encodedSong);
   var b, label;
   var waveforms = ["sine", "square", "sawtooth", "triangle"];
-  var color = ["#f00", "#0f0", "#f0f"];
+  var color = ["#f00", "#0f0", "#00f"];
   if (!gs.assertString("LK") || !gs.assertBytes([1])) {
     DB("Not LK1")
     return false;
@@ -1635,7 +1639,7 @@ var restoreTicksAlpha = function (keyboard, drumKit) {
   // Add synth parts to the phrase
   phrase.addPart(new Synthesizer(ctx, 1, keyboard, "red"));
   phrase.addPart(new Synthesizer(ctx, 2, keyboard, "green"));
-  phrase.addPart(new Synthesizer(ctx, 3, keyboard, "magenta"));
+  phrase.addPart(new Synthesizer(ctx, 3, keyboard, "blue"));
 
   for (var n=0; n<drumKit.length; ++n) { phrase.addPartFixed(drumKit, n) }
 
@@ -2183,7 +2187,7 @@ window.onload = function () {
     var phrase = new Phrase(false, measures, beats, ticks, keyboard);
     phrase.addPart(new Synthesizer(ctx, 1, keyboard, "red"));
     phrase.addPart(new Synthesizer(ctx, 2, keyboard, "green"));
-    phrase.addPart(new Synthesizer(ctx, 3, keyboard, "magenta"));
+    phrase.addPart(new Synthesizer(ctx, 3, keyboard, "blue"));
     for (var n=0; n<drumKit.length; ++n) { phrase.addPartFixed(drumKit, n) }
     Sheet0.add(new PhraseReference(phrase));
   }
