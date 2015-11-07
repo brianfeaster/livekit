@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="DB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="XDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -43,6 +43,13 @@
     </div>
   </div>
 </div>
+
+<div class="window">
+  <div>SYNTHS</div>
+  <div class="knobs"> <p class="actor">s</p> <p class="actor">d</p> </div>
+  <div id="synths">KawaiK4 TR-808 TB-303</div>
+</div>
+
 
 <div class="window">
   <div>KEYBOARD</div>
@@ -732,18 +739,19 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
     }
     // Add an edit/menu element.
     _elementVolume = CreateAppendChild('p', _element);
-    _elementVolume.className = "menu"
+    _elementVolume.className = "volume knobs"
     _elementVolume.style.position = "relative"
     _elementVolume.innerText = "[V]"
 
     _volPad = CreateAppendChild('p', _elementVolume);
     _volPad.style.position = "absolute"
-    _volPad.style.top = "-1.5ch";
+    _volPad.style.top = "0";
     _volPad.style.left = 0;
     _volPad.style.width="11ch";
-    _volPad.innerHTML = "<p>|----|----|</p><p style='text-align:center'>0</p><p>|----|----|</p>";
+    _volPad.style.border="solid 1px #066";
+    _volPad.innerHTML = "<p>|----|----|\n|----|----|</p><div>0</div>";
     _volPad.style.display="none";
-    _volPad.style.background="#066";
+    _volPad.style.background="#000";
     _volPad.style.zIndex=1;
     var _mouseMoved;
     _elementVolume.onmousedown = function (event) {
@@ -752,13 +760,13 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
       _volPad.style.left = (-((1.0-_vol)*11) + (3.0*event.offsetX/event.target.clientWidth)).toFixed(0) +"ch" ;
       _volPad.style.display="block";
     }
-    _volPad.onmousemove = function (event) {
+    _volPad.children[0].onmousemove = function (event) {
      _mouseMoved = true;
       var box = event.target.getBoundingClientRect();
       _vol = 1.0-((event.clientX - box.left) / box.width + .005).toFixed(2);
       event.target.parentElement.children[1].innerText = _vol.toFixed(2);
     }
-    _volPad.onmouseleave  = function () {
+    _volPad.children[0].onmouseleave  = function () {
       if (_mouseMoved) _volPad.style.display="none";
     }
     _volPad.onmousedown = function () {
@@ -2164,7 +2172,7 @@ window.onload = function () {
   restoreTicksAlpha(keyboard, drumKit); // Parse get string
   restoreSongLK1(keyboard, drumKit);
 
-  BeatFinal = Sheet0.beatCount()-1;
+  BeatFinal = Sheet0.beatCount()-1; // Set playback range to end of song.
   Sheet0.updateBeatMarkers();
 
   PhraseGlobalCounter = Sheet0.phraseCount();
@@ -2181,6 +2189,7 @@ window.onload = function () {
 
   // TODO Global hack mechanism to create a new phrase.
   addphrase = function (e) {
+    var shouldUpdateRange = (BeatFinal == Sheet0.beatCount()-1);
     var measures = document.getElementById('addmeasures').value;
     var beats    = document.getElementById('addbeats').value;
     var ticks    = document.getElementById('addticks').value;
@@ -2189,7 +2198,13 @@ window.onload = function () {
     phrase.addPart(new Synthesizer(ctx, 2, keyboard, "green"));
     phrase.addPart(new Synthesizer(ctx, 3, keyboard, "blue"));
     for (var n=0; n<drumKit.length; ++n) { phrase.addPartFixed(drumKit, n) }
+
     Sheet0.add(new PhraseReference(phrase));
+
+    if (shouldUpdateRange) { // Set playback range to end of song.
+      BeatFinal = Sheet0.beatCount()-1;
+      Sheet0.updateBeatMarkers();
+    }
   }
 
   pauseFeedback("pauseicon"); // Tell user it's time to rock on!
