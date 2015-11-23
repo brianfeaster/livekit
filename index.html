@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="XDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -34,7 +34,7 @@
   <div>CONTROL</div>
   <div>&nbsp;</div>
   <div class="knobs">
-    vol <p id="volume" class="actor" contenteditable="true">50</p>
+    vol <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" />
     <br/>
     temp<p id="speed" class="actor" contenteditable="true">160</p>
     <div>
@@ -46,8 +46,8 @@
 
 <div class="window">
   <div>SYNTHS</div>
-  <div class="knobs"> <p class="actor">s</p> <p class="actor">d</p> </div>
-  <div id="synths">KawaiK4 TR-808 TB-303</div>
+  <div class="knobs"> <p id="addsynth" class="actor">+</p></div>
+  <div id="synths"></div>
 </div>
 
 
@@ -299,7 +299,7 @@ var GetStringBase64 = function (get) {
   var self = this;
   var _gsb64 = get || window.location.search.substring(1);
   var _gs = [];
-  
+
   //// PUBLIC
   this.reset = function () {
     _gs = Base64(_gsb64);
@@ -356,7 +356,7 @@ var GetStringBase64 = function (get) {
   var _test = function () {
     var __gsb64 = _gsb64; // Save internal state
     var __gs = _gs;
-    
+
     _gsb64 = "C34oCm";
     self.reset();
     _testAssert(self.nextByte(), 48);
@@ -620,20 +620,161 @@ var Drumkit = function (ctx, color, audioBuffers) {
     color    DOM color
 
   METHODS::
-    Synth.color                Color associated with this object
-    Synth.name(key)            Name associated with this key.  Default is the synth waveform name, each key.
-    Synth.play(key, vol, when) Plays a waveform at a freq determined by the Keyboard object at the
-                               specified key, at webaudio context time 'when' or immediately if when==0.
-    Synth.waveform()           Get current waveform string.
-    Synth.waveformNext()       Select the next waveform.
-    Synth.highlight(key)       Highlight the keyboard object's key with my color.
-    Synth.unhighlight()        Remove my highlight from the keyboard object.
+    .element              This object's element
+    .name                 Name of this instance
+    .color                Color associated with this object
+    .name(key)            Name associated with this key.  Default is the synth waveform name, each key.
+    .adsr()               Get ADSR values in array
+    .attSet(att)          Set new attack value 0.0-1.0.
+    .relSet(rel)          Set new release value 0.0-1.0.
+    .play(key, vol, when) Plays a waveform at a freq determined by the Keyboard object at the
+                          specified key, at webaudio context time 'when' or immediately if when==0.
+    .wave()               Get current waveform index..
+    .waveform()           Get current waveform string.
+    .highlight(key)       Highlight the keyboard object's key with my color.
+    .unhighlight()        Remove my highlight from the keyboard object.
 ******************************************************************************/
-var Synthesizer = function (ctx, type, keyboard, color) {
+var SynthGlobalCounter = 0;
+var Synthesizers = [];
+var Synthesizer = function (ctx, label, type, keyboard, color) {
+  ++SynthGlobalCounter;
   //// Local
-  var _release = 0.5; // Release time in seconds for both the filter and gain.
+  var self = this;
+  var _name = label || ("Synth" + SynthGlobalCounter);
+  var _att = 0.01; // Attack tiem in seconds.
+  var _rel = 0.50; // Release time in seconds for both the filter and gain.
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
   var _waveformIdx = type;
+  var _mouseMoved;
+
+  var _element = document.createElement('div');
+  _element.className = "windowphrasealias";
+  _element.style.width = "13ch";
+
+  var _nameDOM = CreateAppendChild('div', _element);
+  _nameDOM.style.background="#880";
+  _nameDOM.innerText = _name;
+
+  var _buttons = CreateAppendChild('div', _element);
+
+  var _delSynth = CreateAppendChild('p', _buttons);
+  _delSynth.className="actor mustshift";
+  _delSynth.innerText = "-";
+
+  // Remove synth only if not not used in any of the synth parts in any of the phrses and not one of the original 4 synths.
+  _delSynth.onmousedown = function () {
+    // Never remove the first four synths as they are used when creating a new phrase. TODO: remove this dependency
+    var count=0;
+    var synthIndex = Synthesizers.indexOf(self);
+    if (synthIndex < 4) { return; }
+    // Count synth usage in all parts of all phrases.
+    Sheet0.phrases.map(function(ph){ ph.parts.map(function(pt){ if (self == pt.playable) ++count; }); });
+    if (0 < count) { return; } 
+    Synthesizers.splice(synthIndex,1);
+    document.getElementById('synths').removeChild(_element); // Remove myself from DOM
+  }
+
+  var _body = CreateAppendChild('div', _element);
+  _body.className = "knobs";
+  _body.style.position = "relative"
+
+  // Waveform button
+  var _waveformDOM = CreateAppendChild('p', _body)
+  _waveformDOM.className = "actor";
+  _waveformDOM.innerText = _waveforms[_waveformIdx];
+  _waveformDOM.onmousedown = function () {
+    if (_waveforms.length == ++_waveformIdx) _waveformIdx=0;
+    _waveformDOM.innerText = _waveforms[_waveformIdx];
+  }
+
+  CreateAppendChild('br', _body);
+
+  // Attack button
+  var _attack = CreateAppendChild('p', _body);
+  _attack.className = "volume"
+  _attack.innerText = "[A]"
+
+  var _sliderAttack = CreateAppendChild('p', _attack);
+  _sliderAttack.style.position = "absolute"
+  _sliderAttack.style.top = "0";
+  _sliderAttack.style.left = 0;
+  _sliderAttack.style.width="11ch";
+  _sliderAttack.style.border="solid 1px #066";
+  _sliderAttack.innerHTML = "<p>|----|----|\n|----|----|</p><div>0</div>";
+  _sliderAttack.style.display="none";
+  _sliderAttack.style.background="black";
+  _sliderAttack.style.zIndex=2;
+  _attack.onmousedown = function (event) {
+    MouseIsDown = true;
+    _mouseMoved = false;
+    _sliderAttack.style.left = (-((1.0-_att)*11) + (3.0*event.offsetX/event.target.clientWidth)).toFixed(0) +"ch" ;
+    _sliderAttack.style.display="block";
+  }
+  _sliderAttack.children[0].onmousemove = function (event) {
+   _mouseMoved = true;
+    var box = event.target.getBoundingClientRect();
+    _att = 1.0-((event.clientX - box.left) / box.width + .005).toFixed(2);
+    event.target.parentElement.children[1].innerText = _att.toFixed(2);
+  }
+  _sliderAttack.children[0].onmouseleave  = function () {
+    if (_mouseMoved) _sliderAttack.style.display="none";
+  }
+  _sliderAttack.onmousedown = function () {
+    MouseIsDown = true;
+    event.stopPropagation();
+  }
+  _sliderAttack.onmouseup = function () {
+    MouseIsDown = false;
+    if (_mouseMoved) {
+      _sliderAttack.style.display="none";
+    }
+    event.stopPropagation();
+  }
+
+
+  // Decay button
+  var _decay = CreateAppendChild('p', _body);
+  _decay.className = "volume"
+  _decay.innerText = "[D]"
+
+  var _sliderDecay = CreateAppendChild('p', _decay);
+  _sliderDecay.style.position = "absolute"
+  _sliderDecay.style.top = "0";
+  _sliderDecay.style.left = 0;
+  _sliderDecay.style.width="11ch";
+  _sliderDecay.style.border="solid 1px #066";
+  _sliderDecay.innerHTML = "<p>|----|----|\n|----|----|</p><div>0</div>";
+  _sliderDecay.style.display="none";
+  _sliderDecay.style.background="black";
+  _sliderDecay.style.zIndex=2;
+  var _mouseMoved;
+  _decay.onmousedown = function (event) {
+    MouseIsDown = true;
+    _mouseMoved = false;
+    _sliderDecay.style.left = (-((1.0-_rel)*11) + (3+3.0*event.offsetX/event.target.clientWidth)).toFixed(0) +"ch" ;
+    _sliderDecay.style.display="block";
+  }
+  _sliderDecay.children[0].onmousemove = function (event) {
+   _mouseMoved = true;
+    var box = event.target.getBoundingClientRect();
+    _rel = 1.0-((event.clientX - box.left) / box.width + .005).toFixed(2);
+    event.target.parentElement.children[1].innerText = _rel.toFixed(2);
+  }
+  _sliderDecay.children[0].onmouseleave  = function () {
+    if (_mouseMoved) _sliderDecay.style.display="none";
+  }
+  _sliderDecay.onmousedown = function () {
+    MouseIsDown = true;
+    event.stopPropagation();
+  }
+  _sliderDecay.onmouseup = function () {
+    MouseIsDown = false;
+    if (_mouseMoved) {
+      _sliderDecay.style.display="none";
+    }
+    event.stopPropagation();
+  }
+
   var _play = function (key, vol, when) {
     // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
     var at = (when == 0) ? ctx.currentTime : when;
@@ -641,25 +782,30 @@ var Synthesizer = function (ctx, type, keyboard, color) {
     osc.frequency.value = keyboard.freq(key); // Ask the keyboard object for the frequency of this key
     osc.type = _waveforms[_waveformIdx];
     osc.start(at);
-    osc.stop(at + _release);
+    osc.stop(at + _att + _rel);
     osc.onended = function(osc){ osc.disconnect(); }.bind(null, osc);
 
     var gain = ctx.createGain();
-    gain.gain.setValueAtTime(vol*0.5*Volume, at);
-    gain.gain.linearRampToValueAtTime(0, at + _release);
+    gain.gain.setValueAtTime(0, at);
+    gain.gain.linearRampToValueAtTime(vol*0.5*Volume, at + _att);
+    gain.gain.linearRampToValueAtTime(0, at + _att + _rel);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
   }
 
+  Synthesizers.push(this);
+
   //// Public
+  this.element = _element;
   this.color = color
-  this.name = function (note) { return this.waveform(); }
+  this.name = function (note) { return _name; }
+  this.adsr = function () { return [(_att*255).toFixed(), 0, 0, (_rel*255).toFixed()]; }
+  this.attSet = function (att) { _att = att/255.0; }
+  this.relSet = function (rel) { _rel = rel/255.0; }
   this.play = _play;
+  this.wave = function () { return _waveformIdx; }
   this.waveform = function () { return _waveforms[_waveformIdx]; }
-  this.waveformNext = function () {
-    if (_waveforms.length == ++_waveformIdx) _waveformIdx=0;
-  }
   var _lastKey = -1;
   this.highlight = function (key) {
       keyboard.unhighlight(_lastKey, color); // Remove last high-light
@@ -707,6 +853,7 @@ var Synthesizer = function (ctx, type, keyboard, color) {
 ******************************************************************************/
 var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playable) {
   //// Local
+  var self = this;
   var _beatCounter = 0;
   var _element; // The DOM element
   var _elementBeats = [];
@@ -738,8 +885,8 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
       }
     }
     // Add an edit/menu element.
-    _elementVolume = CreateAppendChild('p', _element);
-    _elementVolume.className = "volume knobs"
+    _elementVolume = CreateAppendChild('div', _element);
+    _elementVolume.className = "volume actor knobs"
     _elementVolume.style.position = "relative"
     _elementVolume.innerText = "[V]"
 
@@ -780,9 +927,9 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
       }
       event.stopPropagation();
     }
-    
-    // Add sound name element to this part DOM element
-    _elementName = CreateAppendChild('p', _element);
+
+    // Add sound name element to this part's DOM element
+    _elementName = CreateAppendChild('div', _element);
     _elementName.className = "name"
   }
 
@@ -809,7 +956,7 @@ var Part = function (idElement, beatCount, subBeatCount, beatsPerMeasure, playab
   this.vol = function () {return _vol; }
   this.setVol = function (v) {_vol = v; }
   this.setCursor = function (i) { _cursor = i; }
-  this.play = function (tick, when) { playable.play(_notes[tick], _vol, when); }
+  this.play = function (tick, when) { self.playable.play(_notes[tick], _vol, when); }
   this.playTicks = function (beat, when) {
     if (0 == when) when = ctx.currentTime; // If someone wants this beat played now, compensate otherwise it will be "played in the past".
     for (var t=0; (t < subBeatCount); ++t) {
@@ -865,7 +1012,7 @@ var PhraseGlobalCounter = 0;
 var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   //// Local
   var self = this; // Because this is assigned dynamically when functions are called.
-  var _partlistDOM, _partsDOM, _parts = [];
+  var _parts = [];
   var _references = [];
 
   if (!id) { id = "P" + ++PhraseGlobalCounter; }
@@ -878,13 +1025,55 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   _elementId.innerText = id;
   var _countDOM = CreateAppendChild('div', _element); // Reference count
   _countDOM.innerText = "0";
-  _partlistDOM = CreateAppendChild('div', _element);
+  var _newSynthPart = CreateAppendChild('div', _element); // Reference count
+  _newSynthPart.className="actor";
+  _newSynthPart.innerText = "+";
+  var _halfTicks = CreateAppendChild('div', _element); // Reference count
+  _halfTicks.innerText = "/2";
+  _halfTicks.className="actor mustshift";
+  var _doubleTicks = CreateAppendChild('div', _element); // Reference count
+  _doubleTicks.innerText = "*2";
+  _doubleTicks.className="actor mustshift";
+  var _partlistDOM = CreateAppendChild('div', _element);
   _partlistDOM.className = "partlist";
-  _partsDOM = CreateAppendChild('div', _element);
+  var _partsDOM = CreateAppendChild('div', _element);
 
   // When the phase icon element or phase element itself is clicked on, toggle the main editable element.
   _elementId.onmousedown = function () {
     self.toggleElement();
+  }
+
+  _newSynthPart.onmousedown = function () {
+    var s;
+    if (0 == document.getElementById('synths').children.length) {
+      s = new Synthesizer(ctx, false, 1, keyboard, "#84f");
+      document.getElementById('synths').appendChild(s.element);
+    } else {
+      s = Synthesizers[0];
+    }
+    var p = self.addPart(s);
+    // Move it to top of parts
+    _partsDOM.insertBefore(p.element, _partsDOM.children[0]);
+  }
+
+  _halfTicks.onmousedown = function () {
+    if (!event.shiftKey) return;
+    for (var t=0; (t < self.tickCount/2); ++t) {
+      _parts.map(function(p){
+        p.elementTick(t).innerText = p.elementTick(t*2).innerText;
+        p.setKey(t, p.key(t*2));
+      });
+    }
+  }
+
+  _doubleTicks.onmousedown = function () {
+    if (!event.shiftKey) return;
+    for (var t=self.tickCount/2-1; (0 < t); --t) {
+      _parts.map(function(p){
+        p.elementTick(t*2).innerText = p.elementTick(t).innerText;
+        p.setKey(t*2, p.key(t));
+      });
+    }
   }
 
   // Add a new part to this phrase object. It requires a playable object
@@ -925,9 +1114,6 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
     return _part;
   }
 
-  var _setRefCount = function (newCount) {
-  }
-
   //// Public
   this.id        = id;
   this.element   = _element;
@@ -940,8 +1126,8 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   this.addPart = function (playable) {
     var _part = _createPart(playable);
     _part.elementName.onmousedown = function () {
-      _part.playable.waveformNext();
-      _part.elementName.innerText = _part.playable.waveform();
+      _part.playable = Synthesizers[(1 + Synthesizers.indexOf(_part.playable)) % Synthesizers.length]; // Consider next synth in global list
+      _part.elementName.innerText = _part.playable.name();
     }
     setupSynthPart(_part, keyboard);
     currentActiveSynthPart = _part; // Make sure the keyboard can make sounds initially so assign it the last instantiate part.
@@ -1183,7 +1369,7 @@ var PhraseReference = function (phrase) {
   }
 
   var _e = CreateAppendChild('span', _menuElement); // Delete phrase button element
-  _e.className = "mustshift";
+  _e.className = "actor mustshift";
   _e.innerText = "X"
   _e.onmousedown = function (event) {
     if (event.shiftKey) {
@@ -1300,6 +1486,7 @@ var PhraseReference = function (phrase) {
     var sheet = new Sheet()
 
   METHODS::
+    .phrases     The array of all phrases.
     .length()    Number of phrase references
     .beatCount() Get number of total playable beats
     .beatsBefore(r) Get number of total beats before the specified phrase reference.
@@ -1316,6 +1503,7 @@ var PhraseReference = function (phrase) {
 ******************************************************************************/
 var Sheet = function () {
   //// Local
+  var self = this;
   var _phrases = [];
   var _phraseReferences = [];
   var _beatCount = 0;
@@ -1344,6 +1532,7 @@ var Sheet = function () {
 
 
   //// Public
+  this.phrases   = _phrases;
   this.length    = function ()  { return _phraseReferences.length; }
   this.beatCount = function ()  { return _beatCount; }
   this.beatsBefore = function (phraseReference) {
@@ -1434,10 +1623,199 @@ var Sheet = function () {
  Encode song objects into Base-64 encoding of the following:
 
   -HEADER-
+  "LK" 02  version
+  00        main volume
+  00 00     beat duration
+
+  -SYNTH...-
+  00                Type Synthesizer
+  0a"synthname"     label
+  00                Waveform [square sawtooth triangle sine]
+  00                Volume
+  00 00             Attack release
+
+  -PHRASE...-
+  01                Type Phrase
+  0a"phrasename"    label
+  04 04 04          measures, beatspermeasure, ticksperbeat
+  10                partcount
+  -PART...-
+  08"partname" 00   label, part volume
+  00...             4*4*4 bits representing on/off tick
+  -NOTE OR NOTES-
+    80              If 8th bit set then this&7f is the note to use for each tick.
+    00...           Otherwise {number of ticks} bytes represent the notes for each tick.
+
+  -PHRASE REFERENCE-
+  02                Type PhraseReference
+  0a"phrasename"    Label referring to actual phrase
+*/
+var saveSongLK2 = function () {
+
+  var writtenPhrases = []; // Keep track of written phrases
+  var bytes = [76,75,2]; // "LK" 02  LiveKa7 DAW Version 2 Header
+
+  bytes.push((Volume*255.0).toFixed(0));
+  // BMP saved as fixed point to two decimal places in little endian.  So convert the duration in seconds to microseconds then split.
+  bytes.push(parseInt((6000/BeatDuration) & 255));
+  bytes.push(parseInt((6000/BeatDuration) >> 8));
+
+  Synthesizers.map(function(s) {
+   // TYPE LENGTH "SYNTH LABEL"
+    bytes.push(0);
+    bytes.push(s.name().length);
+    s.name().split('').map(function(b){bytes.push(b.charCodeAt(0))});
+    bytes.push(s.wave()); // Waveform index
+    bytes.push(255); // Volume
+    var adsr = s.adsr();
+    bytes.push(adsr[0]); // Attack
+    bytes.push(adsr[3]); // Release
+  });
+
+  for (var i=0; i<Sheet0.length(); ++i) {
+
+    var ref = Sheet0.index(i);
+    var phrase = ref.phrase;
+
+    if (0 <= writtenPhrases.indexOf(phrase)) { // Write phrase if first reference to it
+      // TYPE LENGTH "REFERENCED PHRASE LABEL"
+      bytes.push(2);
+      bytes.push(phrase.id.length);
+      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+    } else {
+      writtenPhrases.push(phrase); // Keep track of phrases written
+      // TYPE LENGTH "PHRASE LABEL"
+      bytes.push(1);
+      bytes.push(phrase.id.length);
+      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+      // MEASURES BEATS TICKS PARTCOUNT
+      bytes.push(phrase.measureCount);
+      bytes.push(phrase.beatCount/phrase.measureCount);
+      bytes.push(phrase.tickCount/phrase.beatCount);
+      bytes.push(phrase.partCount());
+
+      phrase.parts.map(function(part, i){
+        // LENGTH "PART LABEL" VOLUME
+        bytes.push(part.elementName.innerText.length);
+        part.elementName.innerText.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+        bytes.push(Floor(255.0*part.vol()));
+
+        // TICK BITS
+        var bit = 1
+        var byte=0;
+        part.elementTicks.map(function (te, i) {
+          if ("." != te.innerText) byte = byte | bit;
+          if (128 == bit) {
+            bytes.push(byte);
+            bit = 1;
+            byte = 0;
+          } else {
+            bit = bit<<1
+          }
+        });
+        if (bit != 1) { bytes.push(byte); }
+
+        // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
+        if (part.playable instanceof Synthesizer) {
+          for (var i=0; i<part.tickLength; ++i) { 
+            if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
+          }
+        } else {
+          bytes.push(128 + part.key(0));
+        }
+
+      });
+    }
+  }
+
+  window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
+}
+
+var restoreSongLK2 = function (keyboard, drumKit, encodedSong) {
+  var gs = new GetStringBase64(encodedSong);
+  var next, b, label;
+  var waveforms = ["sine", "square", "sawtooth", "triangle"];
+  var color = ["#f00", "#0f0", "#00f"];
+  if (!gs.assertString("LK") || !gs.assertBytes([2])) {
+    DB("Not LK2")
+    return false;
+  }
+
+  DB("Decoding LK2...")
+
+  b = gs.nextByte();
+  Volume = b / 255.0;
+  document.getElementById('volume').value = (100.0 * Volume).toFixed(0);
+
+  b = gs.nextByte() + (gs.nextByte()<<8);
+  BeatDuration = 6000.0/b;
+  document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
+
+  while (null != (next = gs.nextByte()))
+  if (0 == next) { // Synthesizer
+    label = gs.nextString(gs.nextByte());
+DB("synthesizer " + label);
+    var synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#84f");
+    if (!Synthesizer0) Synthesizer0 = synth;
+    else if (!Synthesizer1) Synthesizer1 = synth;
+    else if (!Synthesizer2) Synthesizer2 = synth;
+    else if (!Synthesizer3) Synthesizer3 = synth;
+    document.getElementById('synths').appendChild(synth.element);
+    gs.nextByte(); // Ignore volume for now
+    synth.attSet(gs.nextByte());
+    synth.relSet(gs.nextByte());
+  } else if (1 == next) { // Phrase
+    label = gs.nextString(gs.nextByte());
+DB("phrase " + label);
+    var measures = gs.nextByte();
+    var beatsper = gs.nextByte();
+    var ticksper = gs.nextByte();
+    var partCount = gs.nextByte();
+    var phrase = new Phrase(label, measures, beatsper, ticksper, keyboard);
+    Sheet0.add(new PhraseReference(phrase));
+    for (var i=0; i<partCount; ++i) {
+      var part;
+      label = gs.nextString(gs.nextByte());
+      var vol = gs.nextByte();
+      var bools = gs.nextBools(phrase.tickCount);
+      if (gs.peekByte() & 128) {
+        part = phrase.addPartFixed(drumKit, gs.nextByte()&127);
+      } else {
+        Synthesizers.map(function(s) { // Lookup synth
+          if (s.name() == label) {
+DB("adding part " + label);
+            part = phrase.addPart(s);
+          }
+        });
+        bools.map(function(n,i){if (n) { part.setKey(i, gs.nextByte());}});
+      }
+      part.setVol(vol/255.0); // Volume
+      bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
+    }
+  } else if (2 == next) { // Phrase reference
+    label = gs.nextString(gs.nextByte()); // Look-up existing phrase id and create a new ref using it.
+DB("reference " + label);
+    for (var i=0; i<Sheet0.length(); ++i) {
+      var phrase = Sheet0.phrase(i)
+      if (phrase.id == label) { // Found it
+        var refPhrase = new PhraseReference(phrase);
+        Sheet0.add(refPhrase);
+        DB(label + " reference");
+        break;
+      }
+    }
+  }
+
+  return true;
+}
+/*
+ Encode song objects into Base-64 encoding of the following:
+
+  -HEADER-
   "LK" 01  version
   00        main volume
   00 00     beat duration
-  
+
   -PHRASE OR PHRASE_REFERENCE...-
     -PHRASE-
     00                Type Phrase
@@ -1455,7 +1833,7 @@ var Sheet = function () {
     0a"phrasename"    Label referring to actual phrase
 
 */
-var saveSong = function () {
+var saveSongLK1 = function () {
 
   var writtenPhrases = []; // Keep track of written phrases
   var bytes = [76,75,1]; // "LK" 01  LiveKa7 DAW Version 1 Header
@@ -1528,19 +1906,19 @@ var restoreSongLK1 = function (keyboard, drumKit, encodedSong) {
   var gs = new GetStringBase64(encodedSong);
   var b, label;
   var waveforms = ["sine", "square", "sawtooth", "triangle"];
-  var color = ["#f00", "#0f0", "#00f"];
+  //var color = ["#f00", "#0f0", "#00f"];
   if (!gs.assertString("LK") || !gs.assertBytes([1])) {
     DB("Not LK1")
     return false;
   }
 
-  DB("Decoding LK1...")
-
   b = gs.nextByte();
+  DB("LK1 volume " + b);
   Volume = b / 255.0;
-  document.getElementById('volume').innerText = (100.0 * Volume).toFixed(0);
+  document.getElementById('volume').value = (100.0 * Volume).toFixed(0);
 
   b = gs.nextByte() + (gs.nextByte()<<8);
+  DB("LK1 beatduration " + b);
   BeatDuration = 6000.0/b;
   document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
 
@@ -1555,12 +1933,21 @@ var restoreSongLK1 = function (keyboard, drumKit, encodedSong) {
     for (var i=0; i<partCount; ++i) {
       var part;
       label = gs.nextString(gs.nextByte());
+DB(label);
       var vol = gs.nextByte();
       var bools = gs.nextBools(phrase.tickCount);
       if (gs.peekByte() & 128) {
         part = phrase.addPartFixed(drumKit, gs.nextByte()&127);
       } else {
-        part = phrase.addPart(new Synthesizer(ctx, waveforms.indexOf(label), keyboard, color[i%3]));
+        //if (0 == i) {
+        //  part = phrase.addPart(Synthesizer0);
+        //} else {
+        //  part = phrase.addPart(new Synthesizer(ctx, false, waveforms.indexOf(label), keyboard, color[i%3]));
+        //}
+        if (waveforms.indexOf(label) == -1)
+          part = phrase.addPart(Synthesizer1);
+        else
+          part = phrase.addPart([Synthesizer0, Synthesizer1, Synthesizer2, Synthesizer3][waveforms.indexOf(label)]);
         bools.map(function(n,i){if (n) { part.setKey(i, gs.nextByte());}});
       }
       part.setVol(vol/255.0); // Volume
@@ -1604,7 +1991,7 @@ Base64('base64digits...').forEach(function(x){s+=("0"+x.toString(16)).slice(-2);
 
 /* Only saves a single phrase with three synth tracks and 13 beat tracks.
 */
-var saveSongAlpha = function () {
+var saveSongLK0 = function () {
   var pattern=[];
   var synthParts=[]; 
 
@@ -1633,11 +2020,16 @@ var saveSongAlpha = function () {
 
 /* Only restores a single phrase with three synth tracks and 13 beat tracks.
 */
-var restoreTicksAlpha = function (keyboard, drumKit) {
+var restoreSongLK0 = function (keyboard, drumKit) {
+DB("restore song lk0");
   var gs = new GetStringBase64();
 
-  if (320 != gs.length()) { return; }
-  DB("Creating default phrase...");
+  if (320 != gs.length()) {
+    DB("Not LK0");
+    return false;
+  }
+
+  DB("LK0 Creating default phrase...");
 
   // Create a phrase with 4 measures, 4 beats per measure, and 4 ticks per beat.
   var phrase = new Phrase("Phrase", 4, 4, 4, keyboard);
@@ -1645,9 +2037,9 @@ var restoreTicksAlpha = function (keyboard, drumKit) {
   Sheet0.add(phraseRef);
 
   // Add synth parts to the phrase
-  phrase.addPart(new Synthesizer(ctx, 1, keyboard, "red"));
-  phrase.addPart(new Synthesizer(ctx, 2, keyboard, "green"));
-  phrase.addPart(new Synthesizer(ctx, 3, keyboard, "blue"));
+  phrase.addPart(Synthesizer1);
+  phrase.addPart(Synthesizer2);
+  phrase.addPart(Synthesizer3);
 
   for (var n=0; n<drumKit.length; ++n) { phrase.addPartFixed(drumKit, n) }
 
@@ -1817,7 +2209,7 @@ var sequencerLoop = function () {
     // Increment beat state
     nextBeatTime += BeatDuration;
     if (BeatFinal < (Beat += 1)) { Beat = BeatInitial + (Beat - BeatFinal - 1); }
-    if (Beat == BeatInitial) { saveSong(); } // On the initial beat, upate the URL's get string.
+    if (Beat == BeatInitial) { saveSongLK2(); } // On the initial beat, upate the URL's get string.
   } // while
 } // sequencerLoop()
 
@@ -1893,6 +2285,7 @@ var setupControls = function (keyboard) {
   //document.getElementById('speed').onmouseenter = function (event) { event.target.focus(); }
   //document.getElementById('speed').onmouseleave = function (event) { event.target.blur(); }
 
+/*
   document.getElementById('volume').onkeydown = function (event) {
     var newVol;
     if (event.keyCode == 38) {
@@ -1925,6 +2318,16 @@ var setupControls = function (keyboard) {
       } // if
     }); // function
   } // function
+*/
+  document.getElementById('volume').onchange = function (event) {
+        var newVol = parseInt(event.target.value);
+        if (0 <= newVol && newVol <= 100) {
+          event.target.value = newVol;
+          Volume = newVol / 100.0;
+        } else {
+          event.target.value =  (Volume*100.0).toFixed(0);
+        }
+  }
 
   document.getElementById('speed').onkeydown = function (event) {
     var newDuration;
@@ -2094,6 +2497,10 @@ var ctx = new (window.AudioContext || window.webkitAudioContext)();
 var Sheet0; // New hotness
 var Keyboard0;
 var DrumKit0;
+var Synthesizer0;
+var Synthesizer1;
+var Synthesizer2;
+var Synthesizer3;
 
 var currentReference = false;
 var currentActiveSynthPart = false;  // This is the last track acted upon.  Should be initialied at some point.
@@ -2106,7 +2513,7 @@ var ToggleButtonState = 1;
  0.375; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
 var BeatDuration = 60/parseInt(document.getElementById('speed').innerText);
 
-var Volume = parseInt(document.getElementById('volume').innerText)/100.0;
+var Volume = parseInt(document.getElementById('volume').value)/100.0;
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
@@ -2155,6 +2562,11 @@ window.onload = function () {
 
   Sheet0 = new Sheet(); // Global sheet object
 
+  document.getElementById('addsynth').onmousedown = function () { 
+    var s = new Synthesizer(ctx, false, 1, keyboard, "#84f");
+    document.getElementById('synths').appendChild(s.element);
+  }
+
   // Create a piano object and DOM element.  61 keys, starting at C2.
   var keyboard = new PianoKeyboard("piano1", 61, 0, 1, 65.4064);
   //var keyboard2 = new PianoKeyboard("piano1", 88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
@@ -2169,8 +2581,30 @@ window.onload = function () {
   Keyboard0 = keyboard;
   DrumKit0 = drumKit
 
-  restoreTicksAlpha(keyboard, drumKit); // Parse get string
+  restoreSongLK2(keyboard, drumKit);
+
+  if (!Synthesizer0) {
+    Synthesizer0 = new Synthesizer(ctx, false, 0, keyboard, "#84f");
+    document.getElementById('synths').appendChild(Synthesizer0.element);
+  }
+
+  if (!Synthesizer1) {
+    Synthesizer1 = new Synthesizer(ctx, false, 1, keyboard, "#4f4");
+    document.getElementById('synths').appendChild(Synthesizer1.element);
+  }
+
+  if (!Synthesizer2) {
+    Synthesizer2 = new Synthesizer(ctx, false, 2, keyboard, "#44f");
+    document.getElementById('synths').appendChild(Synthesizer2.element);
+  }
+
+  if (!Synthesizer3) {
+    Synthesizer3 = new Synthesizer(ctx, false, 3, keyboard, "#84f");
+    document.getElementById('synths').appendChild(Synthesizer3.element);
+  }
+
   restoreSongLK1(keyboard, drumKit);
+  restoreSongLK0(keyboard, drumKit); // Parse get string
 
   BeatFinal = Sheet0.beatCount()-1; // Set playback range to end of song.
   Sheet0.updateBeatMarkers();
@@ -2194,9 +2628,10 @@ window.onload = function () {
     var beats    = document.getElementById('addbeats').value;
     var ticks    = document.getElementById('addticks').value;
     var phrase = new Phrase(false, measures, beats, ticks, keyboard);
-    phrase.addPart(new Synthesizer(ctx, 1, keyboard, "red"));
-    phrase.addPart(new Synthesizer(ctx, 2, keyboard, "green"));
-    phrase.addPart(new Synthesizer(ctx, 3, keyboard, "blue"));
+    phrase.addPart(Synthesizer1);
+    phrase.addPart(Synthesizer2);
+    phrase.addPart(Synthesizer3);
+    phrase.addPart(Synthesizer0);
     for (var n=0; n<drumKit.length; ++n) { phrase.addPartFixed(drumKit, n) }
 
     Sheet0.add(new PhraseReference(phrase));
