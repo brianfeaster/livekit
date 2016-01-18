@@ -522,9 +522,8 @@ var DOMSlider = function () {
     MouseIsDown = true;
     _mouseMoved = false;
     _sliderDecay.style.display="block";
-    //       Position in [R]  -  Value of slider
-    _sliderDecay.style.top = Floor(event.clientY - _sliderDecay.clientHeight/3.0) +"px" ;
-    _sliderDecay.style.left = Floor(event.clientX - _sliderDecay.clientWidth*(0.995-val)) +"px" ;
+    _sliderDecay.style.top = Floor(event.pageY - _sliderDecay.clientHeight/3.0) +"px" ;
+    _sliderDecay.style.left = Floor(event.pageX - _sliderDecay.clientWidth*(0.995-val)) +"px" ;
   }
 
   return self;
