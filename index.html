@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="ISO-8859-1" ?>
+DB(val.toFixed(2)
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
@@ -34,10 +35,10 @@
   <div>CONTROL</div>
   <div>&nbsp;</div>
   <div class="knobs">
-    vol <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" />
-    <br/>
-    temp<p id="speed" class="actor" contenteditable="true">160</p>
+    tempo<p id="speed" class="actor" contenteditable="true">160</p>
     <div>
+    <p id="mainVolume" >vol</p> <!-- input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" / -->
+    <br/>
      <p class="actor reset" onmousedown="reset(event)">|&lt;</p>
      <p class="actor pause" onmousedown="pause(event)">||</p>
     </div>
@@ -447,6 +448,90 @@ var IBC = function () {
 
 
 /******************************************************************************
+  Create a slider object in the DOM.
+
+  There will be one slider object that when activated will adjust wherever the
+  mouse moves over it be set to the passed in value.  A call back will be
+  provided that will be set to the final value.
+
+  USAGE::
+    var slider = new Slider();
+
+  CONSTRUCTOR PARAMETERS::
+    na             N/A
+
+  METHODS::
+    default(e, i, c)  Activate slider in the DOM at the mouse position
+                      using event e, initial value i, and setter
+                      callback c.
+******************************************************************************/
+var DOMSlider = function () {
+  var self;
+  var _sliderDecay = null;
+  var event, val, callback;
+  var _mouseMoved = false;
+
+  var _createDOMElement = function(){
+    _sliderDecay = CreateAppendChild('p', document.body);
+    _sliderDecay.style.position = "absolute"
+    _sliderDecay.className = "knobs"
+    _sliderDecay.style.top = "-1ch";
+    _sliderDecay.style.left = 0;
+    _sliderDecay.style.width="13ch";
+    _sliderDecay.style.border="solid 1px #066";
+    _sliderDecay.innerHTML = "<p>|-----|-----|\n|-----|-----|</p><div>0</div>";
+    _sliderDecay.style.display="none";
+    _sliderDecay.style.background="black";
+    _sliderDecay.style.zIndex=2;
+
+    _sliderDecay.children[0].onmousemove = function (event) {
+      _mouseMoved = true;
+      var box = event.target.getBoundingClientRect();
+      val = 1.0-((event.clientX - box.left) / box.width + .005)
+      event.target.parentElement.children[1].innerText = val.toFixed(2);
+      if (val < 0.0) val = 0.0;
+      if (1.0 < val) val = 1.0;
+      callback(val);
+    }
+  
+    _sliderDecay.children[0].onmouseleave  = function () {
+      if (_mouseMoved) _sliderDecay.style.display = "none";
+    }
+  
+    _sliderDecay.onmousedown = function () {
+      MouseIsDown = true;
+      event.stopPropagation();
+    }
+    _sliderDecay.onmouseup = function () {
+      MouseIsDown = false;
+      if (_mouseMoved) {
+        _sliderDecay.style.display="none";
+      }
+      event.stopPropagation();
+    }
+  }
+
+  self = function(e, v, cb) {
+    event = e;
+    val = v;
+    callback = cb;
+    if (null == _sliderDecay) { _createDOMElement(); }
+
+    _sliderDecay.children[1].innerText = val.toFixed(2);
+
+    MouseIsDown = true;
+    _mouseMoved = false;
+    _sliderDecay.style.display="block";
+    //       Position in [R]  -  Value of slider
+    _sliderDecay.style.top = Floor(event.clientY - _sliderDecay.clientHeight/3.0) +"px" ;
+    _sliderDecay.style.left = Floor(event.clientX - _sliderDecay.clientWidth*(0.995-val)) +"px" ;
+  }
+
+  return self;
+}
+
+
+/******************************************************************************
   Create a piano keyboard in the DOM.  It emulates a keyboard controlled
   oscillator.
 
@@ -677,7 +762,8 @@ var Drumkit = function (ctx, color, audioBuffers) {
       source.start(when);
     }
 
-    gain.connect(ctx.destination);
+    //gain.connect(ctx.destination);
+    gain.connect(destination);
   }
 } // Drumkit
 
@@ -710,28 +796,27 @@ var Drumkit = function (ctx, color, audioBuffers) {
 var SynthGlobalCounter = 0;
 var Synthesizers = [];
 var Synthesizer = function (ctx, label, type, keyboard, color) {
-  ++SynthGlobalCounter;
   //// Local
   var self = this;
   var _ibcId = false;
-  var _name = label || ("Synth" + SynthGlobalCounter);
+  var _name = label || ("Synth" + ++SynthGlobalCounter);
   var _att = 0.01; // Attack tiem in seconds.
   var _rel = 0.50; // Release time in seconds for both the filter and gain.
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
   var _waveformIdx = type;
   var _mouseMoved;
 
-  var _element = document.createElement('div');
+  var _element = document.createElement('div'); // [ ]
   _element.className = "windowphrasealias";
   _element.style.width = "13ch";
 
-  var _nameDOM = CreateAppendChild('div', _element);
+  var _nameDOM = CreateAppendChild('div', _element); // [ Synth1 ]
   _nameDOM.style.background="";
   _nameDOM.innerText = _name;
 
-  var _buttons = CreateAppendChild('div', _element);
+  var _buttons = CreateAppendChild('div', _element); // [ Synth1 [ ] ]
 
-  var _delSynth = CreateAppendChild('p', _buttons);
+  var _delSynth = CreateAppendChild('p', _buttons);  // [ Synth1 [-] ]
   _delSynth.className="actor mustshift";
   _delSynth.innerText = "-";
 
@@ -748,11 +833,12 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     document.getElementById('synths').removeChild(_element); // Remove myself from DOM
   }
 
-  var _body = CreateAppendChild('div', _element);
-  _body.className = "knobs";
-  _body.style.position = "relative"
+  var _body = CreateAppendChild('div', _element);//  [ Synth1 [-] ]
+  _body.className = "knobs";                     //  [            ]
 
   // Waveform button
+  // [ [Synth1] [-] ]
+  // [ [sine]       ]
   var _waveformDOM = CreateAppendChild('p', _body)
   _waveformDOM.className = "actor";
   _waveformDOM.innerText = _waveforms[_waveformIdx];
@@ -764,90 +850,25 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   CreateAppendChild('br', _body);
 
   // Attack button
+  // [ [Synth1] [-] ]
+  // [ [sine]       ]
+  // [ [A]          ]
   var _attack = CreateAppendChild('p', _body);
+  _attack.style.position = "relative"
   _attack.className = "volume"
   _attack.innerText = "[A]"
-
-  var _sliderAttack = CreateAppendChild('p', _attack);
-  _sliderAttack.style.position = "absolute"
-  _sliderAttack.style.top = "0";
-  _sliderAttack.style.left = 0;
-  _sliderAttack.style.width="11ch";
-  _sliderAttack.style.border="solid 1px #066";
-  _sliderAttack.innerHTML = "<p>|----|----|\n|----|----|</p><div>0</div>";
-  _sliderAttack.style.display="none";
-  _sliderAttack.style.background="black";
-  _sliderAttack.style.zIndex=2;
-  _attack.onmousedown = function (event) {
-    MouseIsDown = true;
-    _mouseMoved = false;
-    _sliderAttack.style.left = (-((1.0-_att)*11) + (3.0*event.offsetX/event.target.clientWidth)).toFixed(0) +"ch" ;
-    _sliderAttack.style.display="block";
-  }
-  _sliderAttack.children[0].onmousemove = function (event) {
-   _mouseMoved = true;
-    var box = event.target.getBoundingClientRect();
-    _att = 1.0-((event.clientX - box.left) / box.width + .005).toFixed(2);
-    event.target.parentElement.children[1].innerText = _att.toFixed(2);
-  }
-  _sliderAttack.children[0].onmouseleave  = function () {
-    if (_mouseMoved) _sliderAttack.style.display="none";
-  }
-  _sliderAttack.onmousedown = function () {
-    MouseIsDown = true;
-    event.stopPropagation();
-  }
-  _sliderAttack.onmouseup = function () {
-    MouseIsDown = false;
-    if (_mouseMoved) {
-      _sliderAttack.style.display="none";
-    }
-    event.stopPropagation();
-  }
+  _attack.onmousedown = function(event){ Slider(event, _att, function(v){ _att=v; }); }
 
 
-  // Decay button
-  var _decay = CreateAppendChild('p', _body);
-  _decay.className = "volume"
-  _decay.innerText = "[D]"
-
-  var _sliderDecay = CreateAppendChild('p', _decay);
-  _sliderDecay.style.position = "absolute"
-  _sliderDecay.style.top = "0";
-  _sliderDecay.style.left = 0;
-  _sliderDecay.style.width="11ch";
-  _sliderDecay.style.border="solid 1px #066";
-  _sliderDecay.innerHTML = "<p>|----|----|\n|----|----|</p><div>0</div>";
-  _sliderDecay.style.display="none";
-  _sliderDecay.style.background="black";
-  _sliderDecay.style.zIndex=2;
-  var _mouseMoved;
-  _decay.onmousedown = function (event) {
-    MouseIsDown = true;
-    _mouseMoved = false;
-    _sliderDecay.style.left = (-((1.0-_rel)*11) + (3+3.0*event.offsetX/event.target.clientWidth)).toFixed(0) +"ch" ;
-    _sliderDecay.style.display="block";
-  }
-  _sliderDecay.children[0].onmousemove = function (event) {
-   _mouseMoved = true;
-    var box = event.target.getBoundingClientRect();
-    _rel = 1.0-((event.clientX - box.left) / box.width + .005).toFixed(2);
-    event.target.parentElement.children[1].innerText = _rel.toFixed(2);
-  }
-  _sliderDecay.children[0].onmouseleave  = function () {
-    if (_mouseMoved) _sliderDecay.style.display="none";
-  }
-  _sliderDecay.onmousedown = function () {
-    MouseIsDown = true;
-    event.stopPropagation();
-  }
-  _sliderDecay.onmouseup = function () {
-    MouseIsDown = false;
-    if (_mouseMoved) {
-      _sliderDecay.style.display="none";
-    }
-    event.stopPropagation();
-  }
+  // Release button
+  // [ [Synth1] [-] ]
+  // [ [sine]       ]
+  // [ [A][R]       ]
+  var _release = CreateAppendChild('p', _body);
+  _release.style.position = "relative"
+  _release.className = "volume"
+  _release.innerText = "[R]"
+  _release.onmousedown = function(event){ Slider(event, _rel, function(v){ _rel=v; }); }
 
   var _play = function (key, vol, when) {
     // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
@@ -865,7 +886,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     gain.gain.linearRampToValueAtTime(0, at + _att + _rel);
 
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    //gain.connect(ctx.destination);
+    gain.connect(destination);
   }
 
   Synthesizers.push(this);
@@ -984,44 +1006,7 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
   _elementVolume.className = "volume actor knobs"
   _elementVolume.style.position = "relative"
   _elementVolume.innerText = "[V]"
-
-  var _volPad = CreateAppendChild('p', _elementVolume);
-  _volPad.style.position = "absolute"
-  _volPad.style.top = "0";
-  _volPad.style.left = 0;
-  _volPad.style.width="11ch";
-  _volPad.style.border="solid 1px #066";
-  _volPad.innerHTML = "<p>|----|----|\n|----|----|</p><div>0</div>";
-  _volPad.style.display="none";
-  _volPad.style.background="#000";
-  _volPad.style.zIndex=1;
-  var _mouseMoved;
-  _elementVolume.onmousedown = function (event) {
-    MouseIsDown = true;
-    _mouseMoved = false;
-    _volPad.style.left = (-((1.0-_vol)*11) + (3.0*event.offsetX/event.target.clientWidth)).toFixed(0) +"ch" ;
-    _volPad.style.display="block";
-  }
-  _volPad.children[0].onmousemove = function (event) {
-   _mouseMoved = true;
-    var box = event.target.getBoundingClientRect();
-    _vol = 1.0-((event.clientX - box.left) / box.width + .005).toFixed(2);
-    event.target.parentElement.children[1].innerText = _vol.toFixed(2);
-  }
-  _volPad.children[0].onmouseleave  = function () {
-    if (_mouseMoved) _volPad.style.display="none";
-  }
-  _volPad.onmousedown = function () {
-    MouseIsDown = true;
-    event.stopPropagation();
-  }
-  _volPad.onmouseup = function () {
-    MouseIsDown = false;
-    if (_mouseMoved) {
-      _volPad.style.display="none";
-    }
-    event.stopPropagation();
-  }
+  _elementVolume.onmousedown = function(event){ Slider(event, _vol, function(v){ _vol=v; }); }
 
   // Add sound name element to this part's DOM element
   var _elementName = CreateAppendChild('div', _element);
@@ -1081,20 +1066,19 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
     .partCount()             Return number of parts
     .parts                   Return all parts in an array.
     .part(p)                 Return part p.
-    .createPart(playable)    Appends a new part to the phrase and associates it with a playable object which implements .play(note, vol, when).
-    .createPartFixed(        Appends a new part to the phrase and associates it with a playable object that will be called with a fixedNote.
-       playable, fixedNote)
     .toggleElement           Toggle my main editable DOM element display:none.
     .referenceCount()        Number of current references.
     .referenceAdd(child)     Keep track of referencee objects (children) used to repeat phrases in sheets.
     .referenceDel(ref)       Remove reference from my set.
     .highlightBeat(b)        Set beat high-light marker.
     .unhighlightBeat()       Disable cursor
+    .createPart(playable)    Appends a new part to the phrase and associates it with a playable object which implements .play(note, vol, when).
+    .createPartFixed(        Appends a new part to the phrase and associates it with a playable object that will be called with a fixedNote.
+       playable, fixedNote)
 
   NOTES::
     Calls:
       setupSynthPart()
-      setupDrumTrack()
 
 ******************************************************************************/
 var PhraseGlobalCounter = 0;
@@ -1218,35 +1202,6 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   this.partCount = function () { return _parts.length; }
   this.parts     = _parts;
   this.part      = function (p) { return _parts[p]; }
-  this.createPart = function (playable) {
-    var _part = _createPart(playable);
-    setupSynthPart(_part, keyboard);
-    return _part;
-  }
-  this.createPartFixed = function (drumKit, fixedNote) {
-    var _part = _createPart(drumKit, fixedNote);
-    _part.setAllKeys(fixedNote);
-    _part.elementName.onmousedown = function () { // Clicking part name plays the beat and sets color
-      _part.play(fixedNote, 0);
-      _part.elementName.style.color = "white";
-    }
-    _part.elementName.onmouseup = function () { // Unclicking part name resets color
-      _part.elementName.style.color = "";
-    }
-    _part.elementTicks.map(function (tickElement, t) { // Over every tick...
-      tickElement.onmousedown = function (event) { // Every tick can be toggled
-        MouseIsDown = true;
-        DragOverTickState = this.innerText == "." ? 1 : 2;
-        this.innerText = DragOverTickState == 1 ? "X" : "."
-        if (this.innerText=="X") _part.playable.play(_part.key(t), _part.vol(), 0);
-      }
-      tickElement.onmouseover = function (event) { // Every tick will play on hover and be set if mouseDown
-        if (MouseIsDown) { this.innerText = (DragOverTickState == 1 ? "X" : ".") }
-        else if (this.innerText == "X") _part.playable.play(_part.key(t), _part.vol(), 0);
-      }
-    }); // map function
-    return _part;
-  }
   this.toggleElement = function () { // Toggle the editable DOM element.
     ToggleElementDisplay(_element);
     var off = _element.style.display == "none";  // 'none' implies off.  '' implies on
@@ -1278,6 +1233,35 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   }
   this.unhighlightBeat = function () {
     cursor.style.display = "none";
+  }
+  this.createPart = function (playable) {
+    var _part = _createPart(playable);
+    setupSynthPart(_part, keyboard);
+    return _part;
+  }
+  this.createPartFixed = function (drumKit, fixedNote) {
+    var _part = _createPart(drumKit, fixedNote);
+    _part.setAllKeys(fixedNote);
+    _part.elementName.onmousedown = function () { // Clicking part name plays the beat and sets color
+      _part.play(fixedNote, 0);
+      _part.elementName.style.color = "white";
+    }
+    _part.elementName.onmouseup = function () { // Unclicking part name resets color
+      _part.elementName.style.color = "";
+    }
+    _part.elementTicks.map(function (tickElement, t) { // Over every tick...
+      tickElement.onmousedown = function (event) { // Every tick can be toggled
+        MouseIsDown = true;
+        DragOverTickState = this.innerText == "." ? 1 : 2;
+        this.innerText = DragOverTickState == 1 ? "X" : "."
+        if (this.innerText=="X") _part.playable.play(_part.key(t), _part.vol(), 0);
+      }
+      tickElement.onmouseover = function (event) { // Every tick will play on hover and be set if mouseDown
+        if (MouseIsDown) { this.innerText = (DragOverTickState == 1 ? "X" : ".") }
+        else if (this.innerText == "X") _part.playable.play(_part.key(t), _part.vol(), 0);
+      }
+    }); // map function
+    return _part;
   }
 } // Phrase
 
@@ -1375,11 +1359,7 @@ function setupSynthPart (part, keyboard) {
     };
 
   }); // map function
-}
-
-
-function setupDrumTrack (part) {
-}
+} // setupSynthPart()
 
 
 /******************************************************************************
@@ -1852,7 +1832,6 @@ var restoreSongLK2 = function (keyboard, drumKit, encodedSong) {
 
   b = gs.nextByte();
   Volume = b / 255.0;
-  document.getElementById('volume').value = (100.0 * Volume).toFixed(0);
 
   b = gs.nextByte() + (gs.nextByte()<<8);
   BeatDuration = 6000.0/b;
@@ -2018,7 +1997,6 @@ var restoreSongLK1 = function (keyboard, drumKit, encodedSong) {
   b = gs.nextByte();
   DB("LK1 volume " + b);
   Volume = b / 255.0;
-  document.getElementById('volume').value = (100.0 * Volume).toFixed(0);
 
   b = gs.nextByte() + (gs.nextByte()<<8);
   DB("LK1 beatduration " + b);
@@ -2420,7 +2398,7 @@ var setupControls = function (keyboard) {
       } // if
     }); // function
   } // function
-*/
+
   document.getElementById('volume').onchange = function (event) {
         var newVol = parseInt(event.target.value);
         if (0 <= newVol && newVol <= 100) {
@@ -2430,6 +2408,9 @@ var setupControls = function (keyboard) {
           event.target.value =  (Volume*100.0).toFixed(0);
         }
   }
+*/
+
+  document.getElementById('mainVolume').onmousedown = function(event){ DB(Volume); Slider(event, Volume, function(v){ Volume=v; }); }
 
   document.getElementById('speed').onkeydown = function (event) {
     var newDuration;
@@ -2593,8 +2574,18 @@ var setupControls = function (keyboard) {
 [18, 21, 25, 18, 21, 25, 18, 21, 26, 16, 20, 23, 16, 20, 23, 16, 20, 25, 13, 18, 20, 13, 18, 20, 13, 17, 20, 18, 21, 25, 18, 21, 25, 18, 25, 30, 25, 29, 32, 30, 33, 37, 30, 37, 41, 42, 45, 30].map(function(n,i){Sheet0.phrase(0).part(2).setKey(i,n-12);})
 
 ******************************************************************************/
+var Slider = new DOMSlider();
+
 DB.check((window.AudioContext || window.webkitAudioContext), "Audio context not found.  Use Chrome browser.");
 var ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+var delay = ctx.createDelay(1); delay.delayTime.value = 0.10;
+var gain  = ctx.createGain(); gain.gain.value = 0.50;
+delay.connect(gain);
+gain.connect(delay);
+delay.connect(ctx.destination);
+//var destination = delay;
+var destination = ctx.destination;
 
 var Sheet0; // New hotness
 var Keyboard0;
@@ -2613,7 +2604,7 @@ var DragOverTickState = 1;
  0.375; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
 var BeatDuration = 60/parseInt(document.getElementById('speed').innerText);
 
-var Volume = parseInt(document.getElementById('volume').value)/100.0;
+var Volume = 0.5;
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
