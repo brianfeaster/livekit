@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="ISO-8859-1" ?>
-DB(val.toFixed(2)
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
@@ -49,6 +48,12 @@ DB(val.toFixed(2)
   <div>SYNTHS</div>
   <div class="knobs"> <p id="addsynth" class="actor">+</p></div>
   <div id="synths"></div>
+</div>
+
+<div class="window">
+  <div>FILTERS</div>
+  <div class="knobs"> <p id="" class="actor">+</p></div>
+  <div id="filters"></div>
 </div>
 
 
@@ -466,67 +471,41 @@ var IBC = function () {
                       callback c.
 ******************************************************************************/
 var DOMSlider = function () {
-  var self;
-  var _sliderDecay = null;
-  var event, val, callback;
-  var _mouseMoved = false;
-
-  var _createDOMElement = function(){
-    _sliderDecay = CreateAppendChild('p', document.body);
-    _sliderDecay.style.position = "absolute"
-    _sliderDecay.className = "knobs"
-    _sliderDecay.style.top = "-1ch";
-    _sliderDecay.style.left = 0;
-    _sliderDecay.style.width="13ch";
-    _sliderDecay.style.border="solid 1px #066";
-    _sliderDecay.innerHTML = "<p>|-----|-----|\n|-----|-----|</p><div>0</div>";
-    _sliderDecay.style.display="none";
-    _sliderDecay.style.background="black";
-    _sliderDecay.style.zIndex=2;
-
-    _sliderDecay.children[0].onmousemove = function (event) {
-      _mouseMoved = true;
-      var box = event.target.getBoundingClientRect();
-      val = 1.0-((event.clientX - box.left) / box.width + .005)
-      event.target.parentElement.children[1].innerText = val.toFixed(2);
-      if (val < 0.0) val = 0.0;
-      if (1.0 < val) val = 1.0;
-      callback(val);
-    }
-  
-    _sliderDecay.children[0].onmouseleave  = function () {
-      if (_mouseMoved) _sliderDecay.style.display = "none";
-    }
-  
-    _sliderDecay.onmousedown = function () {
-      MouseIsDown = true;
-      event.stopPropagation();
-    }
-    _sliderDecay.onmouseup = function () {
-      MouseIsDown = false;
-      if (_mouseMoved) {
-        _sliderDecay.style.display="none";
-      }
-      event.stopPropagation();
-    }
+  var callback;
+  var mouseMoved = false;
+  var e = CreateAppendChild('p', document.body);
+  e.style.position = "absolute"
+  e.className = "knobs"
+  e.style.width="13ch";
+  e.style.border="solid 1px #066";
+  e.innerHTML = "<p>|-----|-----|\n|-----|-----|</p><div>0</div>";
+  e.style.display="none";
+  e.style.background="black";
+  e.style.zIndex=2;
+  e.children[0].onmousemove = function (event) {
+    mouseMoved = true;
+    var box = event.target.getBoundingClientRect();
+    var val = 1.0-((event.clientX - box.left) / box.width + .005)
+    if (val < 0.0) val = 0.0;
+    if (1.0 < val) val = 1.0;
+    event.target.parentElement.children[1].innerText = val.toFixed(2);
+    callback(val);
   }
-
-  self = function(e, v, cb) {
-    event = e;
-    val = v;
+  e.children[0].onmouseleave  = function () { if (mouseMoved) e.style.display = "none"; } 
+  e.onmousedown = function (event) { event.stopPropagation(); }
+  e.onmouseup = function (event) {
+    if (mouseMoved) { e.style.display="none"; }
+    event.stopPropagation();
+  }
+  return function(event, val, cb) {
     callback = cb;
-    if (null == _sliderDecay) { _createDOMElement(); }
-
-    _sliderDecay.children[1].innerText = val.toFixed(2);
-
-    MouseIsDown = true;
-    _mouseMoved = false;
-    _sliderDecay.style.display="block";
-    _sliderDecay.style.top = Floor(event.pageY - _sliderDecay.clientHeight/3.0) +"px" ;
-    _sliderDecay.style.left = Floor(event.pageX - _sliderDecay.clientWidth*(0.995-val)) +"px" ;
+    if (null == e) { createDOMElement(); }
+    e.children[1].innerText = val.toFixed(2);
+    mouseMoved = false;
+    e.style.display="block";
+    e.style.top = Floor(event.pageY - e.clientHeight/3.0) +"px" ;
+    e.style.left = Floor(event.pageX - e.clientWidth*(0.995-val)) +"px" ;
   }
-
-  return self;
 }
 
 
@@ -761,8 +740,7 @@ var Drumkit = function (ctx, color, audioBuffers) {
       source.start(when);
     }
 
-    //gain.connect(ctx.destination);
-    gain.connect(destination);
+    gain.connect(Destination);
   }
 } // Drumkit
 
@@ -791,6 +769,7 @@ var Drumkit = function (ctx, color, audioBuffers) {
     .waveform()           Get current waveform string.
     .highlight(key)       Highlight the keyboard object's key with my color.  Used when playing a note.  TODO:  Is this smrt?
     .unhighlight()        Remove my highlight from the keyboard object.
+    .setDestination(d)    Sets output destination
 ******************************************************************************/
 var SynthGlobalCounter = 0;
 var Synthesizers = [];
@@ -804,6 +783,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
   var _waveformIdx = type;
   var _mouseMoved;
+  var _destination = Destination; // Initial destination is global destination
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowphrasealias";
@@ -885,8 +865,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     gain.gain.linearRampToValueAtTime(0, at + _att + _rel);
 
     osc.connect(gain);
-    //gain.connect(ctx.destination);
-    gain.connect(destination);
+    gain.connect(_destination);
   }
 
   Synthesizers.push(this);
@@ -925,7 +904,187 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   this.unhighlight = function () {
     keyboard.unhighlight(_lastKey, color); // Remove last high-light
   };
+  this.setDestination = function(d) { _destination = d; };
 } // Synthesizer
+
+
+
+/******************************************************************************
+  Create a single channel delay filter
+
+  USAGE::
+    var delay = new Delay(ctx);
+
+  CONSTRUCTOR PARAMETERS::
+    ctx      A web audio context.
+
+  METHODS::
+    .element    This object's element
+    .name(key)  Name associated with this key.  Default is the synth waveform name, each key.
+    .input()    Get the input port
+******************************************************************************/
+var Delay = function (ctx) {
+  //// Local
+  var self = this;
+  var _name = "delay";
+  var _att = 0.01; // Attack tiem in seconds.
+  var _rel = 0.50; // Release time in seconds for both the filter and gain.
+
+  var _delay = ctx.createDelay(1); _delay.delayTime.value = 0.50;
+  var _gain  = ctx.createGain(); _gain.gain.value = 0.90;
+  _delay.connect(_gain);
+  _gain.connect(_delay);
+  _gain.connect(ctx.destination);
+  var _input = _gain;
+
+  var _element = document.createElement('div'); // [ ]
+  _element.className = "windowphrasealias";
+  _element.style.width = "13ch";
+
+  var _nameDOM = CreateAppendChild('div', _element); // [ Delay1 ]
+  _nameDOM.style.background="";
+  _nameDOM.innerText = _name;
+
+  var _buttons = CreateAppendChild('div', _element); // [ Delay1 [ ] ]
+
+  var _delSynth = CreateAppendChild('p', _buttons);  // [ Delay1 [-] ]
+  _delSynth.className="actor mustshift";
+  _delSynth.innerText = "-";
+
+  var _body = CreateAppendChild('div', _element);//  [ Delay1 [-] ]
+  _body.className = "knobs";                     //  [            ]
+
+  // Waveform button
+  // [ [Delay1] [-] ]
+  // [ [delay]       ]
+  var _waveformDOM = CreateAppendChild('p', _body)
+  _waveformDOM.className = "actor";
+  _waveformDOM.innerText = "delay"
+  _waveformDOM.onmousedown = function () { }
+
+  CreateAppendChild('br', _body);
+
+  // Attack button
+  // [ [Delay1] [-] ]
+  // [ [sine]       ]
+  // [ [A]          ]
+  var _attack = CreateAppendChild('p', _body);
+  _attack.style.position = "relative"
+  _attack.className = "volume"
+  _attack.innerText = "[A]"
+  _attack.onmousedown = function(event){ Slider(event, _att, function(v){
+    _att=v;
+    _delay.delayTime.value = _att;
+   });}
+
+
+  // Release button
+  // [ [Delay1] [-] ]
+  // [ [sine]       ]
+  // [ [A][F]       ]
+  var _release = CreateAppendChild('p', _body);
+  _release.style.position = "relative"
+  _release.className = "volume"
+  _release.innerText = "[F]"
+  _release.onmousedown = function(event){ Slider(event, _rel, function(v){
+    _rel=v;
+    _gain.gain.value = _rel;
+  }); }
+
+  //// Public
+  this.element = _element;
+  this.name = function () { return _name; }
+  this.input = function () { return _input; }
+} // Delay
+
+
+/******************************************************************************
+  Create a single channel lowpass filter
+
+  USAGE::
+    var delay = new Lowpass(ctx);
+
+  CONSTRUCTOR PARAMETERS::
+    ctx      A web audio context.
+
+  METHODS::
+    .element    This object's element
+    .name(key)  Name associated with this key.  Default is the synth waveform name, each key.
+    .input()    Get the input port
+******************************************************************************/
+var Lowpass = function (ctx) {
+  //// Local
+  var self = this;
+  var _name = "lowpass";
+  var _f = .9; // Attack tiem in seconds.
+  var _q = 0.50; // Release time in seconds for both the filter and gain.
+
+  var _lowpass = ctx.createBiquadFilter();
+  _lowpass.frequency.value = _f;
+  _lowpass.Q.value = _q;
+
+  _lowpass.connect(ctx.destination);
+  var _input = _lowpass;
+
+  var _element = document.createElement('div'); // [ ]
+  _element.className = "windowphrasealias";
+  _element.style.width = "13ch";
+
+  var _nameDOM = CreateAppendChild('div', _element); // [ lowpass ]
+  _nameDOM.style.background="";
+  _nameDOM.innerText = _name;
+
+  var _buttons = CreateAppendChild('div', _element); // [ Delay1 [ ] ]
+
+  var _delSynth = CreateAppendChild('p', _buttons);  // [ Delay1 [-] ]
+  _delSynth.className="actor mustshift";
+  _delSynth.innerText = "-";
+
+  var _body = CreateAppendChild('div', _element);//  [ Delay1 [-] ]
+  _body.className = "knobs";                     //  [            ]
+
+  // Waveform button
+  // [ [Delay1] [-] ]
+  // [ [delay]       ]
+  var _waveformDOM = CreateAppendChild('p', _body)
+  _waveformDOM.className = "actor";
+  _waveformDOM.innerText = "delay"
+  _waveformDOM.onmousedown = function () { }
+
+  CreateAppendChild('br', _body);
+
+  // Attack button
+  // [ [Delay1] [-] ]
+  // [ [sine]       ]
+  // [ [F]          ]
+  var _attack = CreateAppendChild('p', _body);
+  _attack.style.position = "relative"
+  _attack.className = "volume"
+  _attack.innerText = "[F]"
+  _attack.onmousedown = function(event){ Slider(event, _f, function(v){
+    _f=v;
+    _lowpass.frequency.value = 10000.0*(1.0-_f);
+   });}
+
+
+  // Release button
+  // [ [Delay1] [-] ]
+  // [ [sine]       ]
+  // [ [F][Q]       ]
+  var _release = CreateAppendChild('p', _body);
+  _release.style.position = "relative"
+  _release.className = "volume"
+  _release.innerText = "[Q]"
+  _release.onmousedown = function(event){ Slider(event, _q, function(v){
+    _q=v;
+    _lowpass.Q.value = _q * 100.0;
+  }); }
+
+  //// Public
+  this.element = _element;
+  this.name = function () { return _name; }
+  this.input = function () { return _input; }
+} // Delay
 
 
 /******************************************************************************
@@ -2578,13 +2737,7 @@ var Slider = new DOMSlider();
 DB.check((window.AudioContext || window.webkitAudioContext), "Audio context not found.  Use Chrome browser.");
 var ctx = new (window.AudioContext || window.webkitAudioContext)();
 
-var delay = ctx.createDelay(1); delay.delayTime.value = 0.10;
-var gain  = ctx.createGain(); gain.gain.value = 0.50;
-delay.connect(gain);
-gain.connect(delay);
-delay.connect(ctx.destination);
-//var destination = delay;
-var destination = ctx.destination;
+var Destination = ctx.destination;
 
 var Sheet0; // New hotness
 var Keyboard0;
@@ -2593,6 +2746,8 @@ var Synthesizer0;
 var Synthesizer1;
 var Synthesizer2;
 var Synthesizer3;
+var Delay0;
+var Lowpass0;
 
 var currentReference = false;
 
@@ -2695,6 +2850,15 @@ window.onload = function () {
     Synthesizer3 = new Synthesizer(ctx, false, 3, keyboard, "#84f");
     document.getElementById('synths').appendChild(Synthesizer3.element);
   }
+
+  Delay0 = new Delay(ctx);
+  document.getElementById('filters').appendChild(Delay0.element);
+  //Synthesizer3.setDestination(Delay0.input());
+
+  Lowpass0 = new Lowpass(ctx);
+  document.getElementById('filters').appendChild(Lowpass0.element);
+  //Synthesizer0.setDestination(Lowpass0.input());
+
 
   restoreSongLK1(keyboard, drumKit);
   restoreSongLK0(keyboard, drumKit); // Parse get string
