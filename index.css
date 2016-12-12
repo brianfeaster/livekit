@@ -140,6 +140,10 @@ h1 {
   border:0;
 }
 
+#addphrase > div > input {
+  font-size:inherit
+}
+
 .windowphrasealias {
   display:inline-block;
   vertical-align:top;

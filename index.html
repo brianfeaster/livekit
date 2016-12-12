@@ -78,7 +78,7 @@
       <div class="actor">new</div>
     </div>
   </div>
-  <div id="sheet"></div>
+  <div id="sheet" style="padding-right:0.5em"></div>
 </div></div>
 
 <div><div class="window">
@@ -782,6 +782,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _rel = 0.50; // Release time in seconds for both the filter and gain.
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
   var _waveformIdx = type;
+  var _filterIdx = 0;
   var _mouseMoved;
   var _destination = Destination; // Initial destination is global destination
 
@@ -838,7 +839,6 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _attack.innerText = "[A]"
   _attack.onmousedown = function(event){ Slider(event, _att, function(v){ _att=v; }); }
 
-
   // Release button
   // [ [Synth1] [-] ]
   // [ [sine]       ]
@@ -848,6 +848,25 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _release.className = "volume"
   _release.innerText = "[R]"
   _release.onmousedown = function(event){ Slider(event, _rel, function(v){ _rel=v; }); }
+
+  CreateAppendChild('br', _body);
+
+  // Output block
+  // [ [Synth1] [-] ]
+  // [ [sine]       ]
+  // [ [A][R]       ]
+  // [ [main]       ]
+  var _release = CreateAppendChild('p', _body);
+  _release.style.position = "relative"
+  _release.className = "volume"
+  _release.innerText = "[main]"
+  _release.onmousedown = function (event) {
+    if (++_filterIdx == 3) { _filterIdx = 0; }
+    _release.innerText = ["main", "delay","lowpass"][_filterIdx];
+    if (0 == _filterIdx) self.setDestination(Destination);
+    if (1 == _filterIdx) self.setDestination(Delay0.input());
+    if (2 == _filterIdx) self.setDestination(Lowpass0.input());
+  }
 
   var _play = function (key, vol, when) {
     // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
@@ -1048,7 +1067,7 @@ var Lowpass = function (ctx) {
   // [ [delay]       ]
   var _waveformDOM = CreateAppendChild('p', _body)
   _waveformDOM.className = "actor";
-  _waveformDOM.innerText = "delay"
+  _waveformDOM.innerText = "lp"
   _waveformDOM.onmousedown = function () { }
 
   CreateAppendChild('br', _body);
@@ -1626,7 +1645,7 @@ var PhraseReference = function (phrase) {
 
   // Beat and info element
   _e = CreateAppendChild('div', elementIcon);
-  _e.style.width = (4<phrase.beatCount?phrase.beatCount:5) + "ch";
+  //_e.style.width = ((4<phrase.beatCount?phrase.beatCount:5)+0) + "ch";
 
   // Catch mouse events that alter the initial and final beat markers.
   _e.onmousedown = function (event) {
@@ -1642,6 +1661,7 @@ var PhraseReference = function (phrase) {
      Sheet0.updateBeatMarkers();
   }
 
+/*
   var markInitial = CreateAppendChild('span', _e); // Beat marker element
   markInitial.style.position = "absolute";
   markInitial.style.display = "none";
@@ -1653,6 +1673,7 @@ var PhraseReference = function (phrase) {
   markFinal.style.display = "none";
   markFinal.style.background = "#040";
   markFinal.innerHTML = "&lt;";
+*/
 
   var cursor = CreateAppendChild('span', _e); // Beat marker element
   cursor.style.position = "absolute";
