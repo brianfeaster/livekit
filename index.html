@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="DBx" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -302,7 +302,7 @@ var Base64 = (function () {
     .length()        Return current length of decoded GET string.
 ******************************************************************************/
 var GetStringBase64 = function (get) {
-  //// PRIVATE
+  //// PRIvate
   var self = this;
   var _gsb64 = get || window.location.search.substring(1);
   var _gs = [];
@@ -530,6 +530,7 @@ var DOMSlider = function () {
     .setStartFrequency(f)  Reset the base frequencies of the keyboard (first note's frequency)
     .highlight(key, color) Highlight the key using color.  Overrides its last color, if any, by pushing new color on a stack.
     .unhighlight(key)      Removes last/top highlighted color and reverts to its previous color (if any)
+    .midi(event)
 
   IBC: Keyboard will broadcast the physical press.  Listener will act on the
        message and set tick notes, high-light things, send audio to the DAC,
@@ -618,6 +619,14 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
     i = stk.length;
     _keysDOM[key].style.backgroundColor = (0 < i) ? stk[i-1] : "";
   }
+  this.midi = function (event) {
+    var d = event.data;
+    var c = d[0];
+    var k = d[1];
+    if ((144 <= c) && (c<=159) && (0 <= k) && (k < keyCount)) {
+      if (d[2]==0) { _unsetHighlight(k); } else { _setHighlightAndPlay(k); }
+    }
+  }
 } // PianoKeyboard 
 
 
@@ -690,18 +699,23 @@ var AudioBuffers = function (ctx, filenames) {
     var dk = new Drumkit(ctx, color, audioBuffers);
 
   CONSTRUCTOR PARAMETERS::
-    An web audio context and audio buffers object.
+    ctx           An web audio context and audio buffers object.
+    color         Highlight color
+    audioBuffers  Playable sound samples
 
   METHODS::
-    .length                Number of reserved buffers
-    .name(pad)             String describing the pad.  Usually the drum sound.
-    .color                 Color associated with this object
-    .play(pad, vol, when)  Plays an audiobuffer sample specified by pad at
-                                  volume vol at time when or now if when==0.
+    .length                    Number of reserved buffers
+    .name(pad)                 String describing the pad.  Usually the drum sound.
+    .color                     Color associated with this object
+    .play(pad, vol, when)      Plays an audiobuffer sample specified by pad at
+                               volume vol at time when or now if when==0.
+    .connect(destination, idx) Set destination to destination
+    .connected(idx)            Get destination to destination
 ******************************************************************************/
 var Drumkit = function (ctx, color, audioBuffers) {
   //// Local
   var bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
+  var destination = Array(audioBuffers.length).fill(Destination); // Default destination of each sound to default
   //// Public
   this.length = audioBuffers.length;
   this.name = function (pad) {
@@ -741,8 +755,10 @@ var Drumkit = function (ctx, color, audioBuffers) {
       source.start(when);
     }
 
-    gain.connect(Destination);
+    gain.connect(destination[pad]);
   }
+  this.connect = function (dest, idx) { destination[idx] = dest; }
+  this.connected = function (idx) { return destination[idx]; }
 } // Drumkit
 
 
@@ -770,7 +786,7 @@ var Drumkit = function (ctx, color, audioBuffers) {
     .waveform()           Get current waveform string.
     .highlight(key)       Highlight the keyboard object's key with my color.  Used when playing a note.  TODO:  Is this smrt?
     .unhighlight()        Remove my highlight from the keyboard object.
-    .setDestination(d)    Sets output destination
+    .connect(d)           Sets output destination
 ******************************************************************************/
 var SynthGlobalCounter = 0;
 var Synthesizers = [];
@@ -864,9 +880,9 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _release.onmousedown = function (event) {
     if (++_filterIdx == 3) { _filterIdx = 0; }
     _release.innerText = ["main", "delay","lowpass"][_filterIdx];
-    if (0 == _filterIdx) self.setDestination(Destination);
-    if (1 == _filterIdx) self.setDestination(Delay0.input());
-    if (2 == _filterIdx) self.setDestination(Lowpass0.input());
+    if (0 == _filterIdx) self.connect(Destination);
+    if (1 == _filterIdx) self.connect(Delay0.input());
+    if (2 == _filterIdx) self.connect(Lowpass0.input());
   }
 
   var _play = function (key, vol, when) {
@@ -924,7 +940,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   this.unhighlight = function () {
     keyboard.unhighlight(_lastKey, color); // Remove last high-light
   };
-  this.setDestination = function(d) { _destination = d; };
+  this.connect = function(d) { _destination = d; };
 } // Synthesizer
 
 
@@ -1154,6 +1170,7 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
   var _notes = []; // Each tick (beatCount * subBeatCount) gets its own key.
   var _cursor = -1;
   var _vol = 0.4;
+  var _filterIdx = 0;
 
   _element = document.createElement('div'); // DOM element
   _element.className = "part";
@@ -1186,6 +1203,12 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
   _elementVolume.innerText = "[V]"
   _elementVolume.onmousedown = function(event){ Slider(event, _vol, function(v){ _vol=v; }); }
 
+  // Add a filter element.
+  var _elementFilter = CreateAppendChild('p', _element);
+  _elementFilter.style.position = "relative"
+  _elementFilter.className = "volume"
+  _elementFilter.innerText = "[main]"
+
   // Add sound name element to this part's DOM element
   var _elementName = CreateAppendChild('div', _element);
   _elementName.className = "name"
@@ -1199,6 +1222,7 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
   this.elementTicks = _elementTicks;
   this.elementTick = function (i) { return _elementTicks[i]; }
   this.elementID = _id;
+  this.elementFilter = _elementFilter;
   this.elementName = _elementName;
   this.tickLength = _notes.length;
   this.key = function (k) { return _notes[k]; }
@@ -1420,6 +1444,14 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   this.createPartFixed = function (drumKit, fixedNote) {
     var _part = _createPart(drumKit, fixedNote);
     _part.setAllKeys(fixedNote);
+
+    _part.elementFilter.onmousedown = function (event) {
+      var con = drumKit.connected(fixedNote)
+      if (con == Destination) { drumKit.connect(Delay0.input(), fixedNote); this.innerText = "delay"; }
+      if (con == Delay0.input()) { drumKit.connect(Lowpass0.input(), fixedNote); this.innerText = "lowpass"; }
+      if (con == Lowpass0.input()) { drumKit.connect(Destination, fixedNote); this.innerText = "main"; }
+    }
+
     _part.elementName.onmousedown = function () { // Clicking part name plays the beat and sets color
       _part.play(fixedNote, 0);
       _part.elementName.style.color = "white";
@@ -2805,8 +2837,8 @@ window.onkeyup = function (event) {
 
 window.onkeydown = function (event) {
   if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
-  if (event.keyCode == 82) {
-    reset(event); // Pressing 'r' will rewind the playback.
+  if (event.keyCode == 82) { // Pressing 'r' will rewind the playback.
+    reset(event);
   }
   if (event.keyCode == 80) {
     pause(event); // Pressing 'p' will pause the playback.
@@ -2830,6 +2862,7 @@ document.body.addEventListener('touchstart', function (event) {if (event.touches
   onload
 ******************************************************************************/
 var addphrase;
+var midi = null;
 
 window.onload = function () {
   DB("::onload");
@@ -2845,6 +2878,14 @@ window.onload = function () {
   // Create a piano object and DOM element.  61 keys, starting at C2.
   var keyboard = new PianoKeyboard("piano1", 61, 0, 1, 65.4064);
   //var keyboard2 = new PianoKeyboard("piano1",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
+
+  // MIDI fun
+  function onMIDISuccess( m ) {
+    m.inputs.forEach(function(e){e.onmidimessage=function(e){keyboard.midi(e);};});
+  }
+  function onMIDIFailure(msg) { DB("MIDI "+msg ); }
+  navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
+
 
   setupControls(keyboard); // Setup menus and moveable buttons.
 
@@ -2880,11 +2921,11 @@ window.onload = function () {
 
   Delay0 = new Delay(ctx);
   document.getElementById('filters').appendChild(Delay0.element);
-  //Synthesizer3.setDestination(Delay0.input());
+  //Synthesizer3.connect(Delay0.input());
 
   Lowpass0 = new Lowpass(ctx);
   document.getElementById('filters').appendChild(Lowpass0.element);
-  //Synthesizer0.setDestination(Lowpass0.input());
+  //Synthesizer0.connect(Lowpass0.input());
 
 
   restoreSongLK1(keyboard, drumKit);
