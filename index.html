@@ -2400,6 +2400,7 @@ var popupToggle = function (id) {
 
 }
 
+
 // Show an image for a bit in the center of the screen.  Presented after hitting 'pause'.
 var pauseFeedback = function (id) {
   var icon = document.getElementById(id);
@@ -2864,7 +2865,8 @@ document.body.addEventListener('touchstart', function (event) {if (event.touches
 var addphrase;
 var midi = null;
 
-window.onload = function () {
+
+function Main () {
   DB("::onload");
   //IBC.debug();
 
@@ -2967,9 +2969,23 @@ window.onload = function () {
     }
   }
 
-  pauseFeedback("pauseicon"); // Tell user it's time to rock on!
+  //pauseFeedback("pauseicon"); // Tell user it's time to rock on!
 
   DB("--onload [" + DB.status() + "]");
 }
+
+
+function PreMain (i) {
+ if (ctx.state == "suspended") {
+   (i % 8) || pauseFeedback("pauseicon");
+   ctx = new (window.AudioContext || window.webkitAudioContext)();
+   setTimeout(PreMain.bind(0, ++i), 200);
+ } else {
+   Destination = ctx.destination;
+   Main()
+ }
+}
+
+window.onload = PreMain.bind(0,0)
 
 //]]></script></body></html>
