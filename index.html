@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="DBx" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation betA &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -95,7 +95,7 @@
   <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
 </div>
 
-<img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%" src="catpause.gif"/>
+<img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.gif"/>
 
 
 <script type="text/javascript">//<![CDATA[
@@ -140,7 +140,8 @@ var DB = (function () {
   var self;
   var status = true;
   var shouldNewline = true; // Want to prepend a newline when the last message was plain text.
-  var lastPostType = false;
+  var lastPostType = false, lastPost = false;
+  var repeatCount = 0;
 
   var setStyles = function (e) {
     return;
@@ -164,6 +165,12 @@ var DB = (function () {
   } else {
     setStyles(consoleElement);
     self = function (s) {
+      if (lastPost == s) { 
+       ++repeatCount;
+        s = repeatCount + s;
+      } else {
+        repeatCount = 0; 
+      }
       consoleElement.innerHTML += (shouldNewline ? "" : "\n") + s;
       consoleElement.scrollTop = consoleElement.scrollHeight;
       shouldNewline = lastPostType = false;
@@ -171,12 +178,15 @@ var DB = (function () {
     self.log = function (s) { console.log(s); }
     self.post = function (t, s) {
       if (t == lastPostType) {
-        consoleElement.lastChild.innerText = "[" + t + "]" + s;
+        if (lastPost == s) { ++repeatCount; }
+        consoleElement.lastChild.innerText = (0<repeatCount ? repeatCount : "") + "[" + t + "]" + s;
       } else {
         consoleElement.appendChild(document.createElement('p')).innerText = "[" + t + "]" + s; 
         consoleElement.scrollTop = consoleElement.scrollHeight;
         lastPostType = t;
+        repeatCount = 0;
       }
+      lastPost = s;
       shouldNewline = true;
     }
     self.clear = function () {
@@ -473,7 +483,7 @@ var IBC = function () {
 ******************************************************************************/
 var DOMSlider = function () {
   var callback;
-  var mouseMoved = false;
+  var mouseMoved = false,  mouseUp = false;
   var e = CreateAppendChild('p', document.body);
   e.style.position = "absolute"
   e.className = "knobs"
@@ -495,14 +505,16 @@ var DOMSlider = function () {
   e.children[0].onmouseleave  = function () { if (mouseMoved) e.style.display = "none"; } 
   e.onmousedown = function (event) { event.stopPropagation(); }
   e.onmouseup = function (event) {
-    if (mouseMoved) { e.style.display="none"; }
+    if (mouseMoved || mouseUp) { e.style.display="none"; }
     event.stopPropagation();
+    mouseUp = true
   }
   return function(event, val, cb) {
     callback = cb;
     if (null == e) { createDOMElement(); }
     e.children[1].innerText = val.toFixed(2);
     mouseMoved = false;
+    mouseUp = false;
     e.style.display="block";
     e.style.top = Floor(event.pageY - e.clientHeight/3.0) +"px" ;
     e.style.left = Floor(event.pageX - e.clientWidth*(0.995-val)) +"px" ;
@@ -779,6 +791,7 @@ var Drumkit = function (ctx, color, audioBuffers) {
     .name(key)            Name associated with this key.  Default is the synth waveform name, each key.
     .adsr()               Get ADSR values in array
     .attSet(att)          Set new attack value 0.0-1.0.
+    .susSet(sus)          Set new sustain value 0.0-1.0.
     .relSet(rel)          Set new release value 0.0-1.0.
     .play(key, vol, when) Plays a waveform at a freq determined by the Keyboard object at the
                           specified key, at webaudio context time 'when' or immediately if when==0.
@@ -796,6 +809,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _ibcId = false;
   var _name = label || ("Synth" + ++SynthGlobalCounter);
   var _att = 0.01; // Attack tiem in seconds.
+  var _sus = 0.01;
   var _rel = 0.50; // Release time in seconds for both the filter and gain.
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
   var _waveformIdx = type;
@@ -854,12 +868,29 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _attack.style.position = "relative"
   _attack.className = "volume"
   _attack.innerText = "[A]"
-  _attack.onmousedown = function(event){ Slider(event, _att, function(v){ _att=v; }); }
+  var _attackVal = CreateAppendChild('p', _attack);
+  _attack.onmousedown = function(event){ Slider(event, _att, function(v){ _att=v; _attackVal.innerText = v; }); }
+
+  _attackVal.style.position = "absolute";
+  _attackVal.innerText = "100";
+  _attackVal.style.right = "-1em"
+  _attackVal.style.top = "-1em"
+  _attackVal.style.backgroundColor = "blue"
+
+  // Sustain button
+  // [ [Synth1] [-] ]
+  // [ [sine]       ]
+  // [ [A][S]       ]
+  var _sustain = CreateAppendChild('p', _body);
+  _sustain.style.position = "relative"
+  _sustain.className = "volume"
+  _sustain.innerText = "[S]"
+  _sustain.onmousedown = function(event){ Slider(event, _sus, function(v){ _sus=v; }); }
 
   // Release button
   // [ [Synth1] [-] ]
   // [ [sine]       ]
-  // [ [A][R]       ]
+  // [ [A][S][R]    ]
   var _release = CreateAppendChild('p', _body);
   _release.style.position = "relative"
   _release.className = "volume"
@@ -871,15 +902,15 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   // Output block
   // [ [Synth1] [-] ]
   // [ [sine]       ]
-  // [ [A][R]       ]
+  // [ [A][S][R]    ]
   // [ [main]       ]
-  var _release = CreateAppendChild('p', _body);
-  _release.style.position = "relative"
-  _release.className = "volume"
-  _release.innerText = "[main]"
-  _release.onmousedown = function (event) {
+  var _output = CreateAppendChild('p', _body);
+  _output.style.position = "relative"
+  _output.className = "volume"
+  _output.innerText = "[main]"
+  _output.onmousedown = function (event) {
     if (++_filterIdx == 3) { _filterIdx = 0; }
-    _release.innerText = ["main", "delay","lowpass"][_filterIdx];
+    _output.innerText = ["main", "delay","lowpass"][_filterIdx];
     if (0 == _filterIdx) self.connect(Destination);
     if (1 == _filterIdx) self.connect(Delay0.input());
     if (2 == _filterIdx) self.connect(Lowpass0.input());
@@ -892,13 +923,15 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     osc.frequency.value = keyboard.freq(key); // Ask the keyboard object for the frequency of this key
     osc.type = _waveforms[_waveformIdx];
     osc.start(at);
-    osc.stop(at + _att + _rel);
+    osc.stop(at + _att + _sus + _rel);
     osc.onended = function(osc){ osc.disconnect(); }.bind(null, osc);
 
+    DB.post("ASR", [_att, _sus, _rel]);
     var gain = ctx.createGain();
     gain.gain.setValueAtTime(0, at);
     gain.gain.linearRampToValueAtTime(vol*0.5*Volume, at + _att);
-    gain.gain.linearRampToValueAtTime(0, at + _att + _rel);
+    gain.gain.setValueAtTime         (vol*0.5*Volume, at + _att + _sus);
+    gain.gain.linearRampToValueAtTime(0,              at + _att + _sus + _rel);
 
     osc.connect(gain);
     gain.connect(_destination);
@@ -925,8 +958,9 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   this.element = _element;
   this.color = color
   this.name = function () { return _name; }
-  this.adsr = function () { return [(_att*255).toFixed(), 0, 0, (_rel*255).toFixed()]; }
+  this.adsr = function () { return [(_att*255).toFixed(), 0, (_sus*255).toFixed(), (_rel*255).toFixed()]; }
   this.attSet = function (att) { _att = att/255.0; }
+  this.susSet = function (sus) { _sus = sus/255.0; }
   this.relSet = function (rel) { _rel = rel/255.0; }
   this.play = _play;
   this.wave = function () { return _waveformIdx; }
@@ -1926,6 +1960,194 @@ var Sheet = function () {
  Encode song objects into Base-64 encoding of the following:
 
   -HEADER-
+  "LK" 03  version
+  00        main volume
+  00 00     beat duration
+
+  -SYNTH...-
+  00                Type Synthesizer
+  0a"synthname"     label
+  00                Waveform [square sawtooth triangle sine]
+  00                Volume
+  00 00 00          Attack sustain release
+
+  -PHRASE...-
+  01                Type Phrase
+  0a"phrasename"    label
+  04 04 04          measures, beatspermeasure, ticksperbeat
+  10                partcount
+  -PART...-
+  08"partname" 00   label, part volume
+  00...             4*4*4 bits representing on/off tick
+  -NOTE OR NOTES-
+    80              If 8th bit set then this&7f is the note to use for each tick.
+    00...           Otherwise {number of ticks} bytes represent the notes for each tick.
+
+  -PHRASE REFERENCE-
+  02                Type PhraseReference
+  0a"phrasename"    Label referring to actual phrase
+*/
+var saveSongLK3 = function () {
+
+  var writtenPhrases = []; // Keep track of written phrases
+  var bytes = [76,75,3]; // "LK" 02  LiveKa7 DAW Version 2 Header
+
+  bytes.push((Volume*255.0).toFixed(0));
+  // BMP saved as fixed point to two decimal places in little endian.  So convert the duration in seconds to microseconds then split.
+  bytes.push(parseInt((6000/BeatDuration) & 255));
+  bytes.push(parseInt((6000/BeatDuration) >> 8));
+
+  Synthesizers.map(function(s) {
+   // TYPE LENGTH "SYNTH LABEL"
+    bytes.push(0);
+    bytes.push(s.name().length);
+    s.name().split('').map(function(b){bytes.push(b.charCodeAt(0))});
+    bytes.push(s.wave()); // Waveform index
+    bytes.push(255); // Volume
+    var adsr = s.adsr();
+    bytes.push(adsr[0]); // Attack
+    bytes.push(adsr[2]); // Sustain
+    bytes.push(adsr[3]); // Release
+  });
+
+  for (var i=0; i<Sheet0.length(); ++i) {
+
+    var ref = Sheet0.index(i);
+    var phrase = ref.phrase;
+
+    if (0 <= writtenPhrases.indexOf(phrase)) { // Write phrase if first reference to it
+      // TYPE LENGTH "REFERENCED PHRASE LABEL"
+      bytes.push(2);
+      bytes.push(phrase.id.length);
+      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+    } else {
+      writtenPhrases.push(phrase); // Keep track of phrases written
+      // TYPE LENGTH "PHRASE LABEL"
+      bytes.push(1);
+      bytes.push(phrase.id.length);
+      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+      // MEASURES BEATS TICKS PARTCOUNT
+      bytes.push(phrase.measureCount);
+      bytes.push(phrase.beatCount/phrase.measureCount);
+      bytes.push(phrase.tickCount/phrase.beatCount);
+      bytes.push(phrase.partCount());
+
+      phrase.parts.map(function(part, i){
+        // LENGTH "PART LABEL" VOLUME
+        bytes.push(part.elementName.innerText.length);
+        part.elementName.innerText.split('').map(function(b){bytes.push(b.charCodeAt(0))});
+        bytes.push(Floor(255.0*part.vol()));
+
+        // TICK BITS
+        var bit = 1
+        var byte=0;
+        part.elementTicks.map(function (te, i) {
+          if ("." != te.innerText) byte = byte | bit;
+          if (128 == bit) {
+            bytes.push(byte);
+            bit = 1;
+            byte = 0;
+          } else {
+            bit = bit<<1
+          }
+        });
+        if (bit != 1) { bytes.push(byte); }
+
+        // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
+        if (part.playable instanceof Synthesizer) {
+          for (var i=0; i<part.tickLength; ++i) { 
+            if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
+          }
+        } else {
+          bytes.push(128 + part.key(0));
+        }
+
+      });
+    }
+  }
+
+  window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
+} // saveSongLK3
+
+var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
+  var gs = new GetStringBase64(encodedSong);
+  var next, b, label;
+  var waveforms = ["sine", "square", "sawtooth", "triangle"];
+  var color = ["#f00", "#0f0", "#00f"];
+  if (!gs.assertString("LK") || !gs.assertBytes([3])) {
+    DB("Not LK3")
+    return false;
+  }
+
+  DB("Decoding LK3...")
+
+  b = gs.nextByte();
+  Volume = b / 255.0;
+
+  b = gs.nextByte() + (gs.nextByte()<<8);
+  BeatDuration = 6000.0/b;
+  document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
+
+  while (null != (next = gs.nextByte()))
+  if (0 == next) { // Synthesizer
+    label = gs.nextString(gs.nextByte());
+    var synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#84f");
+    if (!Synthesizer0) Synthesizer0 = synth;
+    else if (!Synthesizer1) Synthesizer1 = synth;
+    else if (!Synthesizer2) Synthesizer2 = synth;
+    else if (!Synthesizer3) Synthesizer3 = synth;
+    document.getElementById('synths').appendChild(synth.element);
+    gs.nextByte(); // Ignore volume for now
+    synth.attSet(gs.nextByte());
+    synth.susSet(gs.nextByte());
+    synth.relSet(gs.nextByte());
+  } else if (1 == next) { // Phrase
+    label = gs.nextString(gs.nextByte());
+    var measures = gs.nextByte();
+    var beatsper = gs.nextByte();
+    var ticksper = gs.nextByte();
+    var partCount = gs.nextByte();
+    var phrase = new Phrase(label, measures, beatsper, ticksper, keyboard);
+    Sheet0.add(new PhraseReference(phrase));
+    for (var i=0; i<partCount; ++i) {
+      var part;
+      label = gs.nextString(gs.nextByte());
+      var vol = gs.nextByte();
+      var bools = gs.nextBools(phrase.tickCount);
+      if (gs.peekByte() & 128) {
+        part = phrase.createPartFixed(drumKit, gs.nextByte()&127);
+      } else {
+        Synthesizers.map(function(s) { // Lookup synth
+          if (s.name() == label) {
+            part = phrase.createPart(s);
+          }
+        });
+        bools.map(function(n,i){if (n) { part.setKey(i, gs.nextByte());}});
+      }
+      part.setVol(vol/255.0); // Volume
+      bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
+    }
+  } else if (2 == next) { // Phrase reference
+    label = gs.nextString(gs.nextByte()); // Look-up existing phrase id and create a new ref using it.
+    for (var i=0; i<Sheet0.length(); ++i) {
+      var phrase = Sheet0.phrase(i)
+      if (phrase.id == label) { // Found it
+        var refPhrase = new PhraseReference(phrase);
+        Sheet0.add(refPhrase);
+        DB(label + " reference");
+        break;
+      }
+    }
+  }
+
+  return true;
+} // restoreSongLK3
+
+
+/*
+ Encode song objects into Base-64 encoding of the following:
+
+  -HEADER-
   "LK" 02  version
   00        main volume
   00 00     beat duration
@@ -2106,6 +2328,7 @@ var restoreSongLK2 = function (keyboard, drumKit, encodedSong) {
 
   return true;
 }
+
 /*
  Encode song objects into Base-64 encoding of the following:
 
@@ -2402,17 +2625,19 @@ var popupToggle = function (id) {
 
 
 // Show an image for a bit in the center of the screen.  Presented after hitting 'pause'.
-var pauseFeedback = function (id) {
+var pauseFeedback = function (id, op) {
   var icon = document.getElementById(id);
   var opacity=1.0;
+  op = op | 0.0;
   icon.style.position = "fixed";
   icon.style.display = "";
   icon.style.top = (window.innerHeight/2 - icon.height/2) + "px";
   icon.style.left = (window.innerWidth/2 - icon.width/2) + "px";
   icon.style.opacity = opacity;
+  if (op == 1.0) { return; }
   var fn = function() {
     icon.style.opacity = opacity;
-    if (opacity <= 0.0) {
+    if (opacity <= op) {
       opacity = 1.0;
       icon.style.display="none";
       icon.style.opacity = opacity;
@@ -2422,7 +2647,7 @@ var pauseFeedback = function (id) {
       setTimeout(fn, 50);
     }
   }
-  setTimeout(fn, 500);
+  fn()
 }
 
 var pause = function (event) {
@@ -2506,7 +2731,7 @@ var sequencerLoop = function () {
     // Increment beat state
     nextBeatTime += BeatDuration;
     if (BeatFinal < (Beat += 1)) { Beat = BeatInitial + (Beat - BeatFinal - 1); }
-    if (Beat == BeatInitial) { saveSongLK2(); } // On the initial beat, upate the URL's get string.
+    if (Beat == BeatInitial) { saveSongLK3(); } // On the initial beat, upate the URL's get string.
   } // while
 } // sequencerLoop()
 
@@ -2832,7 +3057,7 @@ window.onkeyup = function (event) {
   if (ShiftIsDown && !event.shiftKey) {
     if (ShiftCallbackDone) ShiftCallbackDone(event);
     ShiftIsDown = ShiftCallback = ShiftCallbackDone = false;
-    DB(ShiftIsDown);
+    DB.post("onkeyup", ShiftIsDown);
   }
 }
 
@@ -2845,7 +3070,7 @@ window.onkeydown = function (event) {
     pause(event); // Pressing 'p' will pause the playback.
     event.stopPropagation(); // TODO This doesn't prevent spacebar from scrolling the main window so for now 'p' will pause the sequencer.
   }
-  DB(event.keyCode);
+  DB.post("onkeydown", event.keyCode);
   if (event.keyCode == 67) { IBC(["tickclear"]); } // Clear whatever the cursor is on
   if (event.keyCode == 68) { IBC(["tickmove", -1]); } // Retard cursor key 'd'
   if (event.keyCode == 70) { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
@@ -2869,6 +3094,7 @@ var midi = null;
 function Main () {
   DB("::onload");
   //IBC.debug();
+
 
   Sheet0 = new Sheet(); // Global sheet object
 
@@ -2899,6 +3125,7 @@ function Main () {
   Keyboard0 = keyboard;
   DrumKit0 = drumKit
 
+  restoreSongLK3(keyboard, drumKit);
   restoreSongLK2(keyboard, drumKit);
 
   if (!Synthesizer0) {
@@ -2969,20 +3196,22 @@ function Main () {
     }
   }
 
-  //pauseFeedback("pauseicon"); // Tell user it's time to rock on!
 
   DB("--onload [" + DB.status() + "]");
 }
 
 
 function PreMain (i) {
+ DB.post("init", ctx.state)
  if (ctx.state == "suspended") {
-   (i % 8) || pauseFeedback("pauseicon");
-   ctx = new (window.AudioContext || window.webkitAudioContext)();
-   setTimeout(PreMain.bind(0, ++i), 200);
+   pauseFeedback("pauseicon", 1.0)
+   ctx.resume()
+   setTimeout(PreMain.bind(0, ++i), 100);
  } else {
    Destination = ctx.destination;
-   Main()
+   document.getElementById("pauseicon").style.clipPath = null;
+   pauseFeedback("pauseicon")
+   setTimeout(Main, 100);
  }
 }
 

@@ -213,3 +213,5 @@ h1 {
 
 .volume  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; text-align:center}
 .volume:hover { border: solid 1px #a0a }
+.volume > p { display: none }
+.volume:hover > p { display: inline-block }
