@@ -119,6 +119,7 @@ var ToggleElementDisplay = function (e1, e2) {
 }
 var ElementById = function(id) { return document.getElementById(id); }
 
+var ctx = window.AudioContext && new window.AudioContext();
 
 /******************************************************************************
   Debug message console and error checking
@@ -258,8 +259,8 @@ var Base64 = (function () {
   }
 
   var _test1 = function (ary) {
-    str = Base64(ary);
-    ary2 = Base64(str);
+    var str = Base64(ary);
+    var ary2 = Base64(str);
     DB.check((ary.toString() == ary2.toString()), ary + " != " + ary2);
   }
 
@@ -288,10 +289,13 @@ var Base64 = (function () {
     else if (typeof o == "string") return _decode(o);
     else return false;
   }
+
   self.test = _test;
 
   return self;
 })();
+
+Base64.test();
 
 
 /******************************************************************************
@@ -727,7 +731,7 @@ var AudioBuffers = function (ctx, filenames) {
 var Drumkit = function (ctx, color, audioBuffers) {
   //// Local
   var bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
-  var destination = Array(audioBuffers.length).fill(Destination); // Default destination of each sound to default
+  var destination = Array(audioBuffers.length).fill(Destinations.input(0)); // Default destination of each sound to default
   //// Public
   this.length = audioBuffers.length;
   this.name = function (pad) {
@@ -800,6 +804,7 @@ var Drumkit = function (ctx, color, audioBuffers) {
     .highlight(key)       Highlight the keyboard object's key with my color.  Used when playing a note.  TODO:  Is this smrt?
     .unhighlight()        Remove my highlight from the keyboard object.
     .connect(d)           Sets output destination
+    .destination()        Return output destination
 ******************************************************************************/
 var SynthGlobalCounter = 0;
 var Synthesizers = [];
@@ -815,7 +820,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _waveformIdx = type;
   var _filterIdx = 0;
   var _mouseMoved;
-  var _destination = Destination; // Initial destination is global destination
+  var _destination = Destinations.input(0); // Initial destination is global destination
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowphrasealias";
@@ -911,9 +916,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _output.onmousedown = function (event) {
     if (++_filterIdx == 3) { _filterIdx = 0; }
     _output.innerText = ["main", "delay","lowpass"][_filterIdx];
-    if (0 == _filterIdx) self.connect(Destination);
-    if (1 == _filterIdx) self.connect(Delay0.input());
-    if (2 == _filterIdx) self.connect(Lowpass0.input());
+    self.connect(Destinations.input(_filterIdx));
   }
 
   var _play = function (key, vol, when) {
@@ -926,7 +929,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     osc.stop(at + _att + _sus + _rel);
     osc.onended = function(osc){ osc.disconnect(); }.bind(null, osc);
 
-    DB.post("ASR", [_att, _sus, _rel]);
+    //DB.post("ASR", [_att, _sus, _rel]);
     var gain = ctx.createGain();
     gain.gain.setValueAtTime(0, at);
     gain.gain.linearRampToValueAtTime(vol*0.5*Volume, at + _att);
@@ -936,8 +939,6 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     osc.connect(gain);
     gain.connect(_destination);
   }
-
-  Synthesizers.push(this);
 
   var _keyboardMessageHandler = function (m) {
     _play(m[1], 1.0, 0);
@@ -953,6 +954,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     }
     IBC(["tickclick", 0, 0]); // This tells any active part to stop listening to keyboard events.
   }
+
+  Synthesizers.push(this);
 
   //// Public
   this.element = _element;
@@ -974,7 +977,11 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   this.unhighlight = function () {
     keyboard.unhighlight(_lastKey, color); // Remove last high-light
   };
-  this.connect = function(d) { _destination = d; };
+  this.connect = function(d) {
+    _destination = d;
+    _output.innerText = Destinations.name(Destinations.index(d));
+  };
+  this.destination = function () { return _destination; };
 } // Synthesizer
 
 
@@ -997,8 +1004,8 @@ var Delay = function (ctx) {
   //// Local
   var self = this;
   var _name = "delay";
-  var _att = 0.01; // Attack tiem in seconds.
-  var _rel = 0.50; // Release time in seconds for both the filter and gain.
+  var _del = 0.01; // Attack tiem in seconds.
+  var _gai = 0.50; // Release time in seconds for both the filter and gain.
 
   var _delay = ctx.createDelay(1); _delay.delayTime.value = 0.50;
   var _gain  = ctx.createGain(); _gain.gain.value = 0.90;
@@ -1041,10 +1048,10 @@ var Delay = function (ctx) {
   var _attack = CreateAppendChild('p', _body);
   _attack.style.position = "relative"
   _attack.className = "volume"
-  _attack.innerText = "[A]"
-  _attack.onmousedown = function(event){ Slider(event, _att, function(v){
-    _att=v;
-    _delay.delayTime.value = _att;
+  _attack.innerText = "[D]"
+  _attack.onmousedown = function(event){ Slider(event, _del, function(v){
+    _del=v;
+    _delay.delayTime.value = _del;
    });}
 
 
@@ -1055,16 +1062,20 @@ var Delay = function (ctx) {
   var _release = CreateAppendChild('p', _body);
   _release.style.position = "relative"
   _release.className = "volume"
-  _release.innerText = "[F]"
-  _release.onmousedown = function(event){ Slider(event, _rel, function(v){
-    _rel=v;
-    _gain.gain.value = _rel;
+  _release.innerText = "[G]"
+  _release.onmousedown = function(event){ Slider(event, _gai, function(v){
+    _gai=v;
+    _gain.gain.value = _gai;
   }); }
 
   //// Public
   this.element = _element;
   this.name = function () { return _name; }
   this.input = function () { return _input; }
+  this.getParams = function () { return [_del, _gai]; }
+  this.setParams = function (ps) {
+    _delay.delayTime.value = _del = ps[0];
+    _gain.gain.value = _gai = ps[1]; }
 } // Delay
 
 
@@ -1136,7 +1147,6 @@ var Lowpass = function (ctx) {
     _lowpass.frequency.value = 10000.0*(1.0-_f);
    });}
 
-
   // Release button
   // [ [Delay1] [-] ]
   // [ [sine]       ]
@@ -1154,7 +1164,40 @@ var Lowpass = function (ctx) {
   this.element = _element;
   this.name = function () { return _name; }
   this.input = function () { return _input; }
-} // Delay
+  this.getParams = function () { return [_f, _q]; }
+  this.setParams = function (ps) {
+    _f = ps[0];
+    _lowpass.frequency.value = 10000.0*(1.0-_f);
+    _q = ps[1];
+    _lowpass.Q.value = _q * 100.0;
+  }
+} // Lowpass
+
+
+
+// Keeps track of all possible sound destinations. The main context destination 
+// is always and more including delay and lowpass filters.
+var Destinations = (function (ctx) {
+  var self = [];
+
+  ctx.destination.name = function () { return "main"; };
+  ctx.destination.input = function () { return ctx.destination; };
+
+  self.push(ctx.destination);
+
+  self.name = function (i) { return self[i].name(); }
+  self.input = function (i) { return self[i].input(); }
+  self.next = function (d) { // Return destination after d in array.
+    var i = 1 + self.findIndex( function (v,i) { return d== v.input(); } )
+    return self[i % self.length];
+  }
+  self.index = function (d) { // Return index of the destination object
+    var i = self.findIndex( function (v,i) { return d==v || d==v.input(); } )
+    return (0 <= i) ? i : 0;
+  }
+  return self;
+})(ctx);
+
 
 
 /******************************************************************************
@@ -1276,7 +1319,6 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
     }
   }
 } // Part
-
 
 /******************************************************************************
   Creates and maintains a set of parts (AKA voices) divided into measures of
@@ -1481,9 +1523,9 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
 
     _part.elementFilter.onmousedown = function (event) {
       var con = drumKit.connected(fixedNote)
-      if (con == Destination) { drumKit.connect(Delay0.input(), fixedNote); this.innerText = "delay"; }
-      if (con == Delay0.input()) { drumKit.connect(Lowpass0.input(), fixedNote); this.innerText = "lowpass"; }
-      if (con == Lowpass0.input()) { drumKit.connect(Destination, fixedNote); this.innerText = "main"; }
+      var dst = Destinations.next(con);
+      drumKit.connect(dst.input(), fixedNote);
+      this.innerText = dst.name();
     }
 
     _part.elementName.onmousedown = function () { // Clicking part name plays the beat and sets color
@@ -1955,37 +1997,47 @@ var Sheet = function () {
  Song serialization
 
 ******************************************************************************/
-
 /*
  Encode song objects into Base-64 encoding of the following:
 
   -HEADER-
-  "LK" 03  version
+  "LK"      project
+  03        version
   00        main volume
   00 00     beat duration
 
+  -FILTERS...-
+  00                Type = Filter
+   06"filter"        label
+   00                Filter type 00=delay 01=lowpass
+   02                parameter count
+    00...             parameters
+
   -SYNTH...-
-  00                Type Synthesizer
-  0a"synthname"     label
-  00                Waveform [square sawtooth triangle sine]
-  00                Volume
-  00 00 00          Attack sustain release
+  01                Type = Synthesizer
+   09"synthname"     label
+   00                Waveform [square sawtooth triangle sine]
+   00                Volume
+   00 00 00          Attack sustain release
+   00                output destination/filter
 
   -PHRASE...-
-  01                Type Phrase
-  0a"phrasename"    label
-  04 04 04          measures, beatspermeasure, ticksperbeat
-  10                partcount
-  -PART...-
-  08"partname" 00   label, part volume
-  00...             4*4*4 bits representing on/off tick
-  -NOTE OR NOTES-
-    80              If 8th bit set then this&7f is the note to use for each tick.
-    00...           Otherwise {number of ticks} bytes represent the notes for each tick.
+  02                Type = Phrase
+   0a"phrasename"    label
+   04 04 04          measures, beatspermeasure, ticksperbeat
+   10                part count
+    -PART...-
+    08"partname" 00   label
+    00                volume
+    00                destinatin/filter
+    00...             4*4*4 bits representing on/off tick
+    -NOTE OR NOTES-
+      80              If 8th bit set then this&7f is the note to use for each tick.
+      00...           Otherwise {number of ticks} bytes represent the notes for each tick.
 
   -PHRASE REFERENCE-
-  02                Type PhraseReference
-  0a"phrasename"    Label referring to actual phrase
+  03                Type PhraseReference
+   0a"phrasename"    Label referring to actual phrase
 */
 var saveSongLK3 = function () {
 
@@ -1997,17 +2049,34 @@ var saveSongLK3 = function () {
   bytes.push(parseInt((6000/BeatDuration) & 255));
   bytes.push(parseInt((6000/BeatDuration) >> 8));
 
+  Destinations.map(function(d,i) {
+    if (0 < i) {
+      bytes.push(0); // TYPE
+      bytes.push(d.name().length); // NAME LEN
+      //DB("LK3 Filter " + d.name());
+      d.name().split('').map(function(b){bytes.push(b.charCodeAt(0))}); // NAME
+      bytes.push(i-1); // Fake filter type.  for now the static delay and lowpass filters
+      var ps = d.getParams(); // PARAMETER COUNT
+      //DB("Params to write:" + ps);
+      bytes.push(ps.length);
+      ps.map( function (e) {
+        bytes.push((e*255.0).toFixed(0));
+     } )
+    }
+  });
+
   Synthesizers.map(function(s) {
    // TYPE LENGTH "SYNTH LABEL"
-    bytes.push(0);
+    bytes.push(1);
     bytes.push(s.name().length);
     s.name().split('').map(function(b){bytes.push(b.charCodeAt(0))});
     bytes.push(s.wave()); // Waveform index
-    bytes.push(255); // Volume
+    bytes.push(255); // Volume not used for now
     var adsr = s.adsr();
     bytes.push(adsr[0]); // Attack
     bytes.push(adsr[2]); // Sustain
     bytes.push(adsr[3]); // Release
+    bytes.push(Destinations.index(s.destination())); // Release
   });
 
   for (var i=0; i<Sheet0.length(); ++i) {
@@ -2017,13 +2086,13 @@ var saveSongLK3 = function () {
 
     if (0 <= writtenPhrases.indexOf(phrase)) { // Write phrase if first reference to it
       // TYPE LENGTH "REFERENCED PHRASE LABEL"
-      bytes.push(2);
+      bytes.push(3);
       bytes.push(phrase.id.length);
       phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
     } else {
       writtenPhrases.push(phrase); // Keep track of phrases written
       // TYPE LENGTH "PHRASE LABEL"
-      bytes.push(1);
+      bytes.push(2);
       bytes.push(phrase.id.length);
       phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
       // MEASURES BEATS TICKS PARTCOUNT
@@ -2037,6 +2106,7 @@ var saveSongLK3 = function () {
         bytes.push(part.elementName.innerText.length);
         part.elementName.innerText.split('').map(function(b){bytes.push(b.charCodeAt(0))});
         bytes.push(Floor(255.0*part.vol()));
+        bytes.push(Destinations.index(DrumKit0.connected(part.key(0)))); // DESTINATION/FILTER
 
         // TICK BITS
         var bit = 1
@@ -2071,9 +2141,7 @@ var saveSongLK3 = function () {
 
 var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
   var gs = new GetStringBase64(encodedSong);
-  var next, b, label;
-  var waveforms = ["sine", "square", "sawtooth", "triangle"];
-  var color = ["#f00", "#0f0", "#00f"];
+  var next, b, label, d;
   if (!gs.assertString("LK") || !gs.assertBytes([3])) {
     DB("Not LK3")
     return false;
@@ -2089,7 +2157,31 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
   document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
 
   while (null != (next = gs.nextByte()))
-  if (0 == next) { // Synthesizer
+  if (0 == next) { // FILTER / DESTINATION
+    label = gs.nextString(gs.nextByte()); // NAME LENGTH, NAME
+    var t = gs.nextByte(); // TYPE
+    b = gs.nextByte(); // PARAM COUNT
+    //DB("params count = " + b);
+    var ps=[]
+    for (var i=0; i<b; ++i) { // PARAMS
+      ps.push(gs.nextByte() / 255.0);
+    }
+    //DB("params = " + ps);
+    if (t==0) {
+      d = new Delay(ctx);
+      //DB("LK3 delay create");
+    } else if (t==1) {
+      //DB("LK3 lowpass create");
+      d = new Lowpass(ctx);
+    } else { t==-1; }
+
+    if (-1 != t) {
+      Destinations.push(d);
+      document.getElementById('filters').appendChild(d.element);
+      d.setParams(ps);
+    }
+  } else if (1 == next) { // Synthesizer
+    DB("LK3 Synth...");
     label = gs.nextString(gs.nextByte());
     var synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#84f");
     if (!Synthesizer0) Synthesizer0 = synth;
@@ -2101,7 +2193,9 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
     synth.attSet(gs.nextByte());
     synth.susSet(gs.nextByte());
     synth.relSet(gs.nextByte());
-  } else if (1 == next) { // Phrase
+    var i = gs.nextByte();
+    synth.connect(Destinations[i].input());
+  } else if (2 == next) { // Phrase
     label = gs.nextString(gs.nextByte());
     var measures = gs.nextByte();
     var beatsper = gs.nextByte();
@@ -2113,9 +2207,14 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
       var part;
       label = gs.nextString(gs.nextByte());
       var vol = gs.nextByte();
+      var dst = gs.nextByte(); // Destination (set below if drumkit track)
+
       var bools = gs.nextBools(phrase.tickCount);
       if (gs.peekByte() & 128) {
-        part = phrase.createPartFixed(drumKit, gs.nextByte()&127);
+        var fixedNote = gs.nextByte() & 127;
+        part = phrase.createPartFixed(drumKit, fixedNote)
+        drumKit.connect(Destinations.input(dst), fixedNote); // DESTINATION/FILTER
+        part.elementFilter.innerText = Destinations.name(dst);
       } else {
         Synthesizers.map(function(s) { // Lookup synth
           if (s.name() == label) {
@@ -2127,7 +2226,7 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
       part.setVol(vol/255.0); // Volume
       bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
     }
-  } else if (2 == next) { // Phrase reference
+  } else if (3 == next) { // Phrase reference
     label = gs.nextString(gs.nextByte()); // Look-up existing phrase id and create a new ref using it.
     for (var i=0; i<Sheet0.length(); ++i) {
       var phrase = Sheet0.phrase(i)
@@ -3018,10 +3117,8 @@ var setupControls = function (keyboard) {
 ******************************************************************************/
 var Slider = new DOMSlider();
 
-DB.check((window.AudioContext || window.webkitAudioContext), "Audio context not found.  Use Chrome browser.");
-var ctx = new (window.AudioContext || window.webkitAudioContext)();
 
-var Destination = ctx.destination;
+DB.check(ctx, "Missing window.AudioContext.  Use Chrome browser.");
 
 var Sheet0; // New hotness
 var Keyboard0;
@@ -3030,8 +3127,8 @@ var Synthesizer0;
 var Synthesizer1;
 var Synthesizer2;
 var Synthesizer3;
-var Delay0;
-var Lowpass0;
+//var Delay0;
+//var Lowpass0;
 
 var currentReference = false;
 
@@ -3042,7 +3139,7 @@ var DragOverTickState = 1;
  0.375; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
 var BeatDuration = 60/parseInt(document.getElementById('speed').innerText);
 
-var Volume = 0.5;
+var Volume = 0.5; // A global value shared by all output gain logic
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
@@ -3125,9 +3222,13 @@ function Main () {
   Keyboard0 = keyboard;
   DrumKit0 = drumKit
 
+  // LiveKa7 v3
   restoreSongLK3(keyboard, drumKit);
+
+  // LiveKa7 v2
   restoreSongLK2(keyboard, drumKit);
 
+  // LiveKa7 v1
   if (!Synthesizer0) {
     Synthesizer0 = new Synthesizer(ctx, false, 0, keyboard, "#84f");
     document.getElementById('synths').appendChild(Synthesizer0.element);
@@ -3147,19 +3248,25 @@ function Main () {
     Synthesizer3 = new Synthesizer(ctx, false, 3, keyboard, "#84f");
     document.getElementById('synths').appendChild(Synthesizer3.element);
   }
-
-  Delay0 = new Delay(ctx);
-  document.getElementById('filters').appendChild(Delay0.element);
-  //Synthesizer3.connect(Delay0.input());
-
-  Lowpass0 = new Lowpass(ctx);
-  document.getElementById('filters').appendChild(Lowpass0.element);
-  //Synthesizer0.connect(Lowpass0.input());
-
-
   restoreSongLK1(keyboard, drumKit);
+
+  // LiveKa7 v0
   restoreSongLK0(keyboard, drumKit); // Parse get string
 
+  // Effects
+  if (!Destinations[1]) {
+    var e = new Delay(ctx);
+    Destinations.push(e);
+    document.getElementById('filters').appendChild(e.element);
+  }
+
+  if (!Destinations[2]) {
+    var e = new Lowpass(ctx);
+    Destinations.push(e);
+    document.getElementById('filters').appendChild(e.element);
+  }
+
+  // Start me up
   BeatFinal = Sheet0.beatCount()-1; // Set playback range to end of song.
   Sheet0.updateBeatMarkers();
 
@@ -3171,9 +3278,6 @@ function Main () {
   setInterval(sequencerLoop, 50);
   setInterval(rendererLoop, 50);
 
-  sequencerLoop();
-
-  //Base64.test();
 
   // TODO Global hack mechanism to create a new phrase.
   addphrase = function (e) {
@@ -3208,7 +3312,6 @@ function PreMain (i) {
    ctx.resume()
    setTimeout(PreMain.bind(0, ++i), 100);
  } else {
-   Destination = ctx.destination;
    document.getElementById("pauseicon").style.clipPath = null;
    pauseFeedback("pauseicon")
    setTimeout(Main, 100);
