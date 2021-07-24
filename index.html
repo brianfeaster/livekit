@@ -228,6 +228,59 @@ var DB = (function () {
 })(); // DB
 
 /******************************************************************************
+  Hyphen - WebSocket baed Key/Value store
+
+  USAGE::
+    hyphen(msg)      Sen dmessage to Hyphen
+******************************************************************************/
+//hyphen.song = function () { return ""; }
+var hyphen =
+(function () {
+   DB ("Connecting to Hyphen!");
+   var server = new WebSocket( window.location.protocol=="https:" ? "wss://shroom.dv8.org:7179" : "ws://shroom.dv8.org:7180");
+   var song = false;
+
+   // Listener starts off waiting for "HYPHEN" hello message
+   server.onmessage = function (e) {
+      if (typeof(e.data) == "string") {
+         if (e.data != "HYPHEN") {
+            DB("hyphen Sent hot bars");
+            song = e.data.split("&")[0];;
+            window.location.href = window.location.pathname+"?"+song;
+         } else {
+             DB("hyphen text: " + e.data);
+         }
+      } else {
+         DB("hyphen bin: " + e.data);
+      }
+   } 
+
+   var get = function (songid) {
+      if (server.readyState != 1) {
+         DB.post("hyphen", "Waiting for connection readyState...");
+         setTimeout(get.bind(0, songid), 200);
+      } else {
+         DB("hyphen sending: get" + songid);
+         var ret = server.send("get" + songid);
+      }
+   }
+
+   var qstr = window.location.search.substring(1).split("&")[0];
+   if ( qstr.length < 20) {
+      get(qstr);
+   }
+
+   var self = get;
+
+   self.server = function () { return server }
+   self.song   = function () { return song }
+
+   return self
+
+})();
+
+
+/******************************************************************************
   Base64 encoder and decoder
 
   USAGE::
@@ -360,7 +413,11 @@ Base64.test();
 var GetStringBase64 = function (get) {
   //// PRIvate
   var self = this;
-  var _gsb64 = get || window.location.search.substring(1);
+  var _gsb64 =
+    get ||
+    (window.location.search.substring(1).length < 20 // Using query as song filename as well
+    ? ""
+    : window.location.search.substring(1));
   var _gs = [];
 
   //// PUBLIC
@@ -2131,7 +2188,7 @@ var Sheet = function () {
 var saveSongLK3 = function () {
 
   var writtenPhrases = []; // Keep track of written phrases
-  var bytes = [76,75,3]; // "LK" 02  LiveKa7 DAW Version 2 Header
+  var bytes = [76,75,3]; // "LK" 03  LiveKa7 DAW Version 3 Header
 
   bytes.push(parseInt(Volume*255.0));
   // BMP saved as fixed point to two decimal places in little endian.  So convert the duration in seconds to microseconds then split.
@@ -3302,7 +3359,9 @@ function Main () {
   function onMIDISuccess( m ) {
     m.inputs.forEach(function(e){e.onmidimessage=function(e){keyboard.midi(e);};});
   }
+
   function onMIDIFailure(msg) { DB("MIDI "+msg ); }
+
   if (navigator.requestMIDIAccess) {
     navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure );
   }
@@ -3318,7 +3377,7 @@ function Main () {
   DrumKit0 = drumKit
 
   // LiveKa7 v3
-  restoreSongLK3(keyboard, drumKit);
+  restoreSongLK3(keyboard, drumKit, hyphen.song());
 
   // LiveKa7 v2
   restoreSongLK2(keyboard, drumKit);
@@ -3408,6 +3467,7 @@ function PreMain (i) {
    ctx.resume()
    setTimeout(PreMain.bind(0, ++i), 100);
  } else {
+
    DB ("Starting AudioContext!");
    //ctx = window.AudioContext && new window.AudioContext();
    document.getElementById("pauseicon").style.clipPath = null;
@@ -3415,6 +3475,7 @@ function PreMain (i) {
    setTimeout(Main, 100);
  }
 }
+
 
 window.onload = PreMain.bind(null,0)
 
