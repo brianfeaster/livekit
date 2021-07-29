@@ -1,0 +1,228 @@
+body {
+ margin:0;
+ background:#000;
+ color:#ccc;
+ font-family: monospace;
+ -webkit-touch-callout: none;
+ -webkit-user-select: none;
+ -khtml-user-select: none;
+ -moz-user-select: none;
+ -ms-user-select: none;
+ user-select: none;
+}
+
+a         {text-decoration: none}
+a:link    {color: #bbf}
+a:visited {color: #aaa}
+a:hover   {color: #0ff}
+
+h1, hr, p { margin:0 }
+
+h1 {
+ font-family:sans-serif;
+ font-size:inherit;
+ white-space:nowrap;
+}
+
+.mustshift { margin-left:1ch }
+.mustshift:hover { background:red }
+
+.headerNav {
+ text-align:right;
+ font-family:sans-serif;
+ font-size:x-small;
+}
+
+.headerNav > div { display:inline-block }
+
+.headerNav > a {
+  margin-left:1ch;
+  white-space:nowrap;
+}
+
+.songList > p:hover {
+  background:#808
+}
+
+.window {
+  display:inline-block;
+  vertical-align:top;
+  margin:0;
+  margin-bottom:1ch;
+}
+
+.window > div:nth-child(1) {
+  display:inline-block;
+  padding-left:.5ch;
+  padding-right:.5ch;
+  border:solid 1px #444;
+  background-color:#111;
+  border-radius:1ch;
+  vertical-align:bottom;
+}
+
+.window > div:nth-child(2) {
+  display:inline-block;
+  position:relative;
+  z-index:1;
+}
+
+.window > div:nth-child(3) {
+  display: block;
+  position: relative;
+  margin-left: 1ch;
+  border: solid 1px #444;
+  border-radius:1ch;
+  margin-top:-1px;
+}
+
+.actor {
+  background-color:#066;
+  border:1px solid black;
+}
+
+.actor:hover {
+  border:solid 1px #f0f
+}
+
+
+.knobs  p {
+  display:inline-block;
+  background:#066;
+}
+
+.knobs > div {
+  text-align:center;
+}
+
+
+.piano {
+ text-align:center; 
+ color: black;
+ margin:1ch;
+}
+
+.piano > div {
+ display:inline-block;
+ padding:2em 0 0 0;
+ border-left:solid 1px black;
+ border-right:solid 1px black;
+ margin:0;
+ width:1.2em;
+ height:1.1em;
+ background-color:white;
+}
+
+.piano > p {
+ display:inline-block;
+ position:absolute;
+ padding:0;
+ border:0;
+ margin-left:-0.5em;
+ width:1.0em;
+ height:1.6em;
+ background-color:#222;
+}
+
+.piano > div:hover,
+.piano > p:hover   {
+  background-color: #e0e
+}
+
+#sheetbuttons > div {
+  display: inline-block;
+  margin-left: 1ch;
+  background-color:#066;
+}
+
+.addphrase {
+  display:inline-block;
+  border:0;
+}
+
+#addphrase > div > input {
+  font-size:inherit
+}
+
+.windowphrasealias {
+  display:inline-block;
+  vertical-align:top;
+  margin-top:.5ch;
+  margin-left:.5ch;
+}
+
+.windowphrasealias > div:nth-child(1) {
+  display:inline-block;
+  border-top:dashed 1px #444;
+  border-right:dashed 1px #444;
+  border-left:dashed 1px #444;
+}
+
+.windowphrasealias > div:nth-child(2) {
+  display:inline-block;
+}
+
+.windowphrasealias > div:nth-child(3) {
+  margin-top:1px;
+  border: dashed 1px #444;
+}
+
+
+.phrases {
+  display:inline-block;
+  min-width: 1em;
+  min-height: 1em;
+  padding:0;
+}
+
+.phrases > div { margin:1ch; }
+.phrases > div > p { display:inline-block; background:#880 }
+.phrases > div > div { display:inline-block ; margin-left:1ch; }
+.phrases > div > div:last-child { display:block; border:solid 1px #880 }
+
+.phrases .partlist > b {
+  font-weight:normal;
+  display:inline-block;
+  text-align:center;
+  width:2em;
+  margin-right:.5em;
+  background:gray
+}
+
+.part { border:none; padding:0; margin:0 }
+.part > div { display:inline-block; vertical-align:top; }
+.part > b { display:inline-block; width:2em; vertical-align:top; text-align:center; background:#888 }
+
+.part > .beat      { border:0px; padding:0px; margin:1px; height:2.0em; width:2.1em; background:#222; color:#999 }
+.part > .beatfirst { background:#333 }
+.part > .beat:hover { border: solid 1px #a0a; margin:0px }
+
+.part > .beat > .tick { border:0; padding:0; margin:0; height:1em; width:1em; display:flex; justify-content:center; align-items:center; }
+
+.part > .beat .tick:nth-child(1) { float:left; }
+.part > .beat .tick:nth-child(2) { float:left; clear:both; }
+.part > .beat .tick:nth-child(1):hover { background-color:yellow}
+.part > .beat .tick:nth-child(2):hover { background-color:yellow}
+.part > .beat .tick:nth-child(3):hover { background-color:yellow}
+.part > .beat .tick:nth-child(4):hover { background-color:yellow}
+
+
+.name  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; height:1em;}
+.name:hover { border: solid 1px #a0a }
+
+.volume  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; text-align:center}
+.volume:hover { border: solid 1px #a0a }
+.volume > p { display: none }
+.volume:hover > p { display: inline-block }
+
+
+.grid { overflow:show; height:12ch; }
+.grid > div:nth-child(1) { float:left; position:sticky; left:0; }
+.grid > div:nth-child(1) > p { background-color:#222; border:solid 1px #000; }
+.grid > div:nth-child(2) { width:calc(100vw - 2ch); }
+.grid > div:nth-child(2) > div:nth-child(1) { position:sticky; top:0;  }
+.grid > div:nth-child(2) > div:nth-child(1) > p { background-color:#222; }
+.grid > div:nth-child(2) > div { white-space:nowrap; }
+.grid > div:nth-child(2) > div > p       { background-color:#333; border:solid 1px #000; display:inline-block; }
+.grid > div:nth-child(2) > div > p:hover { background-color:#115; }
+
