@@ -7,7 +7,7 @@
 </head>
 <body _oncontextmenu="return false;">
 
-<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:10em; position:fixed; right:0; bottom:0"></p>
 
 
 <div style="float:right">&#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</div>
@@ -23,18 +23,20 @@
  <a href="http://jigsaw.w3.org/css-validator/check/referer/">CSS</a>
 </div>
 
+<div class="window">
+  <div>PHRASE SHEET</div>
+  <div class="knobs">&nbsp;</div>
+  <div id="phrasesheet1" class="phrasesheet"></div>
+</div>
 
 <div class="window">
-  <div>CONTROL</div>
-  <div>&nbsp;</div>
-  <div class="knobs">
-    tempo<p id="speed" class="actor" contenteditable="true">160</p>
-    <div>
+  <div>^</div>
+  <div></div>
+  <div class="Xknobs">
+    <p id="speed" class="actor" contenteditable="true">160</p>
     <p id="mainVolume" >vol</p> <!-- input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" / -->
-    <br/>
-     <p class="actor reset" onmousedown="reset(event)">|&lt;</p>
-     <p class="actor pause" onmousedown="pause(event)">||</p>
-    </div>
+    <p class="actor reset" onmousedown="reset(event)">|&lt;</p>
+    <p class="actor pause" onmousedown="pause(event)">||</p>
   </div>
 </div>
 
@@ -51,12 +53,6 @@
     <p id="addFilterLowpass" class="actor">L</p>
   </div>
   <div id="filters"></div>
-</div>
-
-<div class="window">
-  <div>GRID</div>
-  <div class="knobs">&nbsp;</div>
-  <div id="grid1" class="grid"></div>
 </div>
 
 <div class="window">
@@ -910,7 +906,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowphrasealias";
-  _element.style.width = "13ch";
+  //_element.style.width = "13ch";
 
   var _nameDOM = CreateAppendChild('div', _element); // [ Synth1 ]
   _nameDOM.style.background="";
@@ -1148,7 +1144,7 @@ var Delay = function (ctx) {
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowphrasealias";
-  _element.style.width = "13ch";
+  //_element.style.width = "13ch";
 
   var _nameDOM = CreateAppendChild('div', _element); // [ Delay1 ]
   _nameDOM.style.background="";
@@ -1272,7 +1268,7 @@ var Lowpass = function (ctx) {
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowphrasealias";
-  _element.style.width = "13ch";
+  //_element.style.width = "13ch";
 
   var _nameDOM = CreateAppendChild('div', _element); // [ lowpass ]
   _nameDOM.style.background="";
@@ -2119,7 +2115,6 @@ var Sheet = function () {
       document.getElementById('phrases').appendChild(r.phrase.element);
     }
 
-    //DB("Sheet phrase count: " + _phrases.length);
     return false;
   }
   this.del = function (r) {
@@ -2135,7 +2130,6 @@ var Sheet = function () {
     } else {
       DB("WARNING: attempting to delete nonexistent phrase from sheet.");
     }
-    //DB("Sheet phrase count: " + _phrases.length);
   }
   this.shift = function (p, d) {
     var i = _phraseReferences.indexOf(p);
@@ -2956,24 +2950,15 @@ var reset = function (event) {
   TickerTimer.rewind();
 }
 
-// These are always synchronized.
-//   nextBeatTime - real time index to emit sound next (generally a second ahead of ctx.currentTime)
-//   Beat         - beat index to send from next (point into matrix)
-//|------------------------!---------------------- ctx.currentTime
-//                             ^
-//                             +-- BeatTime (next render time to write at)
-//                             +-- Beat (next beat index to render from)
-// When deriving the live beat for DOM highlighting, must do so within the current active beat range
-// So the distance between (BeatTime - currentTime) % beatDuration is how beats to subtract from Beat
-// to get the live beat.  But if this is less than BeatInitial, must add the BeatRange to compensate..
-//
-// Is thre a cleaner way?
-// Constantly writing  over time:   B0 b1 b2 b3...bn b0 b1 b2 ... bn
-// Keep track of currentTime for most recent updated B0
-//
-// Keep track of first real timestamp sound was first writte for tick 0
-// emit up to a second of sound (a few more ticks)
 
+/******************************************************************************
+  TickerTimer - Manage ticks and time
+
+  Ticks represent periodic time units that need to be sequentially
+  considered when creating and emitting audio on time.  This will
+  make sure enough ticks have been consumed so that there is at most
+  1 second of audio processed.
+******************************************************************************/
 var TickerTimer = (function (ctx) {
   // Settings
   var jiffy = .25; // Tick length in seconds (speed of music)
@@ -3007,6 +2992,9 @@ var TickerTimer = (function (ctx) {
   self.setEnd    = function (i) { if (start<=i) { end = i; } return self; }
   self.setLength = function (i) { length=i; if (length<=end) { end = length-1; } return self; }
   // Derive the actual current tick (which will most likely have already been processed)
+  // When deriving the live beat for DOM highlighting, must do so within the current active beat range
+  // So the distance between (BeatTime - currentTime) % beatDuration is how beats to subtract from Beat
+  // to get the live beat.  But if this is less than BeatInitial, must add the BeatRange to compensate..
   self.tickLive = function () {
     var now = ctx.currentTime;
     var ticksAhead = tick - (time - now) / jiffy;
@@ -3018,6 +3006,94 @@ var TickerTimer = (function (ctx) {
 
   return self;
 })(ctx);
+
+
+/******************************************************************************
+  PhraseSheet - Manage parts on a dynamic phrase/sheet.
+
+******************************************************************************/
+var PhraseSheet = function (id, tickCount) {
+  var element = ElementById(id); // phrasesheet1
+  var ticks = [];
+
+  // Create the ticks with a header and no parts
+  // [ [[0]] [[1]] ... ]
+  for (var y=0; y < tickCount; y++) {
+    ticks[y] = CreateAppendChild('div', element);
+    CreateAppendChild('p', ticks[y], (Floor(y/8) % 10));
+  }
+
+  var self = function () { };
+  self.element = function () { return element; }
+  self.tick = function (i) { return ticks[i]; }
+  return self;
+};
+
+
+/******************************************************************************
+  PartSynth - Model a part which for now is a drawable synth grid.
+******************************************************************************/
+var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth) {
+  var phrasesheet = phraseSheetObj.element(); // Parent object's element
+
+  // [... [ [2] [] ] ...]
+  var part = CreateAppendChild('div', phrasesheet.children[tickIdx]); // The Part element
+  part.className = "partgrid";
+  part.style.top = Math.max(height, phrasesheet.firstChild.firstChild.scrollHeight)+"px";
+  //part.style.marginLeft = "-1ch"
+
+  // Labels - left most cells of row
+  var Labels = CreateAppendChild('div', part);
+  var corner = CreateAppendChild('p', Labels); // Corner
+  corner.innerHTML="&#x266b;";
+  var labels = CreateAppendChild('div', Labels);
+  for (var y=0; y<GridHeight; y++) { CreateAppendChild('p', labels, y); }
+
+
+  // Grid tick header
+  var ticks = CreateAppendChild('div', part);
+  for (var y=0; y<GridWidth; y++) { CreateAppendChild('p', ticks, (Floor(y/8) % 10)); }
+
+  // Grid of ticks
+  var grid = CreateAppendChild('div', part); // Raw cells
+
+  // Create ticks
+  for (var y=0; y<GridHeight; y++) {
+    let row = CreateAppendChild('div', grid); // Container of row of ticks
+    for (var x=0; x<GridWidth; x++) {
+      var tick = CreateAppendChild('p', row, NBSP);
+      // Action Clicking
+      tick.onmousedown = function (e) {
+        var txt = e.target.innerText;
+        DragOverTickState = txt == NBSP ? 1 : 2;
+        MouseIsDown = true; // Set global state
+        e.target.innerText = txt == NBSP ? "*" : NBSP;
+      }
+      // Action Hovering/dragging
+      tick.onmouseover = function (y, e) {
+        if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
+        else if (e.target.innerText != NBSP) Synthesizers[0].play(GridHeight-y-1, .5, 0); // Play it
+      }.bind(0, y);
+    }
+  }
+
+  // Clicking and dragging on the corner will move part around in the phrase/sheet
+  corner.onmousedown = function (e) {
+    MouseIsDown = true; // Set global state
+    var tickHeight = phrasesheet.firstChild.firstChild.scrollHeight;
+    var tickWidth  = phrasesheet.lastChild.offsetLeft / (phrasesheet.childElementCount-1); // Tick width take average width of all ticks
+    var leftMargin = phrasesheet.offsetLeft-phrasesheet.scrollLeft; // Account for element's margin and scrolled offset
+    phrasesheet.onmousemove = function (offset, e) {
+       if (!MouseIsDown) { phrasesheet.onmousemove = null; return; } // Maybe nothing to do
+       // Adjust part's vertical position
+       part.style.top = Math.max(offset + e.y, tickHeight) + "px";
+       // Move part to another tick
+       phrasesheet.children[Floor((e.x-leftMargin+1) / tickWidth)].appendChild(part);
+    }.bind(null, part.offsetTop-e.y);
+  };
+
+}
+
 
 /* Periodically high-light whatever beat is currently being heard.
    It uses the web audio context's currentTime as a time reference.
@@ -3072,11 +3148,9 @@ var sequencerLoop = function () {
     if (BeatFinal < (Beat += 1)) { Beat = BeatInitial + (Beat - BeatFinal - 1); }
   } // while
 */
-  //DB.post("mousedown", MouseIsDown);
   if (Pause) { return; }
   var tt = TickerTimer();
   if (tt) {
-    //DB(tt);
     var [tick, time] = tt;
     var rowCount = Grid.children.length; 
     for (var y=0; y < rowCount; ++y) {
@@ -3095,7 +3169,6 @@ var sequencerLoop = function () {
       }
     }
   }
-  //DB.post(tt);
 } // sequencerLoop()
 
 
@@ -3178,6 +3251,8 @@ var rendererLoop = (function (_lastRef, _lastPhrase, _lastBeat, _lastTick) { ret
   _lastBeat = beatLocal;
   _lastTick = tick;
 };})(null, null, null, null);
+
+
 
 /******************************************************************************
 
@@ -3371,7 +3446,7 @@ var setupControls = function (keyboard) {
 
  MAIN
 
- CONCEPTS
+ CONCEPTS Musical Definitions
 
  Pressing a physical key/pad creates a note message/event.
 
@@ -3473,7 +3548,7 @@ document.body.addEventListener('touchstart', function (event) {if (event.touches
 ******************************************************************************/
 var addphrase;
 var midi = null;
-var Grid = null;
+var PhraseSheet = PhraseSheet("phrasesheet1", 128);
 
 function Main () {
   DB("::onload");
@@ -3525,17 +3600,18 @@ function Main () {
   DrumKit0 = drumKit
 
   // LiveKa7 v3
-  restoreSongLK3(keyboard, drumKit, hyphen.song());
+  restoreSongLK3(keyboard, drumKit); //, hyphen.song());
 
   // LiveKa7 v2
   restoreSongLK2(keyboard, drumKit);
 
   // LiveKa7 v1
   if (!Synthesizer0) {
-    Synthesizer0 = new Synthesizer(ctx, false, 0, keyboard, "#84f");
+    Synthesizer0 = new Synthesizer(ctx, false, 2, keyboard, "#84f");
     document.getElementById('synths').appendChild(Synthesizer0.element);
   }
 
+/*
   if (!Synthesizer1) {
     Synthesizer1 = new Synthesizer(ctx, false, 1, keyboard, "#4f4");
     document.getElementById('synths').appendChild(Synthesizer1.element);
@@ -3550,6 +3626,7 @@ function Main () {
     Synthesizer3 = new Synthesizer(ctx, false, 3, keyboard, "#84f");
     document.getElementById('synths').appendChild(Synthesizer3.element);
   }
+*/
   restoreSongLK1(keyboard, drumKit);
 
   // LiveKa7 v0
@@ -3599,64 +3676,18 @@ function Main () {
     }
   }
 
-  // Grid/paint phrase prototype
-  var gridMain  = ElementById("grid1"); // Scrollable container
-
-  // Upper left corner
-  var Corner = CreateAppendChild('div', gridMain); // Left most cells (vertical container)
-  CreateAppendChild('p', Corner, NBSP+NBSP); // Left most cells (vertical container)
-
-  // Labels
-  var gridLabel = CreateAppendChild('div', gridMain); // Left most cells (vertical container)
-  // Grid and its fixed top header
-  var gridbody = CreateAppendChild('div', gridMain); // Raw cells
-  // Header
-  var header = CreateAppendChild('div', gridbody); // Raw cells
-  // Grid
-  Grid = CreateAppendChild('div', gridbody); // Raw cells
-
-  addSynthToGrid(gridLabel, header, Grid, 128, 61);
-  //addSynthToGrid(gridLabel, header, Grid, 128, 5);
+  PartSynth(PhraseSheet, 2, 1*25, 4, 4);
+  PartSynth(PhraseSheet, 8, 4*25, 61, 64);
 
   // The ticker + timer state object.
-  let tickCount = Grid.firstChild.children.length;
-  TickerTimer.setLength(tickCount).setEnd(tickCount-1).setStart(0).rewind();
+  (tickCount => TickerTimer.setLength(tickCount).setEnd(tickCount-1).setStart(0).rewind())(PhraseSheet.element().childElementCount);
 
-  setInterval(sequencerLoop, 50);
-  setInterval(rendererLoop, 50); // This should only update every tick
-
+  //setInterval(sequencerLoop, 50);
+  //setInterval(rendererLoop, 50); // This should only update every tick
 
   DB("--onload [" + DB.status() + "]");
 } // Main
 
-var addSynthToGrid = function (gridLabel, header, Grid, GridWidth, GridHeight) {
-  // Header
-  for (var y=0; y<GridWidth; y++) {
-    CreateAppendChild('p', header, (Floor(y/8) % 10));
-  }
-  // Ticks
-  for (var y=0; y<GridHeight; y++) {
-    // Label
-    CreateAppendChild('p', gridLabel, y);
-    // Create ticks
-    var row = CreateAppendChild('div', Grid); // Container of row of ticks
-    for (var x=0; x<GridWidth; x++) {
-      var tick = CreateAppendChild('p', row, NBSP);
-      // Action Clicking
-      tick.onmousedown = function (e) {
-        var txt = e.target.innerText;
-        DragOverTickState = txt == NBSP ? 1 : 2;
-        MouseIsDown = true; // Set global state
-        e.target.innerText = txt == NBSP ? "*" : NBSP;
-      }
-      // Action Hovering/dragging
-      tick.onmouseover = function (y, e) {
-        if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
-        else if (e.target.innerText != NBSP) Synthesizers[0].play(GridHeight-y-1, .5, 0); // Play it
-      }.bind(0, y);
-    }
-  }
-}
 
 // Await for user gesture then restart WebAudio
 function PreMain (i) {

@@ -64,7 +64,7 @@ h1 {
 .window > div:nth-child(2) {
   display:inline-block;
   position:relative;
-  z-index:1;
+  /*z-index:1;*/
 }
 
 .window > div:nth-child(3) {
@@ -100,6 +100,7 @@ h1 {
  text-align:center; 
  color: black;
  margin:1ch;
+ white-space:nowrap;
 }
 
 .piano > div {
@@ -216,19 +217,17 @@ h1 {
 .volume:hover > p { display: inline-block }
 
 
-.grid { overflow:scroll; height:28ch; }
+.phrasesheet { height:40ch; overflow:scroll; width:calc(100vw - 2ch); white-space:nowrap; }
+.phrasesheet > div { background-color:#112; height:1000%; display:inline-block; }
+.phrasesheet > div > p { background-color:#444; position:sticky; top:0; z-index:1; }
+.phrasesheet > div:hover     { background-color:blue; }
+.phrasesheet > div > p:hover { background-color:cyan; }
 
-.grid > div:nth-child(1) { float:left; position:sticky; top:0; left:0; z-index:1; }
-.grid > div:nth-child(1) > p { background-color:#000; border:solid 1px #000; }
-
-.grid > div:nth-child(2) { float:left; clear:both; position:sticky; left:0; }
-.grid > div:nth-child(2) > p { background-color:#222; border:solid 1px #000; }
-
-.grid > div:nth-child(3) { width:calc(100vw - 2ch); }
-.grid > div:nth-child(3) > div:nth-child(1) { position:sticky; top:0; white-space:nowrap; }
-.grid > div:nth-child(3) > div:nth-child(1) > p { background-color:#444; border:solid 1px #000; display:inline-block; }
-.grid > div:nth-child(3) > div:nth-child(1) > p:hover { border:solid 1px #a0a; }
-
-.grid > div:nth-child(3) > div:nth-child(2) > div { white-space:nowrap; }
-.grid > div:nth-child(3) > div:nth-child(2) > div > p       { background-color:#333; border:solid 1px #000; display:inline-block; }
-.grid > div:nth-child(3) > div:nth-child(2) > div > p:hover { background-color:#987; }
+.partgrid { position:absolute; }
+.partgrid > div:nth-child(1) { position:absolute; right:100%}
+.partgrid > div:nth-child(1) > p { background-color:#00fd; }
+.partgrid > div:nth-child(1) > div > p { background-color:#333d; }
+.partgrid > div:nth-child(2) > p { background-color:#444d; display:inline-block; }
+.partgrid > div:nth-child(3) > div > p { background-color:#222d; display:inline-block; }
+div.partgrid div p:hover,
+div.partgrid div b:hover { background-color:yellow; }
