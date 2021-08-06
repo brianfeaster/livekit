@@ -24,9 +24,9 @@
 </div>
 
 <div class="window">
-  <div>PHRASE SHEET</div>
+  <div>PHRASE</div>
   <div class="knobs">&nbsp;</div>
-  <div id="phrasesheet1" class="phrasesheet"></div>
+  <div id="phrase" class="phrase"></div>
 </div>
 
 <div class="window">
@@ -121,8 +121,6 @@ var ToggleElementDisplay = function (e1, e2) {
 }
 var ElementById = function(id) { return document.getElementById(id); }
 
-var ctx = (window.AudioContext && new window.AudioContext()) || 
-          (window.webkitAudioContext && new window.webkitAudioContext());
 
 /******************************************************************************
   Debug message console and error checking
@@ -158,6 +156,7 @@ var DB = (function () {
   // Create the instance which is a function.  Also create the clear function.
   if (!consoleElement) {
     self = function (s) { console.log(s); lastPostType = false;}
+    self.error = function (s) { console.error(s); lastPostType = false;}
     self.log = self;
     self.post  = function (t, s) { // For the console, only the first post type is displayed.
       if (t != lastPostType) {
@@ -201,13 +200,23 @@ var DB = (function () {
 
   self.check = function (expr, msg) {
     status = status && expr;
-    return expr || self(msg) && false;
+    return expr || self.error(msg) && false;
   }
 
   self.status = function () { return status; }
 
   return self;
 })(); // DB
+
+
+
+/******************************************************************************
+  Useful DAW objects
+******************************************************************************/
+var ctx = (window.AudioContext && new window.AudioContext()) || 
+          (window.webkitAudioContext && new window.webkitAudioContext());
+DB.check(ctx, "Missing window.AudioContext.  Use Chrome browser.");
+
 
 /******************************************************************************
   Hyphen - WebSocket baed Key/Value store
@@ -259,7 +268,7 @@ var hyphen =
 
    return self
 
-})();
+});
 
 
 /******************************************************************************
@@ -661,7 +670,7 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
     startKey += startOctave * 12; // Adjust initial key to account for octave
     for (var k=0; (k < keyCount); ++k) {
 
-      if (sharps[(k + startKey)%12]) {
+      if (1==sharps[(k + startKey)%12]) {
         // Create the sharp key
         newKey = CreateAppendChild('p', _pianoDOM);
       } else {
@@ -3013,10 +3022,10 @@ var TickerTimer = (function (ctx) {
 
 ******************************************************************************/
 var PhraseSheet = function (id, tickCount) {
-  var element = ElementById(id); // phrasesheet1
+  var element = ElementById(id); // phrase
   var ticks = [];
 
-  // Create the ticks with a header and no parts
+  // Create the phrase's tick columns along with each top row tick marks.
   // [ [[0]] [[1]] ... ]
   for (var y=0; y < tickCount; y++) {
     ticks[y] = CreateAppendChild('div', element);
@@ -3034,34 +3043,66 @@ var PhraseSheet = function (id, tickCount) {
   PartSynth - Model a part which for now is a drawable synth grid.
 ******************************************************************************/
 var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth) {
-  var phrasesheet = phraseSheetObj.element(); // Parent object's element
+  // Consider parent
+  var phrase = phraseSheetObj.element(); // Parent object's element
 
-  // [... [ [2] [] ] ...]
-  var part = CreateAppendChild('div', phrasesheet.children[tickIdx]); // The Part element
-  part.className = "partgrid";
-  part.style.top = Math.max(height, phrasesheet.firstChild.firstChild.scrollHeight)+"px";
-  //part.style.marginLeft = "-1ch"
+  // Creat part window
+  // []
+  var part = CreateAppendChild('div', phrase.children[tickIdx]); // The Part element
+  part.className = "window";
+  part.style.top = Math.max(height, phrase.firstChild.firstChild.scrollHeight)+"px";
 
-  // Labels - left most cells of row
-  var Labels = CreateAppendChild('div', part);
-  var corner = CreateAppendChild('p', Labels); // Corner
-  corner.innerHTML="&#x266b;";
-  var labels = CreateAppendChild('div', Labels);
-  for (var y=0; y<GridHeight; y++) { CreateAppendChild('p', labels, y); }
+  // Header  - left most cells of row
+  var title    = CreateAppendChild('div', part, "Part");
+  var controls = CreateAppendChild('div', part, NBSP);
+  controls.className = "knobs";
+  var body = CreateAppendChild('div', part);
+  body.className = "partpiano";
 
+  //var labels = CreateAppendChild('div', Labels);
+  //Labels.className = "vpiano";
+
+  let noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+ // Naturals (non-zero) decending from C.  If positive, then 1=left of sharp, 2=between sharps, 3=right of sharp
+  let naturals = [1, 0, 2, 0, 3, 1, 0, 2, 0, 2, 0, 3];
+/*
+  for (var y=GridHeight-1; 0<=y; y--) {
+    if (sharps[y%12]) {
+      CreateAppendChild('p', labels, NBSP);
+    } else {
+      CreateAppendChild('div', labels, notes[y%12]);
+    }
+  }
+*/
 
   // Grid tick header
-  var ticks = CreateAppendChild('div', part);
-  for (var y=0; y<GridWidth; y++) { CreateAppendChild('p', ticks, (Floor(y/8) % 10)); }
+  var headerTicks = CreateAppendChild('div', body);
+  for (var y=0; y<GridWidth; y++) {
+    if (0 == y%8) {
+      CreateAppendChild('p', headerTicks, "*");
+    } else if (0 == y%4) {
+      CreateAppendChild('p', headerTicks, "+");
+    } else {
+      CreateAppendChild('p', headerTicks, "-");
+    }
+  }
 
-  // Grid of ticks
-  var grid = CreateAppendChild('div', part); // Raw cells
+  // Grid of notes
+  var grid = CreateAppendChild('div', body); // Raw cells
 
   // Create ticks
-  for (var y=0; y<GridHeight; y++) {
-    let row = CreateAppendChild('div', grid); // Container of row of ticks
+  for (var y = GridHeight - 1; 0 <= y; y--) {
+    let natural = naturals[y%12];
+
+    let row = CreateAppendChild(0==natural?"p":"div", grid); // Container of row of ticks
+    if (natural) {
+      row.className = ["natleft", "natin", "natright"][natural-1];
+    }
+
+    let header = CreateAppendChild("p", row, naturals[y%12] ? noteNames[y%12] : NBSP);
+    let notes = CreateAppendChild("div", row);
     for (var x=0; x<GridWidth; x++) {
-      var tick = CreateAppendChild('p', row, NBSP);
+      var tick = CreateAppendChild('p', notes, NBSP);
       // Action Clicking
       tick.onmousedown = function (e) {
         var txt = e.target.innerText;
@@ -3072,23 +3113,23 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
       // Action Hovering/dragging
       tick.onmouseover = function (y, e) {
         if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
-        else if (e.target.innerText != NBSP) Synthesizers[0].play(GridHeight-y-1, .5, 0); // Play it
+        else if (e.target.innerText != NBSP) Synthesizers[0].play(y, .5, 0); // Play it
       }.bind(0, y);
     }
   }
 
-  // Clicking and dragging on the corner will move part around in the phrase/sheet
-  corner.onmousedown = function (e) {
+  // Clicking and dragging on the title will move part around in the phrase/sheet
+  title.onmousedown = function (e) {
     MouseIsDown = true; // Set global state
-    var tickHeight = phrasesheet.firstChild.firstChild.scrollHeight;
-    var tickWidth  = phrasesheet.lastChild.offsetLeft / (phrasesheet.childElementCount-1); // Tick width take average width of all ticks
-    var leftMargin = phrasesheet.offsetLeft-phrasesheet.scrollLeft; // Account for element's margin and scrolled offset
-    phrasesheet.onmousemove = function (offset, e) {
-       if (!MouseIsDown) { phrasesheet.onmousemove = null; return; } // Maybe nothing to do
+    var tickHeight = phrase.firstChild.firstChild.scrollHeight;
+    var tickWidth  = phrase.lastChild.offsetLeft / (phrase.childElementCount-1); // Tick width take average width of all ticks
+    var leftMargin = phrase.offsetLeft-phrase.scrollLeft; // Account for element's margin and scrolled offset
+    phrase.onmousemove = function (offset, e) {
+       if (!MouseIsDown) { phrase.onmousemove = null; return; } // Maybe nothing to do
        // Adjust part's vertical position
        part.style.top = Math.max(offset + e.y, tickHeight) + "px";
        // Move part to another tick
-       phrasesheet.children[Floor((e.x-leftMargin+1) / tickWidth)].appendChild(part);
+       phrase.children[Floor((e.x-leftMargin+1) / tickWidth)].appendChild(part);
     }.bind(null, part.offsetTop-e.y);
   };
 
@@ -3477,8 +3518,6 @@ var setupControls = function (keyboard) {
 var Slider = new DOMSlider();
 
 
-DB.check(ctx, "Missing window.AudioContext.  Use Chrome browser.");
-
 var Sheet0; // New hotness
 var Keyboard0;
 var DrumKit0;
@@ -3548,7 +3587,7 @@ document.body.addEventListener('touchstart', function (event) {if (event.touches
 ******************************************************************************/
 var addphrase;
 var midi = null;
-var PhraseSheet = PhraseSheet("phrasesheet1", 128);
+var PhraseSheet = PhraseSheet("phrase", 128);
 
 function Main () {
   DB("::onload");
@@ -3676,8 +3715,8 @@ function Main () {
     }
   }
 
-  PartSynth(PhraseSheet, 2, 1*25, 4, 4);
-  PartSynth(PhraseSheet, 8, 4*25, 61, 64);
+  PartSynth(PhraseSheet, 2, 1*25, 8, 16);
+  PartSynth(PhraseSheet, 5, 1*25, 61, 32); // startTick, verticalPos, keyCount <=61, tickCount
 
   // The ticker + timer state object.
   (tickCount => TickerTimer.setLength(tickCount).setEnd(tickCount-1).setStart(0).rewind())(PhraseSheet.element().childElementCount);
