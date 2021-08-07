@@ -138,6 +138,7 @@ var ElementById = function(id) {
   Usage::
     DB("string")           -- Send string to info window.  Behaves like a pre element.
     DB.log("string")       -- Send string to console.log.
+    DB.error("string")     -- Send string to console.log.
     DB.post(type, string)  -- Send string to info window band keeps track of type.  Subsequent typed messages replace the last.
     DB.post(type, string)  -- Send string to info window band keeps track of type.  Subsequent typed messages replace the last.
     DB.clear()             -- Empty the entire DB element.
@@ -162,14 +163,11 @@ var DB = (function () {
 
   // Create the instance which is a function.  Also create the clear function.
   if (!consoleElement) {
-    self = function (s) { console.log(s); lastPostType = false;}
-    self.error = function (s) { console.error(s); lastPostType = false;}
+    self = function (s) { console.log(s);}
     self.log = self;
+    self.error = function (s) { console.error(s);}
     self.post  = function (t, s) { // For the console, only the first post type is displayed.
-      if (t != lastPostType) {
-        console.log("[" + t + "]" + s);
-        lastPostType = t;
-      }
+      console.log("[" + t + "]" + s);
     }
     self.clear = function () { lastPostType = false; }
   } else {
@@ -186,6 +184,7 @@ var DB = (function () {
       shouldNewline = lastPostType = false;
     }
     self.log = function (s) { console.log(s); }
+    self.error = function (s) { console.error(s); }
     self.post = function (t, s) {
       if (t == lastPostType) {
         if (lastPost == s) { ++repeatCount; }
@@ -767,16 +766,21 @@ var AudioBuffers = function (ctx, filenames) {
   }
 
   function _loadRawAudioFiles () {
+    let count=0;
     filenames.forEach(function (fn, i) { // forEach passes in each ary element and the index.
       var client = new XMLHttpRequest();
       client.open('GET', fn);
       client.responseType = "arraybuffer";
       client.onreadystatechange = // Callback after remote file has been loaded
         function (e) {
-          if (4 != client.readyState) return;
+          if (4 != client.readyState) { return; }
           var statusState = ((200 == client.status) || (0 == client.status) && (null != client.response)); // When loaded locally with --allow-file-access-from-files, status is 0 so must check client.response instead
           DB.check(statusState, "ERROR: AudioBuffers: " + client.status + " '" + (client.responseURL || fn) + "'");
           if (statusState) {
+            //DB.post("AudioBuffers", `${i}/${filenames.length} ${fn}`);
+            if (++count == filenames.length) {
+              DB.post("AudioBuffers", `${count} files acquired`);
+            }
             //DB.log("LOADED " + fn);
             var samples = new Int16Array(client.response); // Consider u8 ary as s16 ary.
             // Normalized each s16 sample to f32 between -1 and 1.
@@ -826,19 +830,23 @@ var AudioBuffers = function (ctx, filenames) {
     .connect(destination, idx) Set destination to destination
     .connected(idx)            Get destination to destination
 ******************************************************************************/
-var Drumkit = function (ctx, color, audioBuffers) {
+var Drumkit = function (ctx, color, filenames) {
   //// Local
+  var audioBuffers = new AudioBuffers(ctx, filenames)
   var bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
   var destination = Array(audioBuffers.length).fill(Destinations.input(0)); // Default destination of each sound to default
   //// Public
   this.length = audioBuffers.length;
   this.name = function (pad) {
-    return (undefined == pad) ? "TR-808" : audioBuffers.fileName(pad);
+    return (undefined == pad) ? "TR-808" : audioBuffers.fileName(pad).slice(0,-4); // Chop ".raw"
    }
   this.color = color
   this.play = function (pad, vol, when) {
     var audioBuffer = audioBuffers.audioBuffer(pad);
-    if (!audioBuffer) return; // Do nothing if no audio buffer.
+    if (!audioBuffer) {
+      DB.error(`Drumkit.play offset ${pad} expect 0..${this.length-1}`);
+      return; // Do nothing if no audio buffer.
+    }
     var now = (when || ctx.currentTime); // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
     var source = ctx.createBufferSource();
     source.buffer = audioBuffer;
@@ -976,8 +984,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
 
   _attackVal.style.position = "absolute";
   _attackVal.innerText = "100";
-  _attackVal.style.right = "-1em"
-  _attackVal.style.top = "-1em"
+  _attackVal.style.right = "-1em";
+  _attackVal.style.top = "-1em";
   _attackVal.style.backgroundColor = "blue"
 
   // Sustain button
@@ -2871,7 +2879,7 @@ var restoreSongLK0 = function (keyboard, drumKit) {
  Event loops
 
 ******************************************************************************/
-var Pause = false;
+var Pause = true;
 var Beat = 0; // Forever incrementing but resetting to BeatInitial after all beats sent to audio context.
 var nextBeatTime = 0.00; // This should be initialized a bit beyond whatever ctx.currentTime is to allow for ramp-up of the code.
 
@@ -2986,7 +2994,7 @@ var TickerTimer = (function (ctx) {
   let tick = end; // Cyclic tick between a subrange of start..end
   let time = 0; // Time to output audio for the tick
 
-  let elementState = document.createElement("div");
+  let elementState = document.createElement("p");
 
   let setElementState = function () {
     elementState.innerText = `[${start} ${tick} ${end}/${length}]`;
@@ -3073,6 +3081,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   self.partsOnTick = function (tick) {
     return parts.filter( p => p.isOnTick(tick) );
   }
+  self.partsResetZ = () => parts.forEach( p => p.element().style.zIndex="" );
 
   // Reset the TickerTimer state object
   tickertimer
@@ -3088,7 +3097,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
 /******************************************************************************
   PartSynth - Model a part which for now is a drawable synth grid.
 ******************************************************************************/
-var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth) {
+var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth, playable) {
   // Consider parent
   var phrase = phraseSheetObj.element(); // Parent object's element
 
@@ -3100,26 +3109,11 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
 
   // Header  - left most cells of row
   var title    = CreateAppendChild('div', part, "Part");
-  var controls = CreateAppendChild('div', part, NBSP);
+  var controls = CreateAppendChild('div', part);
+
   controls.className = "knobs";
   var body = CreateAppendChild('div', part);
   body.className = "partpiano";
-
-  //var labels = CreateAppendChild('div', Labels);
-  //Labels.className = "vpiano";
-
-  let noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
- // Naturals (non-zero) decending from C.  If positive, then 1=left of sharp, 2=between sharps, 3=right of sharp
-  let naturals = [1, 0, 2, 0, 3, 1, 0, 2, 0, 2, 0, 3];
-/*
-  for (var y=GridHeight-1; 0<=y; y--) {
-    if (sharps[y%12]) {
-      CreateAppendChild('p', labels, NBSP);
-    } else {
-      CreateAppendChild('div', labels, notes[y%12]);
-    }
-  }
-*/
 
   // Grid tick header
   var headerTicks = CreateAppendChild('div', body);
@@ -3136,38 +3130,74 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
   // Grid of lables and notes
   var grid = CreateAppendChild('div', body); // Raw cells
 
+  // Naturals (non-zero) starting from C (for simpler CSS).  Non-zero0 -> 1:left of sharp  2:between sharps  3:right of sharp
+  let naturals  = [1,   0,    2,   0,    3,   1,   0,    2,   0,    2,   0,    3];
+  let noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
   // Create ticks
   for (var y = GridHeight - 1; 0 <= y; y--) {
-    let natural = naturals[y%12];
-
-    let row = CreateAppendChild(0==natural?"p":"div", grid); // A row: Container of labels and ticks
-    if (natural) {
-      row.className = ["natleft", "natin", "natright"][natural-1];
-    }
-
-    let header = CreateAppendChild("p", row, naturals[y%12] ? noteNames[y%12] : NBSP);
-    let notes = CreateAppendChild("div", row);
-    for (var x=0; x<GridWidth; x++) {
-      var tick = CreateAppendChild('p', notes, NBSP);
-      // Action Clicking
-      tick.onmousedown = function (e) {
-        var txt = e.target.innerText;
-        DragOverTickState = txt == NBSP ? 1 : 2;
-        MouseIsDown = true; // Set global state
-        e.target.innerText = txt == NBSP ? "*" : NBSP;
+    if (playable instanceof Synthesizer) {
+      let natural = naturals[y%12];
+  
+      let row = CreateAppendChild(0==natural?"p":"div", grid); // A row: Container of label and ticks
+      if (natural) {
+        row.className = ["natleft", "natin", "natright"][natural-1];
       }
-      // Action Hovering/dragging
-      tick.onmouseover = function (y, e) {
-        if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
-        else if (e.target.innerText != NBSP) Synthesizers[0].play(y, .5, 0); // Play it
-      }.bind(0, y);
+  
+      let header = CreateAppendChild("p", row, naturals[y%12] ? noteNames[y%12] : NBSP);
+  
+      let notes = CreateAppendChild("div", row);
+      for (var x=0; x<GridWidth; x++) {
+        var tick = CreateAppendChild('p', notes, NBSP);
+        // Action Clicking
+        tick.onmousedown = function (e) {
+          var txt = e.target.innerText;
+          DragOverTickState = txt == NBSP ? 1 : 2;
+          MouseIsDown = true; // Set global state
+          e.target.innerText = txt == NBSP ? "*" : NBSP;
+        }
+        // Action Hovering/dragging
+        tick.onmouseover = function (y, e) {
+          if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
+          else if (e.target.innerText != NBSP) playable.play(y, .5, 0); // Play it
+        }.bind(0, y);
+      }
+    } else {
+      let row = CreateAppendChild("div", grid); // A row: Container of label and ticks
+      row.className = "drumkit";
+      let header = CreateAppendChild("p", row, playable.name(y));
+      let notes = CreateAppendChild("div", row);
+      for (var x=0; x<GridWidth; x++) {
+        var tick = CreateAppendChild('p', notes, NBSP);
+        // Action Clicking
+        tick.onmousedown = function (e) {
+          var txt = e.target.innerText;
+          DragOverTickState = txt == NBSP ? 1 : 2;
+          MouseIsDown = true; // Set global state
+          e.target.innerText = txt == NBSP ? "*" : NBSP;
+        }
+        // Action Hovering/dragging
+        tick.onmouseover = function (y, e) {
+          if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
+          else if (e.target.innerText != NBSP) playable.play(y, .5, 0); // Play it
+        }.bind(0, y);
+      }
     }
   }
 
+  // Toggle body
+  var collapse = CreateAppendChild('p', controls, "-");
+  collapse.className = "actor";
+  collapse.onmousedown = e => ToggleElementDisplay(grid);
 
-  // Clicking and dragging on the title will move part around in the phrase/sheet
+
+  // Clicking title will raise it.  Dragging title will move it around the phrase/sheet
   title.onmousedown = function (e) {
     MouseIsDown = true; // Set global state
+
+    phraseSheetObj.partsResetZ(); // Raise this phrase and reset others
+    part.style.zIndex = 1;
+    
     // Intial state
     var tickHeight = phrase.firstChild.firstChild.scrollHeight;
     var tickWidth  = phrase.lastChild.offsetLeft / (phrase.childElementCount-1); // Tick width take average width of all ticks
@@ -3179,20 +3209,22 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
        // Move part to another tick
        let newTick = Floor((e.x-leftMargin+1) / tickWidth);
        if (newTick != tickIdx) {
-         DB(`Moving phrase ${tickIdx} -> ${newTick}`);
          phrase.children[newTick].appendChild(part);
          tickIdx = newTick;
        }
     }.bind(null, part.offsetTop-e.y);
   };
 
-  let ticks = function (y) { return grid.children[y].children[1]; }
 
   let self = function () { };
+  self.element = () => part;
   self.startTick = function () { return tickIdx; }
   self.isOnTick = function (t) {
     return tickIdx <= t && t < tickIdx + GridWidth;
   }
+
+  let ticks = function (y) { return grid.children[y].children[1]; }
+
   self.play = function (gtick, time) {
     let tick = gtick - tickIdx;
     if ( 0 <= tick && tick < GridWidth ) {
@@ -3207,7 +3239,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
             ++sustain;
             ++next;
           }
-          Synthesizers[0].play(GridHeight-y-1, .5, time, sustain);
+          playable.play(GridHeight-y-1, .5, time, sustain);
         }
       }
     } else {
@@ -3218,7 +3250,6 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
   phraseSheetObj.partAdd(self);
 
   return self;
-
 }
 
 
@@ -3657,6 +3688,13 @@ window.onmousemove = function (event) {
 document.body.addEventListener('touchstart', function (event) {if (event.touches.length=='fack') event.preventDefault(); DB(event.touches);}, true);
 
 
+// Prevent space from scrolling browser window as it's used for DAW controls.
+window.addEventListener('keydown', function(e) {
+  if(e.keyCode == 32 && e.target == document.body) {
+    e.preventDefault();
+  }
+});
+
 /******************************************************************************
   onload
 ******************************************************************************/
@@ -3693,22 +3731,21 @@ function Main () {
 
   // MIDI fun
   function onMIDISuccess( m ) {
-    m.inputs.forEach(function(e){e.onmidimessage=function(e){keyboard.midi(e);};});
+    m.inputs.forEach( e => {e.onmidimessage=function(e){keyboard.midi(e);};} );
   }
 
-  function onMIDIFailure(msg) { DB("MIDI "+msg ); }
+  function onMIDIFailure(msg) { DB.error("MIDI "+msg ); }
 
   if (navigator.requestMIDIAccess) {
-    navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure );
+    navigator.
+    requestMIDIAccess({"sysex":true, "software":true}).then(onMIDISuccess, onMIDIFailure);
   }
 
   setupControls(keyboard); // Setup menus and moveable buttons.
 
   // Load the audio asynchronously and create the default drumkit.
-  //var filenames = ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"];
-  var filenames = []; // DEBUG
-  var audioBuffers = new AudioBuffers(ctx, filenames)
-  var drumKit = new Drumkit(ctx, "orange", audioBuffers);
+  var filenames = ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"];
+  var drumKit = new Drumkit(ctx, "orange", filenames);
 
   Keyboard0 = keyboard;
   DrumKit0 = drumKit
@@ -3725,7 +3762,7 @@ function Main () {
     document.getElementById('synths').appendChild(Synthesizer0.element);
   }
 
-/*
+
   if (!Synthesizer1) {
     Synthesizer1 = new Synthesizer(ctx, false, 1, keyboard, "#4f4");
     document.getElementById('synths').appendChild(Synthesizer1.element);
@@ -3740,7 +3777,7 @@ function Main () {
     Synthesizer3 = new Synthesizer(ctx, false, 3, keyboard, "#84f");
     document.getElementById('synths').appendChild(Synthesizer3.element);
   }
-*/
+
   restoreSongLK1(keyboard, drumKit);
 
   // LiveKa7 v0
@@ -3790,8 +3827,8 @@ function Main () {
     }
   }
 
-  PartSynth(PhraseSheet, 2, 1*25, 8, 16);
-  PartSynth(PhraseSheet, 5, 1*25, 61, 32); // startTick, verticalPos, keyCount <=61, tickCount
+  PartSynth(PhraseSheet, 24, 1*20, 16, 16, DrumKit0 );
+  //PartSynth(PhraseSheet, 19, 1*20, 61, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
 
   setInterval(sequencerLoop, 50);
