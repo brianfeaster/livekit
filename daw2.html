@@ -25,7 +25,7 @@
 
 <div class="window">
   <div>PHRASE</div>
-  <div class="knobs">&nbsp;</div>
+  <div class="knobs"> <p>|&gt;</p> <p>&lt;-&gt;</p> </div>
   <div id="phrase" class="phrase"></div>
 </div>
 
@@ -92,7 +92,7 @@
   <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
 </div>
 
-<img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.gif" onclick="ctx.resume()"/>
+<img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.jpg" onclick="ctx.resume()"/>
 
 
 <script type="text/javascript">//<![CDATA[
@@ -108,18 +108,25 @@ var Pow   = Math.pow;
 var Abs   = Math.abs;
 var Rnd   = Math.random;
 var Mod   = function (n,d) { return n - d * Math.floor(n/d); }
+
 var CreateAppendChild = function (name, element, text) {
   var e = element.appendChild(document.createElement(name));
   if (text != undefined) { e.innerText = text; }
   return e;
 }
-var CreateInsertBefore = function (name, element) { return element.insertBefore(document.createElement(name), element.firstChild); }
+
+var CreateInsertBefore = function (name, element) {
+  return element.insertBefore(document.createElement(name), element.firstChild);
+}
+
 var ToggleElementDisplay = function (e1, e2) {
-  var off = e1.style.display == "none"; // 'none' implies not displayed.  '' implies the default CSS value.
+  let off = e1.style.display == "none"; // 'none' implies not displayed.  '' implies the default CSS value.
   e1.style.display = off ? "" : "none"; // Toggle e1's display state.
   if (e2) { e2.style.display = off ? "none" : ""; } // e2's style is opposite e1.
 }
-var ElementById = function(id) { return document.getElementById(id); }
+var ElementById = function(id) {
+ return document.getElementById(id);
+}
 
 
 /******************************************************************************
@@ -2970,18 +2977,24 @@ var reset = function (event) {
 ******************************************************************************/
 var TickerTimer = (function (ctx) {
   // Settings
-  var jiffy = .25; // Tick length in seconds (speed of music)
-  var lead  = 1.0; // Audio lead pre-buffer length in seconds
-  var length = 8; // Total number of ticks
-  var start  = 0; // Start tick
-  var end    = length-1; // End tick
+  let jiffy = .25; // Tick length in seconds (speed of music)
+  let lead  = 1.0; // Audio lead pre-buffer length in seconds
+  let length = 8; // Total number of ticks
+  let start  = 0; // Start tick
+  let end    = length-1; // End tick
   // Dynamic State
-  var tick = end; // Cyclic tick between a subrange of start..end
-  var time = 0; // Time to output audio for the tick
+  let tick = end; // Cyclic tick between a subrange of start..end
+  let time = 0; // Time to output audio for the tick
+
+  let elementState = document.createElement("div");
+
+  let setElementState = function () {
+    elementState.innerText = `[${start} ${tick} ${end}/${length}]`;
+  }
 
   // Request the next tick and time to render it.  False implies not ready.
-  var self = function () {
-    var now = ctx.currentTime;
+  let self = function () {
+    let now = ctx.currentTime;
     // Skip if "lead" seconds have already been processed
     if (now + lead <= time) { return false; }
     // Increment tick.  Wrap to "start" if past "end"
@@ -2990,29 +3003,34 @@ var TickerTimer = (function (ctx) {
     time += jiffy;
     if (time < now) { time = now + 0.25; }
     // Return next tick to process and time to render it
+    setElementState();
     return [tick, time];
   };
   self.rewind = function () { // Reset state so next tick is 0 and next time will be nowish.
     tick = end;
     time = 0;
+    setElementState();
     return self;
   }
-  self.setStart  = function (i) { if (i<=end) { start = i; } return self; }
-  self.setEnd    = function (i) { if (start<=i) { end = i; } return self; }
-  self.setLength = function (i) { length=i; if (length<=end) { end = length-1; } return self; }
+  self.setStart  = function (i) { if (i<=end) { start = i; setElementState(); } return self; }
+  self.setEnd    = function (i) { if (start<=i) { end = i; setElementState(); } return self; }
+  self.setLength = function (i) { length=i; if (length<=end) { end = length-1; setElementState(); } return self; }
   // Derive the actual current tick (which will most likely have already been processed)
   // When deriving the live beat for DOM highlighting, must do so within the current active beat range
   // So the distance between (BeatTime - currentTime) % beatDuration is how beats to subtract from Beat
   // to get the live beat.  But if this is less than BeatInitial, must add the BeatRange to compensate..
   self.tickLive = function () {
-    var now = ctx.currentTime;
-    var ticksAhead = tick - (time - now) / jiffy;
-    var tickLive = Mod(Floor(ticksAhead)-start, end-start+1)+start;
+    let now = ctx.currentTime;
+    let ticksAhead = tick - (time - now) / jiffy;
+    let tickLive = Mod(Floor(ticksAhead)-start, end-start+1)+start;
     return tickLive;
   }
   self.lastTime = function () { return time + jiffy; }
   self.jiffy = function () { return jiffy; }
+  self.elementState = function () { return elementState; }
+  self.getRange = function () { return [start, end]; }
 
+  setElementState();
   return self;
 })(ctx);
 
@@ -3021,20 +3039,48 @@ var TickerTimer = (function (ctx) {
   PhraseSheet - Manage parts on a dynamic phrase/sheet.
 
 ******************************************************************************/
-var PhraseSheet = function (id, tickCount) {
+var PhraseSheet = function (id, tickCount, tickertimer) {
   var element = ElementById(id); // phrase
-  var ticks = [];
+
+  // Debugging:: hxiPut the TickerTimer's state element to the title bar
+  element.previousElementSibling.appendChild(tickertimer.elementState());
+
+  let ticks = []; // The row of ticks [ [header [parts]] ... ]
+  let parts = []; // List of all Part objects created.
 
   // Create the phrase's tick columns along with each top row tick marks.
   // [ [[0]] [[1]] ... ]
   for (var y=0; y < tickCount; y++) {
     ticks[y] = CreateAppendChild('div', element);
-    CreateAppendChild('p', ticks[y], (Floor(y/8) % 10));
+    let header = CreateAppendChild('p', ticks[y], (Floor(y/8) % 10));
+    header.onmousedown = function (y, header, e) {
+      if (e.shiftKey) { tickertimer.setEnd(y); }
+      else { tickertimer.setStart(y); }
+      let [start, end] = tickertimer.getRange();
+      // Reset Phrase tick header highlights.
+      for (var i=0; i < tickCount; i++) {
+        ticks[i].firstChild.style.color = (i<start || end<i) ? "#555" : "";
+      }
+    }.bind(null, y, header);
   }
 
   var self = function () { };
   self.element = function () { return element; }
   self.tick = function (i) { return ticks[i]; }
+  self.partAdd = function (p) { parts.push(p); return self; }
+
+  // Get list of Parts that lay on this tick.
+  self.partsOnTick = function (tick) {
+    return parts.filter( p => p.isOnTick(tick) );
+  }
+
+  // Reset the TickerTimer state object
+  tickertimer
+    .setLength(tickCount)
+    .setEnd(tickCount-1)
+    .setStart(0)
+    .rewind();
+
   return self;
 };
 
@@ -3087,14 +3133,14 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
     }
   }
 
-  // Grid of notes
+  // Grid of lables and notes
   var grid = CreateAppendChild('div', body); // Raw cells
 
   // Create ticks
   for (var y = GridHeight - 1; 0 <= y; y--) {
     let natural = naturals[y%12];
 
-    let row = CreateAppendChild(0==natural?"p":"div", grid); // Container of row of ticks
+    let row = CreateAppendChild(0==natural?"p":"div", grid); // A row: Container of labels and ticks
     if (natural) {
       row.className = ["natleft", "natin", "natright"][natural-1];
     }
@@ -3118,20 +3164,60 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
     }
   }
 
+
   // Clicking and dragging on the title will move part around in the phrase/sheet
   title.onmousedown = function (e) {
     MouseIsDown = true; // Set global state
+    // Intial state
     var tickHeight = phrase.firstChild.firstChild.scrollHeight;
     var tickWidth  = phrase.lastChild.offsetLeft / (phrase.childElementCount-1); // Tick width take average width of all ticks
     var leftMargin = phrase.offsetLeft-phrase.scrollLeft; // Account for element's margin and scrolled offset
     phrase.onmousemove = function (offset, e) {
-       if (!MouseIsDown) { phrase.onmousemove = null; return; } // Maybe nothing to do
+       if (!MouseIsDown) { phrase.onmousemove = null; return; } // Maybe stop handling this event
        // Adjust part's vertical position
        part.style.top = Math.max(offset + e.y, tickHeight) + "px";
        // Move part to another tick
-       phrase.children[Floor((e.x-leftMargin+1) / tickWidth)].appendChild(part);
+       let newTick = Floor((e.x-leftMargin+1) / tickWidth);
+       if (newTick != tickIdx) {
+         DB(`Moving phrase ${tickIdx} -> ${newTick}`);
+         phrase.children[newTick].appendChild(part);
+         tickIdx = newTick;
+       }
     }.bind(null, part.offsetTop-e.y);
   };
+
+  let ticks = function (y) { return grid.children[y].children[1]; }
+
+  let self = function () { };
+  self.startTick = function () { return tickIdx; }
+  self.isOnTick = function (t) {
+    return tickIdx <= t && t < tickIdx + GridWidth;
+  }
+  self.play = function (gtick, time) {
+    let tick = gtick - tickIdx;
+    if ( 0 <= tick && tick < GridWidth ) {
+      for ( var y=0; (y < GridHeight); ++y ) {
+        let row = ticks(y).children;
+        var note = row[tick];
+        if (note.innerText == "*") {
+          var sustain=0;
+          var next = tick+1;
+          while (next < GridWidth
+                 && row[next].innerText == "-") {
+            ++sustain;
+            ++next;
+          }
+          Synthesizers[0].play(GridHeight-y-1, .5, time, sustain);
+        }
+      }
+    } else {
+      DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+GridWidth-1}`);
+    }
+  }
+
+  phraseSheetObj.partAdd(self);
+
+  return self;
 
 }
 
@@ -3190,48 +3276,37 @@ var sequencerLoop = function () {
   } // while
 */
   if (Pause) { return; }
-  var tt = TickerTimer();
+  let tt = TickerTimer();
   if (tt) {
-    var [tick, time] = tt;
-    var rowCount = Grid.children.length; 
-    for (var y=0; y < rowCount; ++y) {
-      var children = Grid.children.item(y).children;
-      var childrenCount = children.length;
-      var e = children.item(tick);
-      if (e.innerText == "*") {
-        var sustain=0;
-        var next = tick+1;
-        while (next < childrenCount
-               && children.item(next).innerText == "-") {
-          ++sustain;
-          ++next;
-        }
-        Synthesizers[0].play(rowCount-y-1, .5, time, sustain);
-      }
-    }
+    let [tick, time] = tt; // Tick to process and time to emit
+
+    PhraseSheet.partsOnTick(tick).forEach( part => {
+      part.play(tick, time);
+    });
+
   }
-} // sequencerLoop()
+} // sequencerLoop
 
 
 var rendererLoop = (function (_lastRef, _lastPhrase, _lastBeat, _lastTick) { return function () {
-  if ((ctx.currentTime <= TickerTimer.lastTime() ) && Grid != null) { // Only if audio has been queued and a Grid exists
+  if ((ctx.currentTime <= TickerTimer.lastTime() ) && PhraseSheet != null) { // Only if audio has been queued and a Grid exists
+    let phrase = PhraseSheet.element();
     var tick = TickerTimer.tickLive();
 
     // Scroll the grid so current tick is centered somewhere
-    var grid1 = ElementById("grid1");
-    var tickWidth = Grid.firstChild.children.item(1).offsetLeft - Grid.firstChild.children.item(0).offsetLeft;
+    var tickWidth = phrase.children.item(1).offsetLeft - phrase.children.item(0).offsetLeft;
 
-    var pos = Floor(grid1.clientWidth / tickWidth / 2);
+    var pos = Floor(phrase.clientWidth / tickWidth / 2);
 
-    grid1.scrollLeft =
-      Grid.firstChild.children.item(tick).offsetLeft
+    phrase.scrollLeft =
+      phrase.children.item(tick).offsetLeft
       - (pos-1) * tickWidth
-      - Grid.firstChild.children.item(0).offsetLeft; // The row labels are a different size
+      - phrase.children.item(0).offsetLeft; // The row labels are a different size
 
-    let element = Grid.parentElement.firstChild.children.item(_lastTick);
+    let element = phrase.children.item(_lastTick);
     element.style.background=""; 
 
-    element = Grid.parentElement.firstChild.children.item(tick);
+    element = phrase.children.item(tick);
     element.style.background="red"; 
     _lastTick = tick;
   }
@@ -3587,7 +3662,7 @@ document.body.addEventListener('touchstart', function (event) {if (event.touches
 ******************************************************************************/
 var addphrase;
 var midi = null;
-var PhraseSheet = PhraseSheet("phrase", 128);
+var PhraseSheet = PhraseSheet("phrase", 128, TickerTimer);
 
 function Main () {
   DB("::onload");
@@ -3718,11 +3793,9 @@ function Main () {
   PartSynth(PhraseSheet, 2, 1*25, 8, 16);
   PartSynth(PhraseSheet, 5, 1*25, 61, 32); // startTick, verticalPos, keyCount <=61, tickCount
 
-  // The ticker + timer state object.
-  (tickCount => TickerTimer.setLength(tickCount).setEnd(tickCount-1).setStart(0).rewind())(PhraseSheet.element().childElementCount);
 
-  //setInterval(sequencerLoop, 50);
-  //setInterval(rendererLoop, 50); // This should only update every tick
+  setInterval(sequencerLoop, 50);
+  setInterval(rendererLoop, 50); // This should only update every tick
 
   DB("--onload [" + DB.status() + "]");
 } // Main

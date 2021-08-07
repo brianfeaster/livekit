@@ -217,7 +217,7 @@ h1 {
 
 .phrase { height:40ch; overflow:scroll; width:calc(100vw - 2ch); white-space:nowrap; position:relative; }
 .phrase > div { background-color:#112; height:1000%; display:inline-block; }
-.phrase > div > p { background-color:#444; position:sticky; top:0; z-index:1; }
+.phrase > div > p { background-color:#333; position:sticky; top:0; z-index:1; }
 .phrase > div > div { position: absolute;; }
 .phrase > div:hover     { background-color:blue; }
 .phrase > div > p:hover { background-color:cyan; }
