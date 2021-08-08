@@ -25,7 +25,19 @@
 
 <div class="window">
   <div>PHRASE</div>
-  <div class="knobs"> <p>|&gt;</p> <p>&lt;-&gt;</p> </div>
+  <div class="knobs">
+    <p>|&gt;</p>
+    <p>&lt;-&gt;</p>
+    <div id="addphrase" style="display:inline-block">
+      <div style="display:none; position:absolute; border:solid 1px #066; white-space:nowrap; background:#000; z-index:2">
+        <div id="createphrase" style="padding:0 1ch;background:#066; text-align:center">Create</div>
+        <input id="addmeasures" value="4" type="number" style="width:3ch"/>Measures<br/>
+        <input id="addbeats" value="4" type="number" style="width:3ch"/>Beats<br/>
+        <input id="addticks" value="4" type="number" style="width:3ch"/>ticks<br/>
+      </div>
+      <p class="actor">new</p>
+    </div>
+  </div>
   <div id="phrase" class="phrase"></div>
 </div>
 
@@ -35,8 +47,8 @@
   <div class="Xknobs">
     <p id="speed" class="actor" contenteditable="true">160</p>
     <p id="mainVolume" >vol</p> <!-- input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" / -->
-    <p class="actor reset" onmousedown="reset(event)">|&lt;</p>
-    <p class="actor pause" onmousedown="pause(event)">||</p>
+    <p class="actor reset" onmousedown="TickerTimer.rewind()">|&lt;</p>
+    <p class="actor pause" onmousedown="TickerTimer.pause()">||</p>
   </div>
 </div>
 
@@ -62,30 +74,6 @@
     <div id="piano1" class="piano"></div>
   </div>
 </div>
-
-<div><div class="window" style="position:relative">
-  <div>MAIN SHEET </div>
-  <div id="sheetbuttons">
-    <div id="addphrase">
-      <div style="display:none; position:absolute; border:solid 1px #066; white-space:nowrap; background:#000; z-index:1">
-        <p id="createphrase" style="padding:0 1ch;background:#066; text-align:center">Create</p>
-        <input id="addmeasures" value="4" type="number" style="width:3ch"/>Measures<br/>
-        <input id="addbeats" value="4" type="number" style="width:3ch"/>Beats<br/>
-        <input id="addticks" value="4" type="number" style="width:3ch"/>ticks<br/>
-      </div>
-      <div class="actor">new</div>
-    </div>
-  </div>
-  <div id="sheet" style="padding-right:0.5em"></div>
-</div></div>
-
-<div><div class="window">
-  <div>PHRASE EDITOR</div>
-  <div>&nbsp;</div>
-  <div>
-    <div id="phrases" class="phrases"></div>
-  </div>
-</div></div>
 
 <div id="skeuomorph" style="display:none; padding:50px; width:700px; min-height:200px; background-color:#444; background-image:url('brushedMetalBackground.jpg')" onmousedown="popupToggle('skeuomorph')">
   <b style="position:absolute; right:1ch; top:1ch">[X]</b>
@@ -492,7 +480,7 @@ var GetStringBase64 = function (get) {
 
 
 /******************************************************************************
-  Inter-broadcast communication message hyper-loop system.
+  Inter-Broadcast Communication message hyper-loop system.
 
   USAGE:: var Icb = new IBC();
 
@@ -811,7 +799,8 @@ var AudioBuffers = function (ctx, filenames) {
 
 
 /******************************************************************************
-  Create a playable drumkit.  Expects a webaudio context and Audio Buffers DB.
+  Create a playable drumkit.  Expects a webaudio context and list of assets to
+  acquire and cache into an AudioBuffer collection.
 
   USAGE::
     var dk = new Drumkit(ctx, color, audioBuffers);
@@ -943,6 +932,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _delSynth.innerText = "-";
 
   // Remove synth only if not not used in any of the synth parts in any of the phrses and not one of the original 4 synths.
+  /*
   _delSynth.onmousedown = function () {
     // Never remove the first four synths as they are used when creating a new phrase. TODO: remove this dependency
     var count=0;
@@ -951,9 +941,10 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     // Count synth usage in all parts of all phrases.
     Sheet0.phrases.map(function(ph){ ph.parts.map(function(pt){ if (self == pt.playable) ++count; }); });
     if (0 < count) { return; } 
-    Synthesizers.splice(synthIndex,1);
+    Synthesizers.splice(synthIndex, 1);
     document.getElementById('synths').removeChild(_element); // Remove myself from DOM
   }
+  */
 
   var _body = CreateAppendChild('div', _element);//  [ Synth1 [-] ]
   _body.className = "knobs";                     //  [            ]
@@ -1438,11 +1429,12 @@ var Destinations = (function (ctx) {
     .playTicks(beat, when) Play the ticks at the specified beat starting at when.
 
 ******************************************************************************/
-var PartGid = 0;
+/*
+var PartGID = 0;
 var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
   //// Local
   var self = this;
-  var _gid = ++PartGid;
+  var _gid = ++PartGID;
   var _beatCounter = 0;
   var _element; // The DOM element
   var _elementBeats = [];
@@ -1520,6 +1512,8 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
     }
   }
 } // Part
+*/
+
 
 /******************************************************************************
   Creates and maintains a set of parts (AKA voices) divided into measures of
@@ -1560,6 +1554,7 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
       setupSynthPart()
 
 ******************************************************************************/
+/*
 var PhraseGlobalCounter = 0;
 var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   //// Local
@@ -1751,10 +1746,11 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
     return _part;
   }
 } // Phrase
-
-
-/* The synth tracks all share one cursor for the keyboard.  It could be the case that there are multiple keyboards.  This means the keyboard should keep track of which part and tick the cursor is.
 */
+
+
+/* The synth tracks all share one cursor for the keyboard.  It could be the case that there are multiple keyboards.  This means the keyboard should keep track of which part and tick the cursor is.  */
+/*
 function setupSynthPart (part, keyboard) {
   var _ibcId = false; // This synth-part's IBC callback.
 
@@ -1851,6 +1847,7 @@ function setupSynthPart (part, keyboard) {
 
   }); // map function
 } // setupSynthPart()
+*/
 
 
 /******************************************************************************
@@ -1879,12 +1876,13 @@ function setupSynthPart (part, keyboard) {
                          character but now high-lighting the background of all
                          beats within the playable range.
 ******************************************************************************/
+/*
 var PhraseReference = function (phrase) {
   //// Local
   var self = this;
 
-  /* Create the sheet-view DOM element: [[Title] [Buttons]
-                                         [Beats and Info ]] */
+  // Create the sheet-view DOM element: [[Title] [Buttons]
+  //                                     [Beats and Info ]]
   var elementIcon = document.createElement('div');
   elementIcon.className = "windowphrasealias";
 
@@ -1975,19 +1973,17 @@ var PhraseReference = function (phrase) {
      Sheet0.updateBeatMarkers();
   }
 
-/*
-  var markInitial = CreateAppendChild('span', _e); // Beat marker element
-  markInitial.style.position = "absolute";
-  markInitial.style.display = "none";
-  markInitial.style.background = "#040";
-  markInitial.innerHTML = "&gt;";
+  //var markInitial = CreateAppendChild('span', _e); // Beat marker element
+  //markInitial.style.position = "absolute";
+  //markInitial.style.display = "none";
+  //markInitial.style.background = "#040";
+  //markInitial.innerHTML = "&gt;";
 
-  var markFinal = CreateAppendChild('span', _e); // Beat marker element
-  markFinal.style.position = "absolute";
-  markFinal.style.display = "none";
-  markFinal.style.background = "#040";
-  markFinal.innerHTML = "&lt;";
-*/
+  //var markFinal = CreateAppendChild('span', _e); // Beat marker element
+  //markFinal.style.position = "absolute";
+  //markFinal.style.display = "none";
+  //markFinal.style.background = "#040";
+  //markFinal.innerHTML = "&lt;";
 
   var cursor = CreateAppendChild('span', _e); // Beat marker element
   cursor.style.position = "absolute";
@@ -2029,21 +2025,20 @@ var PhraseReference = function (phrase) {
     // Consider the global beat values for the first and last beat of this phrase.
     var beatFirst = Sheet0.beatsBefore(self);
     var beatLast = beatFirst + self.beatCount-1;
-/*
-    if ((beatFirst <= initial) && (initial <= beatLast)) {
-      markInitial.style.display = "";
-      markInitial.style.left = (initial - beatFirst) + "ch";
-    } else {
-      markInitial.style.display = "none";
-    }
 
-    if ((beatFirst <= final) && (final <= beatLast)) {
-      markFinal.style.display = "";
-      markFinal.style.left = (final-beatFirst) + "ch";
-    } else {
-      markFinal.style.display = "none";
-    }
-*/
+    //if ((beatFirst <= initial) && (initial <= beatLast)) {
+    //  markInitial.style.display = "";
+    //  markInitial.style.left = (initial - beatFirst) + "ch";
+    //} else {
+    //  markInitial.style.display = "none";
+    //}
+
+    //if ((beatFirst <= final) && (final <= beatLast)) {
+    //  markFinal.style.display = "";
+    //  markFinal.style.left = (final-beatFirst) + "ch";
+    //} else {
+    //  markFinal.style.display = "none";
+    //}
 
     // Color the currently playing beats
     for (var b=0; (b < self.beatCount); ++b) {
@@ -2056,6 +2051,7 @@ var PhraseReference = function (phrase) {
   }
   phrase.referenceAdd(this);
 } // PhraseReference
+*/
 
 
 /******************************************************************************
@@ -2081,6 +2077,7 @@ var PhraseReference = function (phrase) {
     .phraseCount() Get number of live phrases.
     .updateBeatMarkers() Update the beat markers
 ******************************************************************************/
+/*
 var Sheet = function () {
   //// Local
   var self = this;
@@ -2092,23 +2089,23 @@ var Sheet = function () {
   var _buttons = document.getElementById("sheetbuttons");
 
   // Move current reference phrase left button
-  var _e = CreateAppendChild('div', _buttons); // Shift phrase left button element
+  var _e = CreateAppendChild('p', _buttons); // Shift phrase left button element
   _e.className = "actor";
   _e.innerText = "<"
   _e.onmousedown = function (event) { if (currentReference) Sheet0.shift(currentReference, -1); }
 
   // Move current reference phrase right button
-  _e = CreateAppendChild('div', _buttons); // Shift phrase right button element
+  _e = CreateAppendChild('p', _buttons); // Shift phrase right button element
   _e.className = "actor";
   _e.innerText = ">"
   _e.onmousedown = function (event) { if (currentReference) Sheet0.shift(currentReference, 1); }
 
   // The "add phrase" DOM section
 
-  var _addphrase = document.getElementById('addphrase');
+  var _addphrase = document.getElementById('addphraseOLD');
   _addphrase.children[1].onmouseup = function () { _addphrase.children[0].style.display=""; }
   _addphrase.children[0].onmouseleave = function () { _addphrase.children[0].style.display="none"; }
-  document.getElementById('createphrase').onmousedown = function () { addphrase(); _addphrase.children[0].style.display="none";};
+  document.getElementById('createphraseOLD').onmousedown = function () { addphrase(); _addphrase.children[0].style.display="none";};
 
 
   //// Public
@@ -2189,6 +2186,7 @@ var Sheet = function () {
     _phraseReferences.map(function(r) { r.setMarks(BeatInitial, BeatFinal); }); // TODO global var hacks
   }
 } // Sheet
+/*
 
 
 /******************************************************************************
@@ -2879,10 +2877,6 @@ var restoreSongLK0 = function (keyboard, drumKit) {
  Event loops
 
 ******************************************************************************/
-var Pause = true;
-var Beat = 0; // Forever incrementing but resetting to BeatInitial after all beats sent to audio context.
-var nextBeatTime = 0.00; // This should be initialized a bit beyond whatever ctx.currentTime is to allow for ramp-up of the code.
-
 var popupToggle = function (id) {
   var e = document.getElementById(id);
   var opacity;
@@ -2914,65 +2908,19 @@ var popupToggle = function (id) {
 }
 
 
-// Show an image for a bit in the center of the screen.  Presented after hitting 'pause'.
-var pauseFeedback = function (id, op) {
-  var icon = document.getElementById(id);
-  var opacity=1.0;
-  op = op | 0.0;
-  icon.style.position = "fixed";
-  icon.style.display = "";
-  icon.style.top = (window.innerHeight/2 - icon.height/2) + "px";
-  icon.style.left = (window.innerWidth/2 - icon.width/2) + "px";
-  icon.style.opacity = opacity;
-  if (op == 1.0) { return; }
-  var fn = function() {
-    icon.style.opacity = opacity;
-    if (opacity <= op) {
-      opacity = 1.0;
-      icon.style.display="none";
-      icon.style.opacity = opacity;
-      return;
-    } else {
-      opacity-=0.05;
-      setTimeout(fn, 50);
-    }
-  }
-  fn()
-}
 
-var pause = function (event) {
-  var highlight = true;
-  var id = false; 
-  var color = '#f00';
-  var e = document.getElementsByClassName('pause')[0];
-  if (Pause = !Pause) {
-    DB.post('pause', 'suspend');
-    // Show a pause icon.  Currently a psychedelic kitteh.
-    pauseFeedback("pauseicon");
-    e.style.backgroundColor = color;
-    // Blink the pause button.
-    id = setInterval(function(){
-                       e.style.backgroundColor = (Pause && (highlight =! highlight)) ? color : '';
-                       if (!Pause) { clearInterval(id); }
-                     },
-                     500);
-  } else {
-    DB.post('pause', 'resume');
-    e.style.backgroundColor = '';
-    clearInterval(id);
-    if (nextBeatTime <= ctx.currentTime) { nextBeatTime = ctx.currentTime + 0.25; }
-  }
-}
 
+/*
 var reset = function (event) {
   if (Pause) {
     Pause = false;
     DB.post('pause', 'resume');
   }
-  Beat = BeatInitial;
-  nextBeatTime = ctx.currentTime + 0.25;
+  //Beat = BeatInitial;
+  //nextBeatTime = ctx.currentTime + 0.25;
   TickerTimer.rewind();
 }
+*/
 
 
 /******************************************************************************
@@ -2985,6 +2933,7 @@ var reset = function (event) {
 ******************************************************************************/
 var TickerTimer = (function (ctx) {
   // Settings
+  let paused = false;
   let jiffy = .25; // Tick length in seconds (speed of music)
   let lead  = 1.0; // Audio lead pre-buffer length in seconds
   let length = 8; // Total number of ticks
@@ -2996,8 +2945,55 @@ var TickerTimer = (function (ctx) {
 
   let elementState = document.createElement("p");
 
-  let setElementState = function () {
-    elementState.innerText = `[${start} ${tick} ${end}/${length}]`;
+  let setElementState = () => elementState.innerText=`[${start} ${tick} ${end}/${length}]`;
+
+  // Show an image for a bit in the center of the screen.  Presented after hitting 'pause'.
+  var _pauseFeedback = function (id, op) {
+    var icon = document.getElementById(id);
+    var opacity=1.0;
+    op = op | 0.0;
+    icon.style.position = "fixed";
+    icon.style.display = "";
+    icon.style.top = (window.innerHeight/2 - icon.height/2) + "px";
+    icon.style.left = (window.innerWidth/2 - icon.width/2) + "px";
+    icon.style.opacity = opacity;
+    if (op == 1.0) { return; }
+    var fn = function() {
+      icon.style.opacity = opacity;
+      if (opacity <= op) {
+        opacity = 1.0;
+        icon.style.display="none";
+        icon.style.opacity = opacity;
+        return;
+      } else {
+        opacity-=0.05;
+        setTimeout(fn, 50);
+      }
+    }
+    fn()
+  }
+  
+  var _pause = function () {
+    var highlight = true;
+    var id = false; 
+    var color = '#f00';
+    var e = document.getElementsByClassName('pause')[0];
+    if (paused = !paused) { // Did we switch into pause mode?
+      DB.post('pause', 'suspend');
+      // Show a pause icon.  Currently a psychedelic kitteh.
+      _pauseFeedback("pauseicon");
+      e.style.backgroundColor = color;
+      // Blink the pause button.
+      id = setInterval(function(){
+                         e.style.backgroundColor = (paused && (highlight =! highlight)) ? color : '';
+                         if (!paused) { clearInterval(id); }
+                       },
+                       500);
+    } else {
+      DB.post('pause', 'resume');
+      e.style.backgroundColor = '';
+      clearInterval(id);
+    }
   }
 
   // Request the next tick and time to render it.  False implies not ready.
@@ -3014,15 +3010,23 @@ var TickerTimer = (function (ctx) {
     setElementState();
     return [tick, time];
   };
+  self.tick = self;
+  self.pause     = function ()  { _pause(); }
+  self.pauseFeedback = function (id, op)  { _pauseFeedback(id, op); }
+  self.setJiffy  = function (s) { jiffy = s; };
+  self.setStart  = function (i) { if (i<=end) { start = i; setElementState(); } return self; };
+  self.setEnd    = function (i) { if (start<=i) { end = i; setElementState(); } return self; };
+  self.setLength = function (i) { length=i; if (length<=end) { end = length-1; setElementState(); } return self; };
   self.rewind = function () { // Reset state so next tick is 0 and next time will be nowish.
+    if (paused) {
+      paused = false;
+      DB.post('pause', 'resume');
+    }
     tick = end;
     time = 0;
     setElementState();
     return self;
-  }
-  self.setStart  = function (i) { if (i<=end) { start = i; setElementState(); } return self; }
-  self.setEnd    = function (i) { if (start<=i) { end = i; setElementState(); } return self; }
-  self.setLength = function (i) { length=i; if (length<=end) { end = length-1; setElementState(); } return self; }
+  };
   // Derive the actual current tick (which will most likely have already been processed)
   // When deriving the live beat for DOM highlighting, must do so within the current active beat range
   // So the distance between (BeatTime - currentTime) % beatDuration is how beats to subtract from Beat
@@ -3033,6 +3037,7 @@ var TickerTimer = (function (ctx) {
     let tickLive = Mod(Floor(ticksAhead)-start, end-start+1)+start;
     return tickLive;
   }
+  self.isPaused = function () { return paused; }
   self.lastTime = function () { return time + jiffy; }
   self.jiffy = function () { return jiffy; }
   self.elementState = function () { return elementState; }
@@ -3056,7 +3061,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   let ticks = []; // The row of ticks [ [header [parts]] ... ]
   let parts = []; // List of all Part objects created.
 
-  // Create the phrase's tick columns along with each top row tick marks.
+  // Create the tick columns and the top row tick marks. Part div's will be inserted/removed later.
   // [ [[0]] [[1]] ... ]
   for (var y=0; y < tickCount; y++) {
     ticks[y] = CreateAppendChild('div', element);
@@ -3087,8 +3092,20 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   tickertimer
     .setLength(tickCount)
     .setEnd(tickCount-1)
-    .setStart(0)
-    .rewind();
+    .setStart(0);
+    //.rewind();
+
+  // Create new parts when this button is activated
+  var _addphrase = document.getElementById('addphrase');
+  _addphrase.children[1].onmouseup = function () { _addphrase.children[0].style.display=""; }
+  _addphrase.children[0].onmouseleave = function () { _addphrase.children[0].style.display="none"; }
+  document.getElementById('createphrase').onmousedown = function () {
+    var measures = document.getElementById('addmeasures').value;
+    var beats    = document.getElementById('addbeats').value;
+    var ticks    = document.getElementById('addticks').value;
+    PartSynth(PhraseSheet, 2, 2*20, 61, measures*beats*ticks, Synthesizers[0]);
+    _addphrase.children[0].style.display="none";
+  };
 
   return self;
 };
@@ -3178,7 +3195,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
         }
         // Action Hovering/dragging
         tick.onmouseover = function (y, e) {
-          if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
+          if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "*" : NBSP) } // Continue painting
           else if (e.target.innerText != NBSP) playable.play(y, .5, 0); // Play it
         }.bind(0, y);
       }
@@ -3306,7 +3323,7 @@ var sequencerLoop = function () {
     if (BeatFinal < (Beat += 1)) { Beat = BeatInitial + (Beat - BeatFinal - 1); }
   } // while
 */
-  if (Pause) { return; }
+  if (TickerTimer.isPaused()) { return; }
   let tt = TickerTimer();
   if (tt) {
     let [tick, time] = tt; // Tick to process and time to emit
@@ -3343,7 +3360,7 @@ var rendererLoop = (function (_lastRef, _lastPhrase, _lastBeat, _lastTick) { ret
   }
 
   // Old renderer
-
+  /*
   if ((nextBeatTime <= ctx.currentTime) || (0 == Sheet0.length())) return;
   var beatf = (Beat - (nextBeatTime - ctx.currentTime) / BeatDuration);
   var beat = Mod(Floor(beatf)-BeatInitial, BeatFinal-BeatInitial+1)+BeatInitial;
@@ -3397,6 +3414,7 @@ var rendererLoop = (function (_lastRef, _lastPhrase, _lastBeat, _lastTick) { ret
   _lastPhrase = phrase;
   _lastBeat = beatLocal;
   _lastTick = tick;
+  */
 };})(null, null, null, null);
 
 
@@ -3501,91 +3519,6 @@ var setupControls = function (keyboard) {
     }); // function
   } // function
 
-  // Let's make a few elements moveable between each other
-
-  /* I Shift has been pressed over a moveable block
-       * position:absolute  
-       * 
-       event.target.parentElement
-            .clientX/Y
-                       .getBoundingClientRect().left/right
-  */
-  var ShiftClientX = 0;
-  var ShiftClientY = 0;
-  var Slots = [];
-  var tempElem = false;
-
-  /* As the mouse moves around the element, keep track of its relative location */
-  var createMover = function (moverId) {
-
-    document.getElementById(moverId).onmousemove = function (event) {
-      if (!ShiftIsDown) {
-        event.target.focus();
-        // The moveable element's offset from the mouse.
-        ShiftClientX = Floor(event.clientX - event.target.getBoundingClientRect().left);
-        ShiftClientY = Floor(event.clientY - event.target.getBoundingClientRect().top);
-        //DB("event.clientXY " + ShiftClientX + " " + ShiftClientY);
-      }
-    }
-
-    document.getElementById(moverId).onkeydown = function (event) {
-      if (ShiftClientX && !ShiftIsDown && event.shiftKey) {
-        var elem = event.target;
-        var parent = elem.parentElement;
-        ShiftClientX += parent.getBoundingClientRect().left;
-        ShiftClientY += parent.getBoundingClientRect().top;
-        ShiftIsDown = true;
-        //DB(ShiftIsDown);
-        event.tabindex=1;
-        event.target.style.left = event.offsetLeft + "px"
-        event.target.style.top = event.offsetTop + "px"
-        event.target.style.position = 'absolute'
-        event.target.style.opacity = 0.7
-        event.target.style.border = "solid 1px white";
-
-        // Create the slots this element can be moved to.
-        for (var i=0; (i < parent.children.length); i++) {
-          var child = parent.children[i];
-          if (child != elem) Slots.push(child);
-        }
-        // Create the placeholder
-        tempElem = elem.cloneNode(true);
-        tempElem.style.position = 'static';
-
-        //event.target.style.border = "solid thin white";
-        ShiftCallback = function (event) { // What to do when the mouse moves while shift is held down.
-          var shiftX = event.clientX - ShiftClientX;
-          var shiftY = event.clientY - ShiftClientY;
-          elem.style.left =  shiftX + "px";
-          elem.style.top =  shiftY + "px";
-          //DB("global:" + event.clientX + " " + event.clientY);
-          //Where to insert the place holder
-          for (var i=0; (i < Slots.length); ++i) {
-            if (20 > Abs(Slots[i].offsetLeft - shiftX)) {
-              parent.insertBefore(tempElem, Slots[i]);
-            }
-          }
-        }
-        ShiftCallbackDone = function (event) {
-          event.target.style.left = "";
-          event.target.style.top = "";
-          event.target.style.position = "";
-          event.target.style.opacity = "";
-          event.target.style.border = "";
-          ShiftClientX = ShiftClientY = false;
-          parent.insertBefore(elem, tempElem);
-          parent.removeChild(tempElem);
-          elem.outerHTML += " ";
-          createMover(moverId);
-          Slots = [];
-        }
-        ShiftCallback(event);
-      } // if
-    } // function
-  } // createMover
-
-  //createMover('freq');
-  //createMover('speed');
 } // setupControls ()
 
 
@@ -3636,8 +3569,8 @@ var Synthesizer3;
 
 var currentReference = false;
 
-var BeatInitial = 0; // Inclusive
-var BeatFinal = 0; // Inclusive
+//var BeatInitial = 0; // Inclusive
+//var BeatFinal = 0; // Inclusive
 
 var DragOverTickState = 1;
  0.375; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
@@ -3649,29 +3582,16 @@ var Volume = 0.5; // A global value shared by all output gain logic
 var MouseIsDown = false;
 window.onmouseup = function () { MouseIsDown = false; }
 
-// It's nice to keep track of the user's shift state.
-var ShiftIsDown = false;
-var ShiftCallback = false; // Called when mouse moves and shift is down
-var ShiftCallbackDone  = false;
-
-window.onkeyup = function (event) {
-  if (ShiftIsDown && !event.shiftKey) {
-    if (ShiftCallbackDone) ShiftCallbackDone(event);
-    ShiftIsDown = ShiftCallback = ShiftCallbackDone = false;
-    DB.post("onkeyup", ShiftIsDown);
-  }
-}
-
 window.onkeydown = function (event) {
   if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
   if (event.keyCode == 82) { // Pressing 'r' will rewind the playback.
-    reset(event);
+    TickerTimer.rewind();
   }
   if (event.keyCode == 32) { // Pressing 'r' will rewind the playback.
-    reset(event);
+    TickerTimer.rewind();
   }
   if (event.keyCode == 80) {
-    pause(event); // Pressing 'p' will pause the playback.
+    TickerTimer.pauser(event); // Pressing 'p' will pause the playback.
     event.stopPropagation(); // TODO This doesn't prevent spacebar from scrolling the main window so for now 'p' will pause the sequencer.
   }
   DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code);
@@ -3680,17 +3600,21 @@ window.onkeydown = function (event) {
   if (event.keyCode == 70) { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
 }
 
-window.onmousemove = function (event) {
-  if (ShiftCallback) ShiftCallback(event);
-}
-
 // Stop tablets and phones from scrolling and resizing?
-document.body.addEventListener('touchstart', function (event) {if (event.touches.length=='fack') event.preventDefault(); DB(event.touches);}, true);
+document.body.addEventListener(
+  'touchstart',
+  function (event) {
+    if (event.touches.length=='fack') {
+      event.preventDefault();
+    }
+    DB(event.touches);
+  },
+  true);
 
 
 // Prevent space from scrolling browser window as it's used for DAW controls.
 window.addEventListener('keydown', function(e) {
-  if(e.keyCode == 32 && e.target == document.body) {
+  if (e.keyCode == 32 && e.target == document.body) {
     e.preventDefault();
   }
 });
@@ -3706,7 +3630,7 @@ function Main () {
   DB("::onload");
   //IBC.debug();
 
-  Sheet0 = new Sheet(); // Global sheet object
+  //Sheet0 = new Sheet(); // Global sheet object
 
   document.getElementById('addsynth').onmousedown = function () { 
     var s = new Synthesizer(ctx, false, 1, keyboard, "#84f");
@@ -3797,16 +3721,17 @@ function Main () {
   }
 
   // Start me up
-  BeatFinal = Sheet0.beatCount()-1; // Set playback range to end of song.
-  Sheet0.updateBeatMarkers();
+  //BeatFinal = Sheet0.beatCount()-1; // Set playback range to end of song.
+  //Sheet0.updateBeatMarkers();
 
-  PhraseGlobalCounter = Sheet0.phraseCount();
+  //PhraseGlobalCounter = Sheet0.phraseCount();
 
   // Begin event loops
-  nextBeatTime = ctx.currentTime+1.0;
+  //nextBeatTime = ctx.currentTime+1.0;
 
 
   // TODO Global hack mechanism to create a new phrase.
+  /*
   addphrase = function (e) {
     var shouldUpdateRange = (BeatFinal == Sheet0.beatCount()-1);
     var measures = document.getElementById('addmeasures').value;
@@ -3826,9 +3751,10 @@ function Main () {
       Sheet0.updateBeatMarkers();
     }
   }
+  */
 
-  PartSynth(PhraseSheet, 24, 1*20, 16, 16, DrumKit0 );
-  //PartSynth(PhraseSheet, 19, 1*20, 61, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  PartSynth(PhraseSheet, 18, 1*20, 16, 32, DrumKit0 );
+  PartSynth(PhraseSheet, 18, 3*20, 61, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
 
   setInterval(sequencerLoop, 50);
@@ -3842,7 +3768,7 @@ function Main () {
 function PreMain (i) {
  DB.post("init", ctx.state)
  if (ctx.state == "suspended") {
-   pauseFeedback("pauseicon", 1.0)
+   TickerTimer.pauseFeedback("pauseicon", 1.0)
    ctx.resume()
    setTimeout(PreMain.bind(0, ++i), 100);
  } else {
@@ -3850,7 +3776,7 @@ function PreMain (i) {
    DB ("Starting AudioContext!");
    //ctx = window.AudioContext && new window.AudioContext();
    document.getElementById("pauseicon").style.clipPath = null;
-   pauseFeedback("pauseicon")
+   TickerTimer.pauseFeedback("pauseicon")
    setTimeout(Main, 100);
  }
 }

@@ -47,7 +47,6 @@ h1 {
 .window {
   display:inline-block;
   margin:0;
-  margin-bottom:1ch;
 }
 
 .window > div:nth-child(1) {
@@ -85,13 +84,13 @@ h1 {
 }
 
 
-.knobs  p {
+.knobs > p {
   display:inline-block;
   background:#066;
 }
 
 .knobs > div {
-  text-align:center;
+  /* text-align:center; */
 }
 
 
@@ -127,12 +126,6 @@ h1 {
 .piano > div:hover,
 .piano > p:hover   {
   background-color: #e0e
-}
-
-#sheetbuttons > div {
-  display: inline-block;
-  margin-left: 1ch;
-  background-color:#066;
 }
 
 .addphrase {
