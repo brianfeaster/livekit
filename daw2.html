@@ -44,7 +44,7 @@
 <div class="window">
   <div>^</div>
   <div></div>
-  <div class="Xknobs">
+  <div class="knobs">
     <p id="speed" class="actor" contenteditable="true">160</p>
     <p id="mainVolume" >vol</p> <!-- input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" / -->
     <p class="actor reset" onmousedown="TickerTimer.rewind()">|&lt;</p>
@@ -2933,7 +2933,7 @@ var reset = function (event) {
 ******************************************************************************/
 var TickerTimer = (function (ctx) {
   // Settings
-  let paused = false;
+  let paused = true;
   let jiffy = .25; // Tick length in seconds (speed of music)
   let lead  = 1.0; // Audio lead pre-buffer length in seconds
   let length = 8; // Total number of ticks
@@ -3144,28 +3144,25 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
     }
   }
 
-  // Grid of lables and notes
-  var grid = CreateAppendChild('div', body); // Raw cells
-
-  // Naturals (non-zero) starting from C (for simpler CSS).  Non-zero0 -> 1:left of sharp  2:between sharps  3:right of sharp
-  let naturals  = [1,   0,    2,   0,    3,   1,   0,    2,   0,    2,   0,    3];
-  let noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  // Container of rows of label and ticks
+  var grid = CreateAppendChild('div', body);
 
   // Create ticks
   for (var y = GridHeight - 1; 0 <= y; y--) {
     if (playable instanceof Synthesizer) {
-      let natural = naturals[y%12];
+
+      let note = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][y%12];
+      let nat = 1 == note.length;
+      let label = nat ? note : NBSP; // Natural notes are 1 char long
+
+      let row = CreateAppendChild("div", grid); // A row: Container of label and ticks
+      row.className = note.charAt(0) + (nat ? " nat" : " shp");
   
-      let row = CreateAppendChild(0==natural?"p":"div", grid); // A row: Container of label and ticks
-      if (natural) {
-        row.className = ["natleft", "natin", "natright"][natural-1];
-      }
-  
-      let header = CreateAppendChild("p", row, naturals[y%12] ? noteNames[y%12] : NBSP);
-  
-      let notes = CreateAppendChild("div", row);
+      let header = CreateAppendChild("p", row, label); // White keys show note
+      let notes = CreateAppendChild("div", row); // Row of ticks
+
       for (var x=0; x<GridWidth; x++) {
-        var tick = CreateAppendChild('p', notes, NBSP);
+        var tick = CreateAppendChild('p', notes, NBSP); // A tick
         // Action Clicking
         tick.onmousedown = function (e) {
           var txt = e.target.innerText;
@@ -3591,7 +3588,7 @@ window.onkeydown = function (event) {
     TickerTimer.rewind();
   }
   if (event.keyCode == 80) {
-    TickerTimer.pauser(event); // Pressing 'p' will pause the playback.
+    TickerTimer.pause(event); // Pressing 'p' will pause the playback.
     event.stopPropagation(); // TODO This doesn't prevent spacebar from scrolling the main window so for now 'p' will pause the sequencer.
   }
   DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code);
@@ -3755,6 +3752,7 @@ function Main () {
 
   PartSynth(PhraseSheet, 18, 1*20, 16, 32, DrumKit0 );
   PartSynth(PhraseSheet, 18, 3*20, 61, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  //PartSynth(PhraseSheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
 
   setInterval(sequencerLoop, 50);

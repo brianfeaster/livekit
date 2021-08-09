@@ -64,7 +64,6 @@ h1 {
 .window > div:nth-child(2) {
   display:inline-block;
   position:relative;
-  /* z-index:1; */
 }
 
 .window > div:nth-child(3) {
@@ -211,44 +210,64 @@ h1 {
 
 .phrase { height:40ch; overflow:scroll; width:calc(100vw - 2ch); white-space:nowrap; position:relative; }
 .phrase > div { background-color:#112; height:1000%; display:inline-block; }
-.phrase > div > p { background-color:#333; position:sticky; top:0; z-index:1; }
+.phrase > div > p { background-color:#333; position:sticky; top:0; z-index:2; }
 .phrase > div > div { position: absolute;; }
 .phrase > div:hover     { background-color:blue; }
 .phrase > div > p:hover { background-color:cyan; }
 .phrase > div:hover > div:nth-child(2) > div:nth-child(1) { background-color:blue; }
 
 
-/* Part Header of ticks */
+/* Header of ticks */
 .partpiano > div:nth-child(1) > p { display:inline-block; background-color:#444b; }
 
-/* Entire black row [ label [ticks] ]  */
-.partpiano > div:nth-child(2) > p { }
+/* Label natural */
+.partpiano > div:nth-child(2) > div.nat > p { color:black; background-color:white; width:4ch; right:calc(100%); text-align:right; position:absolute; }
+/* Label sharp */
+.partpiano > div:nth-child(2) > div.shp > p { background-color:black; width:2.0ch; right:calc(100% + 2.0ch); position:absolute; z-index:1; }
 
-/* black label */
-.partpiano > div:nth-child(2) > p   > p { height:1.5ch; margin-top:.2ch; background-color:black; position:absolute; right:calc(100% + .4ch); width:.6ch; z-index:1; }
-/* white label */
-.partpiano > div:nth-child(2) > div > p { color:black; background-color:white; position:absolute; right:calc(100%); }
-.partpiano > div:nth-child(2) > div.natright > p { padding:.45ch 0 .45ch 0; }
-.partpiano > div:nth-child(2) > div.natin    > p { padding:.9ch 0 .8ch 0; margin-top:-0.9ch; }
-.partpiano > div:nth-child(2) > div.natleft  > p { padding:1ch 0 0 0; margin-top:-1.1ch; }
-.partpiano > div:nth-child(2) > div.drumkit  > p { color:#770; background-color:#220; width:auto; margin:0; }
+/* Rows of [label [ticks]] */
+.partpiano > div:nth-child(2) > div > p,
+.partpiano > div:nth-child(2) > div > div,
+.partpiano > div:nth-child(2) > div > div > p { height:1em; }
 
-/* any tick */
-.partpiano > div:nth-child(2) > * > div > p { display:inline-block; }
-/* white/black [ticks] container */
-.partpiano > div:nth-child(2) > div > div { background:#222b; }
-.partpiano > div:nth-child(2) > p > div   { background:#222b; }
-/* black tick */
-.partpiano > div:nth-child(2) > p > div > p { }
+.partpiano > div:nth-child(2) > div.drumkit > p,
+.partpiano > div:nth-child(2) > div.drumkit > div,
+.partpiano > div:nth-child(2) > div.drumkit > div > p { height:1pc; }
+
+/* Natural labels */
+.partpiano > div:nth-child(2) > div.nat > p { height:1.66em; }
+/* Labels */
+.partpiano > div:nth-child(2) > div.B.nat > p { margin-top: .06em; }
+.partpiano > div:nth-child(2) > div.A.nat > p { margin-top:-.23em; }
+.partpiano > div:nth-child(2) > div.G.nat > p { margin-top:-.51em; }
+.partpiano > div:nth-child(2) > div.F.nat > p { margin-top:-.79em; }
+.partpiano > div:nth-child(2) > div.E.nat > p { margin-top:-.08em; }
+.partpiano > div:nth-child(2) > div.D.nat > p { margin-top:-.37em; }
+.partpiano > div:nth-child(2) > div.C.nat > p { margin-top:-.66em; }
+
+.partpiano > div:nth-child(2) > div.A.shp > p { margin-top: .15em; }
+.partpiano > div:nth-child(2) > div.F.shp > p { margin-top:-.15em; }
+
+.partpiano > div:nth-child(2) > div.D.shp > p { margin-top: .15em; }
+.partpiano > div:nth-child(2) > div.C.shp > p { margin-top:-.15em; }
+
+/* ex ch PC EM /*
+
+/* drumk kit beat label */
+.partpiano > div:nth-child(2) > div.drumkit > p { color:#770; background-color:#220; position:absolute; right:calc(100%); }
+
+/* tick */
+.partpiano > div:nth-child(2) > div > div > p { display:inline-block; }
+
+/* any row of ticks */
+.partpiano > div:nth-child(2) > div > div { background:#222B; }
+
+/* row of sharp ticks */
+.partpiano > div:nth-child(2) > div.shp > div { background:#1b1b1bBB; }
 
 
 /* Highlight label and [ticks] when hovering anywhere on full row */
-.partpiano > div:nth-child(2) > p:hover > p,
-.partpiano > div:nth-child(2) > *:hover > div > p,
+.partpiano > div:nth-child(2) > div:hover > div,
 .partpiano > div:nth-child(2) > div:hover > p { background-color:blue; }
 /* Highligh any tick */
-.partpiano > div:nth-child(2) > * > div > p:hover { background:cyan; }
-
-/*
-ex ch pc em 
-/*
+.partpiano > div:nth-child(2) > div > div > p:hover { background:cyan; }
