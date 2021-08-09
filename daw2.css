@@ -72,6 +72,29 @@ h1 {
   margin-top:-1px;
 }
 
+.windowmini {
+  display:inline-block;
+  vertical-align:top;
+  margin-top:.5ch;
+  margin-left:.5ch;
+}
+
+.windowmini > div:nth-child(1) {
+  display:inline-block;
+  border-top:dashed 1px #444;
+  border-right:dashed 1px #444;
+  border-left:dashed 1px #444;
+}
+
+.windowmini > div:nth-child(2) {
+  display:inline-block;
+}
+
+.windowmini > div:nth-child(3) {
+  margin-top:1px;
+  border: dashed 1px #444;
+}
+
 .actor {
   background-color:#066;
   border: solid 1px #0000;
@@ -88,10 +111,52 @@ h1 {
   background:#066;
 }
 
-.knobs > div {
-  /* text-align:center; */
+
+#addphrase {
+  display:inline-block;
+  border:0;
 }
 
+/*
+#addphrase > div > input {
+  font-size:inherit
+}
+
+.phrases {
+  display:inline-block;
+  min-width: 1em;
+  min-height: 1em;
+  padding:0;
+}
+
+.phrases > div { margin:1ch; }
+.phrases > div > p { display:inline-block; background:#880 }
+.phrases > div > div { display:inline-block ; margin-left:1ch; }
+.phrases > div > div:last-child { display:block; border:solid 1px #880 }
+
+.phrases .partlist > b {
+  font-weight:normal;
+  display:inline-block;
+  text-align:center;
+  width:2em;
+  margin-right:.5em;
+  background:gray
+}
+
+.part { border:none; padding:0; margin:0 }
+.part > div { display:inline-block; vertical-align:top; }
+.part > b { display:inline-block; width:2em; vertical-align:top; text-align:center; background:#888 }
+.part > .beat      { border:0px; padding:0px; margin:1px; height:2.0em; width:2.1em; background:#222; color:#999 }
+.part > .beatfirst { background:#333 }
+.part > .beat:hover { border: solid 1px #a0a; margin:0px }
+.part > .beat > .tick { border:0; padding:0; margin:0; height:1em; width:1em; display:flex; justify-content:center; align-items:center; }
+.part > .beat .tick:nth-child(1) { float:left; }
+.part > .beat .tick:nth-child(2) { float:left; clear:both; }
+.part > .beat .tick:nth-child(1):hover { background-color:yellow}
+.part > .beat .tick:nth-child(2):hover { background-color:yellow}
+.part > .beat .tick:nth-child(3):hover { background-color:yellow}
+.part > .beat .tick:nth-child(4):hover { background-color:yellow}
+*/
 
 .piano {
  text-align:center; 
@@ -126,77 +191,6 @@ h1 {
 .piano > p:hover   {
   background-color: #e0e
 }
-
-.addphrase {
-  display:inline-block;
-  border:0;
-}
-
-#addphrase > div > input {
-  font-size:inherit
-}
-
-.windowphrasealias {
-  display:inline-block;
-  vertical-align:top;
-  margin-top:.5ch;
-  margin-left:.5ch;
-}
-
-.windowphrasealias > div:nth-child(1) {
-  display:inline-block;
-  border-top:dashed 1px #444;
-  border-right:dashed 1px #444;
-  border-left:dashed 1px #444;
-}
-
-.windowphrasealias > div:nth-child(2) {
-  display:inline-block;
-}
-
-.windowphrasealias > div:nth-child(3) {
-  margin-top:1px;
-  border: dashed 1px #444;
-}
-
-
-.phrases {
-  display:inline-block;
-  min-width: 1em;
-  min-height: 1em;
-  padding:0;
-}
-
-.phrases > div { margin:1ch; }
-.phrases > div > p { display:inline-block; background:#880 }
-.phrases > div > div { display:inline-block ; margin-left:1ch; }
-.phrases > div > div:last-child { display:block; border:solid 1px #880 }
-
-.phrases .partlist > b {
-  font-weight:normal;
-  display:inline-block;
-  text-align:center;
-  width:2em;
-  margin-right:.5em;
-  background:gray
-}
-
-.part { border:none; padding:0; margin:0 }
-.part > div { display:inline-block; vertical-align:top; }
-.part > b { display:inline-block; width:2em; vertical-align:top; text-align:center; background:#888 }
-
-.part > .beat      { border:0px; padding:0px; margin:1px; height:2.0em; width:2.1em; background:#222; color:#999 }
-.part > .beatfirst { background:#333 }
-.part > .beat:hover { border: solid 1px #a0a; margin:0px }
-
-.part > .beat > .tick { border:0; padding:0; margin:0; height:1em; width:1em; display:flex; justify-content:center; align-items:center; }
-
-.part > .beat .tick:nth-child(1) { float:left; }
-.part > .beat .tick:nth-child(2) { float:left; clear:both; }
-.part > .beat .tick:nth-child(1):hover { background-color:yellow}
-.part > .beat .tick:nth-child(2):hover { background-color:yellow}
-.part > .beat .tick:nth-child(3):hover { background-color:yellow}
-.part > .beat .tick:nth-child(4):hover { background-color:yellow}
 
 
 .name  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; height:1em;}

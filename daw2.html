@@ -1,6 +1,10 @@
- <?xml version="1.0" encoding="ISO-8859-1" ?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html version="-//W3C//DTD XHTML 1.1//EN"
+      xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.w3.org/1999/xhtml http://www.w3.org/MarkUp/SCHEMA/xhtml11.xsd"
+>
 <head>
  <title>Liveka7 DAW</title>
  <link rel="stylesheet" href="daw2.css" type="text/css" media="screen" title="Shrewm"/>
@@ -26,10 +30,13 @@
 <div class="window">
   <div>PHRASE</div>
   <div class="knobs">
-    <p>|&gt;</p>
-    <p>&lt;-&gt;</p>
-    <div id="addphrase" style="display:inline-block">
-      <div style="display:none; position:absolute; border:solid 1px #066; white-space:nowrap; background:#000; z-index:2">
+    <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" />
+    <!--p id="mainVolume">vol</p-->
+    <p id="speed" class="actor" contenteditable="true">60</p>
+    <p class="actor reset" onmousedown="TickerTimer.rewind()">|&gt;</p>
+    <p class="actor pause" onmousedown="TickerTimer.pause()">||</p>
+    <div id="addphrase">
+      <div style="display:none; position:absolute; border:solid 1px #066; white-space:nowrap; background:#000; z-index:3">
         <div id="createphrase" style="padding:0 1ch;background:#066; text-align:center">Create</div>
         <input id="addmeasures" value="4" type="number" style="width:3ch"/>Measures<br/>
         <input id="addbeats" value="4" type="number" style="width:3ch"/>Beats<br/>
@@ -37,19 +44,9 @@
       </div>
       <p class="actor">new</p>
     </div>
+    <!-- p style="font-weight:bold; color:black; background:yellow; border:dashed thick red" class="actor">&gt!}=-drop-={!&lt;</p -->
   </div>
   <div id="phrase" class="phrase"></div>
-</div>
-
-<div class="window">
-  <div>^</div>
-  <div></div>
-  <div class="knobs">
-    <p id="speed" class="actor" contenteditable="true">160</p>
-    <p id="mainVolume" >vol</p> <!-- input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" / -->
-    <p class="actor reset" onmousedown="TickerTimer.rewind()">|&lt;</p>
-    <p class="actor pause" onmousedown="TickerTimer.pause()">||</p>
-  </div>
 </div>
 
 <div class="window">
@@ -80,7 +77,7 @@
   <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
 </div>
 
-<img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.jpg" onclick="ctx.resume()"/>
+<p><img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.jpg" onclick="ctx.resume()"/></p>
 
 
 <script type="text/javascript">//<![CDATA[
@@ -151,7 +148,7 @@ var DB = (function () {
 
   // Create the instance which is a function.  Also create the clear function.
   if (!consoleElement) {
-    self = function (s) { console.log(s);}
+    self = function (s) { console.log(s); return s; }
     self.log = self;
     self.error = function (s) { console.error(s);}
     self.post  = function (t, s) { // For the console, only the first post type is displayed.
@@ -185,6 +182,7 @@ var DB = (function () {
       }
       lastPost = s;
       shouldNewline = true;
+      return s;
     }
     self.clear = function () {
        consoleElement.innerHTML = "";
@@ -559,7 +557,7 @@ var IBC = function () {
   provided that will be set to the final value.
 
   USAGE::
-    var slider = new Slider();
+    var slider = new DOMSlider();
 
   CONSTRUCTOR PARAMETERS::
     na             N/A
@@ -590,16 +588,17 @@ var DOMSlider = function () {
     event.target.parentElement.children[1].innerText = val.toFixed(2);
     callback(val);
   }
-  e.children[0].onmouseleave  = function () { if (mouseMoved) e.style.display = "none"; } 
+  e.children[0].onmouseleave = function () {
+    if (mouseMoved) { e.style.display = "none"; }
+  } 
   e.onmousedown = function (event) { event.stopPropagation(); }
-  e.onmouseup = function (event) {
+  e.onmouseup = function (event) { // Handle clicking, releasing, then moving
     if (mouseMoved || mouseUp) { e.style.display="none"; }
     event.stopPropagation();
     mouseUp = true
   }
   return function(event, val, cb) {
     callback = cb;
-    if (null == e) { createDOMElement(); }
     e.children[1].innerText = val.toFixed(2);
     mouseMoved = false;
     mouseUp = false;
@@ -607,7 +606,7 @@ var DOMSlider = function () {
     e.style.top = Floor(event.pageY - e.clientHeight/3.0) +"px" ;
     e.style.left = Floor(event.pageX - e.clientWidth*(0.995-val)) +"px" ;
   }
-}
+} // DOMSlider
 
 
 /******************************************************************************
@@ -918,7 +917,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _destination = Destinations.input(0); // Initial destination is global destination
 
   var _element = document.createElement('div'); // [ ]
-  _element.className = "windowphrasealias";
+  _element.className = "windowmini";
   //_element.style.width = "13ch";
 
   var _nameDOM = CreateAppendChild('div', _element); // [ Synth1 ]
@@ -1158,7 +1157,7 @@ var Delay = function (ctx) {
   var _input = _gain;
 
   var _element = document.createElement('div'); // [ ]
-  _element.className = "windowphrasealias";
+  _element.className = "windowmini";
   //_element.style.width = "13ch";
 
   var _nameDOM = CreateAppendChild('div', _element); // [ Delay1 ]
@@ -1282,7 +1281,7 @@ var Lowpass = function (ctx) {
   _lowpass.connect(ctx.destination);
 
   var _element = document.createElement('div'); // [ ]
-  _element.className = "windowphrasealias";
+  _element.className = "windowmini";
   //_element.style.width = "13ch";
 
   var _nameDOM = CreateAppendChild('div', _element); // [ lowpass ]
@@ -1884,7 +1883,7 @@ var PhraseReference = function (phrase) {
   // Create the sheet-view DOM element: [[Title] [Buttons]
   //                                     [Beats and Info ]]
   var elementIcon = document.createElement('div');
-  elementIcon.className = "windowphrasealias";
+  elementIcon.className = "windowmini";
 
   // Title element
   var elementTitle = CreateAppendChild('div', elementIcon);
@@ -2907,9 +2906,6 @@ var popupToggle = function (id) {
 
 }
 
-
-
-
 /*
 var reset = function (event) {
   if (Pause) {
@@ -3056,7 +3052,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   var element = ElementById(id); // phrase
 
   // Debugging:: hxiPut the TickerTimer's state element to the title bar
-  element.previousElementSibling.appendChild(tickertimer.elementState());
+  //element.previousElementSibling.appendChild(tickertimer.elementState());
 
   let ticks = []; // The row of ticks [ [header [parts]] ... ]
   let parts = []; // List of all Part objects created.
@@ -3220,7 +3216,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
        if (!MouseIsDown) { phrase.onmousemove = null; return; } // Maybe stop handling this event
        // Adjust part's vertical position
        part.style.top = Math.max(offset + e.y, tickHeight) + "px";
-       // Move part to another tick
+       // Move part to another tick TODO broken when moved beyond the last phrase grid column
        let newTick = Floor((e.x-leftMargin+1) / tickWidth);
        if (newTick != tickIdx) {
          phrase.children[newTick].appendChild(part);
@@ -3471,7 +3467,10 @@ var setupControls = function (keyboard) {
   }
 */
 
-  document.getElementById('mainVolume').onmousedown = function(event){ DB(Volume); Slider(event, Volume, function(v){ Volume=v; }); }
+  // Currently using the HTML range input form
+  //document.getElementById('mainVolume').onmousedown = function(event) {
+  //  Slider(event, Volume, v=>DB(Volume=v));
+  //}
 
   document.getElementById('speed').onkeydown = function (event) {
     var newDuration;
@@ -3488,6 +3487,7 @@ var setupControls = function (keyboard) {
     } else {
       event.target.innerText = newDuration;
       BeatDuration = 60.0/newDuration;
+      TickerTimer.setJiffy(BeatDuration/4.0);
     }
   }
 
@@ -3498,6 +3498,7 @@ var setupControls = function (keyboard) {
         if (1 < newDuration && newDuration <= 666) {
           event.target.innerText = newDuration;
           BeatDuration = 60/newDuration;
+          TickerTimer.setJiffy(BeatDuration/4.0);
         } else {
           event.target.innerText =  60/BeatDuration;
         }
@@ -3506,8 +3507,6 @@ var setupControls = function (keyboard) {
   } // function
 
 
-  document.getElementById('freq').onmouseenter = function (event) { } // event.target.focus(); }
-  document.getElementById('freq').onmouseleave = function (event) { } // event.target.blur(); }
   document.getElementById('freq').onkeypress = function (event) {
     setTimeout(function () { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
       if (event.keyCode == 13) {
@@ -3552,8 +3551,6 @@ var setupControls = function (keyboard) {
 
 ******************************************************************************/
 var Slider = new DOMSlider();
-
-
 var Sheet0; // New hotness
 var Keyboard0;
 var DrumKit0;
@@ -3561,19 +3558,20 @@ var Synthesizer0;
 var Synthesizer1;
 var Synthesizer2;
 var Synthesizer3;
+
 //var Delay0;
 //var Lowpass0;
-
-var currentReference = false;
-
+//var currentReference = false;
 //var BeatInitial = 0; // Inclusive
 //var BeatFinal = 0; // Inclusive
 
-var DragOverTickState = 1;
- 0.375; // .5 .25 .125 .0625 .03125  Keep timing binary friendly.  Inverted BPM.
-var BeatDuration = 60/parseInt(document.getElementById('speed').innerText);
+document.getElementById('volume').oninput = function (e) {
+  Volume = e.srcElement.value / 100.0;
+}
 
+var DragOverTickState = 1;
 var Volume = 0.5; // A global value shared by all output gain logic
+var BeatDuration = 60/parseInt(document.getElementById('speed').innerText);
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
