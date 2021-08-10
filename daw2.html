@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html version="-//W3C//DTD XHTML 1.1//EN"
-      xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en"
+      xmlns="http://www.w3.org/1999/xhtml"
       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-      xsi:schemaLocation="http://www.w3.org/1999/xhtml http://www.w3.org/MarkUp/SCHEMA/xhtml11.xsd"
->
+      xml:lang="en" lang="en"
+      xsi:schemaLocation="http://www.w3.org/1999/xhtml http://www.w3.org/MarkUp/SCHEMA/xhtml11.xsd">
 <head>
  <title>Liveka7 DAW</title>
  <link rel="stylesheet" href="daw2.css" type="text/css" media="screen" title="Shrewm"/>
@@ -36,11 +36,11 @@
     <p class="actor reset" onmousedown="TickerTimer.rewind()">|&gt;</p>
     <p class="actor pause" onmousedown="TickerTimer.pause()">||</p>
     <div id="addphrase">
-      <div style="display:none; position:absolute; border:solid 1px #066; white-space:nowrap; background:#000; z-index:3">
-        <div id="createphrase" style="padding:0 1ch;background:#066; text-align:center">Create</div>
-        <input id="addmeasures" value="4" type="number" style="width:3ch"/>Measures<br/>
-        <input id="addbeats" value="4" type="number" style="width:3ch"/>Beats<br/>
-        <input id="addticks" value="4" type="number" style="width:3ch"/>ticks<br/>
+      <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
+        <div id="createphrase" style="background:#066; text-align:center">Create</div>
+        <input id="addmeasures" value="4" type="number"/>Measures<br/>
+        <input id="addbeats" value="4" type="number"/>Beats<br/>
+        <input id="addticks" value="4" type="number"/>ticks<br/>
       </div>
       <p class="actor">new</p>
     </div>
@@ -92,26 +92,55 @@ var Ceil  = Math.ceil;
 var Pow   = Math.pow;
 var Abs   = Math.abs;
 var Rnd   = Math.random;
-var Mod   = function (n,d) { return n - d * Math.floor(n/d); }
+var Mod   = function (n,d) { return n - d * Math.floor(n/d); };
 
 var CreateAppendChild = function (name, element, text) {
   var e = element.appendChild(document.createElement(name));
   if (text != undefined) { e.innerText = text; }
   return e;
-}
+};
 
 var CreateInsertBefore = function (name, element) {
   return element.insertBefore(document.createElement(name), element.firstChild);
-}
+};
 
 var ToggleElementDisplay = function (e1, e2) {
   let off = e1.style.display == "none"; // 'none' implies not displayed.  '' implies the default CSS value.
   e1.style.display = off ? "" : "none"; // Toggle e1's display state.
   if (e2) { e2.style.display = off ? "none" : ""; } // e2's style is opposite e1.
-}
+};
+
 var ElementById = function(id) {
  return document.getElementById(id);
-}
+};
+
+
+/* A clickable DOM element object
+
+   A DOM element is created and added to parent. When clicked, the appropriate
+   handler will be called.  Each callback will receive the event and should
+   return a string representing the true or false state.  The current state and
+   associated DOM element can be queried.  
+
+   USAGE::
+   let a = AppendNewToggleActor(document.body, false, "myclass", ()=>"yes", ()=>"no");
+   DB(`State ${a()}  Element ${a.element(}`);
+*/
+var AppendNewToggleActor = function (parent, state, className, callbackTrue, callbackFalse) {
+  let element = CreateAppendChild('p', parent) // New Element
+  if (className) { element.className = className; } // Maybe set the class
+  // Call appropriate handler and update element's text
+  let act = (event) => element.innerText = (state ? callbackTrue : callbackFalse)(event);
+  // Event handler: toggle state
+  element.onmousedown = (event) => (state = !state, act(event));
+  // Call a handler so everything is synched.
+  act();
+  // Return state
+  let self = () => state;
+  // Return DOM element
+  self.element = () => e;
+  return self;
+};
 
 
 /******************************************************************************
@@ -214,7 +243,7 @@ DB.check(ctx, "Missing window.AudioContext.  Use Chrome browser.");
   Hyphen - WebSocket baed Key/Value store
 
   USAGE::
-    hyphen(msg)      Sen dmessage to Hyphen
+    hyphen(msg)      Send message to Hyphen
 ******************************************************************************/
 //hyphen.song = function () { return ""; }
 var hyphen =
@@ -2939,10 +2968,6 @@ var TickerTimer = (function (ctx) {
   let tick = end; // Cyclic tick between a subrange of start..end
   let time = 0; // Time to output audio for the tick
 
-  let elementState = document.createElement("p");
-
-  let setElementState = () => elementState.innerText=`[${start} ${tick} ${end}/${length}]`;
-
   // Show an image for a bit in the center of the screen.  Presented after hitting 'pause'.
   var _pauseFeedback = function (id, op) {
     var icon = document.getElementById(id);
@@ -3003,16 +3028,15 @@ var TickerTimer = (function (ctx) {
     time += jiffy;
     if (time < now) { time = now + 0.25; }
     // Return next tick to process and time to render it
-    setElementState();
     return [tick, time];
   };
   self.tick = self;
   self.pause     = function ()  { _pause(); }
   self.pauseFeedback = function (id, op)  { _pauseFeedback(id, op); }
   self.setJiffy  = function (s) { jiffy = s; };
-  self.setStart  = function (i) { if (i<=end) { start = i; setElementState(); } return self; };
-  self.setEnd    = function (i) { if (start<=i) { end = i; setElementState(); } return self; };
-  self.setLength = function (i) { length=i; if (length<=end) { end = length-1; setElementState(); } return self; };
+  self.setStart  = function (i) { if (i<=end) { start = i; } return self; };
+  self.setEnd    = function (i) { if (start<=i) { end = i; } return self; };
+  self.setLength = function (i) { length=i; if (length<=end) { end = length-1; } return self; };
   self.rewind = function () { // Reset state so next tick is 0 and next time will be nowish.
     if (paused) {
       paused = false;
@@ -3020,7 +3044,6 @@ var TickerTimer = (function (ctx) {
     }
     tick = end;
     time = 0;
-    setElementState();
     return self;
   };
   // Derive the actual current tick (which will most likely have already been processed)
@@ -3036,10 +3059,7 @@ var TickerTimer = (function (ctx) {
   self.isPaused = function () { return paused; }
   self.lastTime = function () { return time + jiffy; }
   self.jiffy = function () { return jiffy; }
-  self.elementState = function () { return elementState; }
   self.getRange = function () { return [start, end]; }
-
-  setElementState();
   return self;
 })(ctx);
 
@@ -3050,28 +3070,10 @@ var TickerTimer = (function (ctx) {
 ******************************************************************************/
 var PhraseSheet = function (id, tickCount, tickertimer) {
   var element = ElementById(id); // phrase
-
-  // Debugging:: hxiPut the TickerTimer's state element to the title bar
-  //element.previousElementSibling.appendChild(tickertimer.elementState());
+  var knobs = element.previousElementSibling;
 
   let ticks = []; // The row of ticks [ [header [parts]] ... ]
-  let parts = []; // List of all Part objects created.
-
-  // Create the tick columns and the top row tick marks. Part div's will be inserted/removed later.
-  // [ [[0]] [[1]] ... ]
-  for (var y=0; y < tickCount; y++) {
-    ticks[y] = CreateAppendChild('div', element);
-    let header = CreateAppendChild('p', ticks[y], (Floor(y/8) % 10));
-    header.onmousedown = function (y, header, e) {
-      if (e.shiftKey) { tickertimer.setEnd(y); }
-      else { tickertimer.setStart(y); }
-      let [start, end] = tickertimer.getRange();
-      // Reset Phrase tick header highlights.
-      for (var i=0; i < tickCount; i++) {
-        ticks[i].firstChild.style.color = (i<start || end<i) ? "#555" : "";
-      }
-    }.bind(null, y, header);
-  }
+  let parts = []; // List of all Part objects created.  Their elements will be scattered about the tick.
 
   var self = function () { };
   self.element = function () { return element; }
@@ -3082,7 +3084,49 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   self.partsOnTick = function (tick) {
     return parts.filter( p => p.isOnTick(tick) );
   }
-  self.partsResetZ = () => parts.forEach( p => p.element().style.zIndex="" );
+  self.partsResetZ = function () {
+    parts.forEach( p => p.element().style.zIndex="" );
+  }
+  self.refreshHeader = function () {
+    // Reset Phrase tick header highlights.
+    let [start, end] = tickertimer.getRange();
+    for (var i=0; i < tickCount; i++) {
+      ticks[i].firstChild.style.backgroundColor = (i<start || end<i) ? "#444" : "";
+    }
+  }
+  self.setLength = function (c) { tickertimer.setLength(c); self.refreshHeader(); return self; }
+  self.setStart = function (i) { tickertimer.setStart(i); self.refreshHeader(); return self; }
+  self.setEnd = function (i) { tickertimer.setEnd(i); self.refreshHeader(); return self; }
+  self.play = function (tick, time) {
+    self.partsOnTick(tick).forEach( part => {
+      part.play(tick, time);
+    });
+  }
+
+  // Create the tick columns and the top row tick marks. Part div's will be inserted/removed later.
+  // [ [[0]] [[1]] ... ]
+  for (var row=0; row < tickCount; row++) {
+    let tick = CreateAppendChild('div', element); // Create the tick column
+    ticks.push(tick); // Keep track of the tick columns
+    let header = CreateAppendChild('p', tick, (Floor(row/8) % 10)); // Add the tick header
+
+    // Hovering will play all ticks in each part.
+    header.onmouseover = function (tick) {
+      if (brushToPlay()) { self.play(tick, 0); }
+    }.bind(null, row);
+
+    header.onmousedown = function (y, header, e) { // Handle updating sheet's start/end playback ticks.
+      if (e.shiftKey) { self.setEnd(y); }
+      else { self.setStart(y); }
+    }.bind(null, row, header);
+
+  }
+
+  // Add a brushToPlay toggle button
+  let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
+    ()=>(ticks.forEach(t=>t.firstChild.style.color=null), "@("),
+    ()=>(ticks.forEach(t=>t.firstChild.style.color="inherit"), "@)"));
+  DB([brushToPlay(), brushToPlay.element()]);
 
   // Reset the TickerTimer state object
   tickertimer
@@ -3122,22 +3166,23 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
 
   // Header  - left most cells of row
   var title    = CreateAppendChild('div', part, "Part");
-  var controls = CreateAppendChild('div', part);
+  var knobs = CreateAppendChild('div', part);
+  knobs.className = "knobs";
 
-  controls.className = "knobs";
   var body = CreateAppendChild('div', part);
   body.className = "partpiano";
 
   // Grid tick header
   var headerTicks = CreateAppendChild('div', body);
+
   for (var y=0; y<GridWidth; y++) {
-    if (0 == y%8) {
-      CreateAppendChild('p', headerTicks, "*");
-    } else if (0 == y%4) {
-      CreateAppendChild('p', headerTicks, "+");
-    } else {
-      CreateAppendChild('p', headerTicks, "-");
-    }
+    let header = 
+      0 == y%8 ? CreateAppendChild('p', headerTicks, "*") :
+      0 == y%4 ? CreateAppendChild('p', headerTicks, "+")
+               : CreateAppendChild('p', headerTicks, "-");
+    header.onmouseover = function (tick) {
+      if (brushToPlay()) { self.playTick(tick, 0); }
+    }.bind(null, y);
   }
 
   // Container of rows of label and ticks
@@ -3169,7 +3214,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
         // Action Hovering/dragging
         tick.onmouseover = function (y, e) {
           if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
-          else if (e.target.innerText != NBSP) playable.play(y, .5, 0); // Play it
+          else if (e.target.innerText == "*") playable.play(y, .5, 0); // Play it
         }.bind(0, y);
       }
     } else {
@@ -3189,17 +3234,22 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
         // Action Hovering/dragging
         tick.onmouseover = function (y, e) {
           if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "*" : NBSP) } // Continue painting
-          else if (e.target.innerText != NBSP) playable.play(y, .5, 0); // Play it
+          else if (e.target.innerText != NBSP && brushToPlay()) playable.play(y, .5, 0); // Play it
         }.bind(0, y);
       }
     }
   }
 
-  // Toggle body
-  var collapse = CreateAppendChild('p', controls, "-");
+  // Toggle-body knob
+  var collapse = CreateAppendChild('p', knobs, "-");
   collapse.className = "actor";
   collapse.onmousedown = e => ToggleElementDisplay(grid);
 
+  // Toggle brushToPlay knob
+  knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
+  let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
+    () => (headerTicks.style.color=null, "@("),
+    () => (headerTicks.style.color="inherit", "@)"));
 
   // Clicking title will raise it.  Dragging title will move it around the phrase/sheet
   title.onmousedown = function (e) {
@@ -3233,10 +3283,16 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
     return tickIdx <= t && t < tickIdx + GridWidth;
   }
 
-  let ticks = function (y) { return grid.children[y].children[1]; }
+  let ticks = function (y) { return grid.children[y].children[1]; };
 
   self.play = function (gtick, time) {
     let tick = gtick - tickIdx;
+    if ( 0 <= tick && tick < GridWidth ) {
+      self.playTick(tick, time);
+    }
+  }
+
+  self.playTick = function (tick, time) {
     if ( 0 <= tick && tick < GridWidth ) {
       for ( var y=0; (y < GridHeight); ++y ) {
         let row = ticks(y).children;
@@ -3321,9 +3377,7 @@ var sequencerLoop = function () {
   if (tt) {
     let [tick, time] = tt; // Tick to process and time to emit
 
-    PhraseSheet.partsOnTick(tick).forEach( part => {
-      part.play(tick, time);
-    });
+    PhraseSheet.play(tick, time);
 
   }
 } // sequencerLoop
@@ -3748,9 +3802,11 @@ function Main () {
   }
   */
 
-  PartSynth(PhraseSheet, 18, 1*20, 16, 32, DrumKit0 );
-  PartSynth(PhraseSheet, 18, 3*20, 61, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  PartSynth(PhraseSheet, 8, 1*20, 16, 32, DrumKit0 );
+  PartSynth(PhraseSheet, 8, 16*20, 61, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
   //PartSynth(PhraseSheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+
+  PhraseSheet.setStart(8).setEnd(8+32-1);
 
 
   setInterval(sequencerLoop, 50);
