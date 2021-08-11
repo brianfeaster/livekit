@@ -69,6 +69,7 @@
   <div class="knobs">&nbsp;<p id="freq" class="actor" contenteditable="true">65.4064</p></div>
   <div>
     <div id="piano1" class="piano"></div>
+    <div id="piano2" class="piano"></div>
   </div>
 </div>
 
@@ -88,6 +89,7 @@
 ******************************************************************************/
 var NBSP = "\u00a0";
 var Floor = Math.floor;
+var Round = Math.round;
 var Ceil  = Math.ceil;
 var Pow   = Math.pow;
 var Abs   = Math.abs;
@@ -100,8 +102,10 @@ var CreateAppendChild = function (name, element, text) {
   return e;
 };
 
-var CreateInsertBefore = function (name, element) {
-  return element.insertBefore(document.createElement(name), element.firstChild);
+var CreateInsertChild = function (name, element, text) {
+  var e = element.insertBefore(document.createElement(name), element.firstChild);
+  if (text != undefined) { e.innerText = text; }
+  return e;
 };
 
 var ToggleElementDisplay = function (e1, e2) {
@@ -120,7 +124,7 @@ var ElementById = function(id) {
    A DOM element is created and added to parent. When clicked, the appropriate
    handler will be called.  Each callback will receive the event and should
    return a string representing the true or false state.  The current state and
-   associated DOM element can be queried.  
+   associated DOM element can be queried.
 
    USAGE::
    let a = AppendNewToggleActor(document.body, false, "myclass", ()=>"yes", ()=>"no");
@@ -138,9 +142,41 @@ var AppendNewToggleActor = function (parent, state, className, callbackTrue, cal
   // Return state
   let self = () => state;
   // Return DOM element
-  self.element = () => e;
+  self.element = () => element;
   return self;
 };
+
+
+/*  Slowly reveal or hide a DOM element.
+*/
+var popupToggle = function (id) {
+  var e = document.getElementById(id);
+  var opacity;
+
+  if (e.style.display == "none") { // If off enable it and ramp opacity from 0 to 1
+    e.style.opacity = opacity = 0;
+    e.style.display = "";
+    e.style.position = "fixed";
+    e.style.top = (window.innerHeight/2 - e.clientHeight/2) + "px"; // Always be centering
+    e.style.left = (window.innerWidth/2 - e.clientWidth/2) + "px";
+  } else {
+    opacity = 100;
+  }
+
+  var self = function() {
+    opacity -= 5;
+    e.style.opacity = Abs(opacity/100);
+    if (opacity == 0) {
+      e.style.display = "none";
+      return;
+    }
+    if (opacity == -100) return;
+
+    setTimeout(self, 10);
+  }
+
+  self();
+}
 
 
 /******************************************************************************
@@ -187,11 +223,11 @@ var DB = (function () {
   } else {
     setStyles(consoleElement);
     self = function (s) {
-      if (lastPost == s) { 
+      if (lastPost == s) {
        ++repeatCount;
         s = repeatCount + s;
       } else {
-        repeatCount = 0; 
+        repeatCount = 0;
       }
       consoleElement.innerHTML += (shouldNewline ? "" : "\n") + s;
       consoleElement.scrollTop = consoleElement.scrollHeight;
@@ -204,7 +240,7 @@ var DB = (function () {
         if (lastPost == s) { ++repeatCount; }
         consoleElement.lastChild.innerText = (0<repeatCount ? repeatCount : "") + "[" + t + "]" + s;
       } else {
-        consoleElement.appendChild(document.createElement('p')).innerText = "[" + t + "]" + s; 
+        consoleElement.appendChild(document.createElement('p')).innerText = "[" + t + "]" + s;
         consoleElement.scrollTop = consoleElement.scrollHeight;
         lastPostType = t;
         repeatCount = 0;
@@ -234,7 +270,7 @@ var DB = (function () {
 /******************************************************************************
   Useful DAW objects
 ******************************************************************************/
-var ctx = (window.AudioContext && new window.AudioContext()) || 
+var ctx = (window.AudioContext && new window.AudioContext()) ||
           (window.webkitAudioContext && new window.webkitAudioContext());
 DB.check(ctx, "Missing window.AudioContext.  Use Chrome browser.");
 
@@ -265,7 +301,7 @@ var hyphen =
       } else {
          DB("hyphen bin: " + e.data);
       }
-   } 
+   }
 
    var get = function (songid) {
       if (server.readyState != 1) {
@@ -305,7 +341,7 @@ var hyphen =
                      of the passed byte array.
   ALGORITHM NOTES::
     An incomplete octet will be correctly created because:
-    (emptyArray[0] >> num)   =>   (undefined >> num)   =>  
+    (emptyArray[0] >> num)   =>   (undefined >> num)   =>
 ******************************************************************************/
 var Base64 = (function () {
   //// Private
@@ -596,7 +632,7 @@ var IBC = function () {
                       using event e, initial value i, and setter
                       callback c.
 ******************************************************************************/
-var DOMSlider = function () {
+var Slider = function () {
   var callback;
   var mouseMoved = false,  mouseUp = false;
   var e = CreateAppendChild('p', document.body);
@@ -619,7 +655,7 @@ var DOMSlider = function () {
   }
   e.children[0].onmouseleave = function () {
     if (mouseMoved) { e.style.display = "none"; }
-  } 
+  }
   e.onmousedown = function (event) { event.stopPropagation(); }
   e.onmouseup = function (event) { // Handle clicking, releasing, then moving
     if (mouseMoved || mouseUp) { e.style.display="none"; }
@@ -635,12 +671,12 @@ var DOMSlider = function () {
     e.style.top = Floor(event.pageY - e.clientHeight/3.0) +"px" ;
     e.style.left = Floor(event.pageX - e.clientWidth*(0.995-val)) +"px" ;
   }
-} // DOMSlider
+}() // DOMSlider
 
 
 /******************************************************************************
-  Create a piano keyboard in the DOM.  It emulates a keyboard controlled
-  oscillator.
+  Skeuomorphic piano keyboard.  Implements the DOM element as well as the
+  audio synthesis.
 
   USAGE::
     var kb = new PianoKeyboard(id, keyCount, startKey, startOctave, startFrequency);
@@ -653,65 +689,75 @@ var DOMSlider = function () {
     startFrequency First specified key's frequency
 
   METHODS::
-    .keyElement(key)       Get the DOM element representing the white or black key  Indexed between 0 and number of keys-1.
+    .keyElement(key)       Get the DOM element representing the white or black
+                           key  Indexed between 0 and number of keys-1.
     .freq(key)             Frequency of key.
-    .setStartFrequency(f)  Reset the base frequencies of the keyboard (first note's frequency)
-    .highlight(key, color) Highlight the key using color.  Overrides its last color, if any, by pushing new color on a stack.
-    .unhighlight(key)      Removes last/top highlighted color and reverts to its previous color (if any)
+    .setStartFrequency(f)  Reset base frequencies of the keyboard (first note's freq)
+    .highlight(key, color) Highlight the key using color.  Overrides its last
+                           color, if any, by pushing new color on a stack.
+    .unhighlight(key)      Removes last/top highlighted color and reverts to
+                           its previous color (if any)
     .midi(event)
 
-  IBC: Keyboard will broadcast the physical press.  Listener will act on the
-       message and set tick notes, high-light things, send audio to the DAC,
-       etc.  Performance is a concern.  Audio stream related messages should
-       avoid the IBC and manage private callback lists.
+  GLOBALS::
+    IBC: Keyboard will broadcast the physical press.  Listener will act on the
+         message and set tick notes, high-light things, send audio to the DAC,
+         etc.  Performance is a concern.  Audio stream related messages should
+         avoid the IBC and manage private callback lists.
 ******************************************************************************/
 var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequency) {
   //// Private
   var self = this;
-  var _pianoDOM = document.getElementById(id);
-  DB.check(_pianoDOM, "ERROR: PianoKeyboard: Element id=" + id + " not found in DOM.");
+  var element = document.getElementById(id);
+  DB.check(element, "ERROR: PianoKeyboard: Element id=" + id + " not found in DOM.");
   var _keysDOM = []; // Keeps track of the DOM elements which represent the white and black keys in order.
   var _frequencies = [];
   var _highlights = []; // Array of stacks.  An empty stack implies no high-light.
   var _highlightColor = "#f8f"
 
   // Helpers to play and set and unset key's high-light
-  var _setHighlightAndPlay = function(key) {
+  var keyDown = function(key) {
     self.highlight(key, _highlightColor); // Set current key high-light
-    IBC([id, key, true]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
+    IBC(["keyboard1", key, true]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
   }
-  var _unsetHighlightAndStopPlaying = function(key) {
+  var keyUp = function(key) {
     self.unhighlight(key, _highlightColor);
-    IBC([id, key, false]); // Notify listeners a key was pressed  ["piano1", 12, stopPlaying]
+    IBC(["keyboard1", key, false]); // Notify listeners a key was pressed  ["piano1", 12, stopPlaying]
   }
 
   var _createDOM = function () {
     var notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    var sharps = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]; // Bool table of sharps in an octave, starting at C
-    var newKey, keyPair = false; // The piano DOM is composed of divs containing either just a div (white key) or div and p (white and black key)
     startKey += startOctave * 12; // Adjust initial key to account for octave
-    for (var k=0; (k < keyCount); ++k) {
-
-      if (1==sharps[(k + startKey)%12]) {
-        // Create the sharp key
-        newKey = CreateAppendChild('p', _pianoDOM);
-      } else {
-        // Create the natural key
-        newKey = CreateAppendChild('div', _pianoDOM)
+    for (let ii=0; (ii < keyCount); ++ii) {
+      let key = ii + startKey;
+      let newKey;
+      if (2 == notes[key % 12].length) { // Create the sharp key
+        newKey = CreateAppendChild('p', element);
+      } else { // Create the natural key
+        newKey = CreateAppendChild('div', element)
         // Create the key's label (only natural keys)
-        var note   = (k + startKey) % 12;
-        var octave = Floor((k + startKey) / 12);
+        var octave = Floor(key / 12);
+        let note   = key % 12;
         newKey.innerText = notes[note] + (note==0?octave:'');
       }
 
       // Register mouse event handlers for every keyboard DOM element representing a key.
-      newKey.onmouseover  = function(k){ if (MouseIsDown) { _setHighlightAndPlay(k); } }.bind(null, k);
-      newKey.onmousedown  = function(k){ MouseIsDown=true; _setHighlightAndPlay(k); }.bind(null, k);
-      newKey.onmouseleave = _unsetHighlightAndStopPlaying.bind(null, k);
-      newKey.onmouseup = _unsetHighlightAndStopPlaying.bind(null,k);
+      newKey.onmouseover  = function(k) {
+        if (MouseIsDown) { keyDown(k); }
+      }.bind(null, key);
+
+      newKey.onmousedown  = function(k) {
+        MouseIsDown=true; keyDown(k);
+      }.bind(null, key);
+
+      newKey.onmouseleave = function (k) {
+        if (MouseIsDown) { keyUp(k); }
+      }.bind(null, key);
+
+      newKey.onmouseup = keyUp.bind(null,key);
 
       _keysDOM.push(newKey); // Keep track of each created key.
-      _frequencies.push(startFrequency * Pow(2, k/12.0));
+      _frequencies.push(startFrequency * Pow(2, key/12.0));
       _highlights.push([]);
     }
   };
@@ -753,10 +799,10 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
     var c = d[0];
     var k = d[1];
     if ((144 <= c) && (c<=159) && (0 <= k) && (k < keyCount)) {
-      if (d[2]==0) { _unsetHighlightAndStopPlaying(k); } else { _setHighlightAndPlay(k); }
+      if (d[2]==0) { keyUp(k); } else { keyDown(k); }
     }
   }
-} // PianoKeyboard 
+} // PianoKeyboard
 
 
 /******************************************************************************
@@ -823,7 +869,7 @@ var AudioBuffers = function (ctx, filenames) {
   this.length = filenames ? filenames.length : 0;
   this.fileName = function (i) { return filenames[i]; }
   this.audioBuffer = function (i) { return _audioBuffers[i]; }
-} // AudioBuffers 
+} // AudioBuffers
 
 
 /******************************************************************************
@@ -968,7 +1014,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     if (synthIndex < 4) { return; }
     // Count synth usage in all parts of all phrases.
     Sheet0.phrases.map(function(ph){ ph.parts.map(function(pt){ if (self == pt.playable) ++count; }); });
-    if (0 < count) { return; } 
+    if (0 < count) { return; }
     Synthesizers.splice(synthIndex, 1);
     document.getElementById('synths').removeChild(_element); // Remove myself from DOM
   }
@@ -1045,7 +1091,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   }
 
   var _play = function (key, vol, when, sustain) {
-    // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
+    // Depending on how this is called (when is either 0 or a real time in the
+    // future) now will be the current time or when
     var sus = _sus + (sustain ? sustain*TickerTimer.jiffy() : 0);
     var hold = when==0;
     var at = hold ? ctx.currentTime : when;
@@ -1100,9 +1147,9 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     osc.stop(at + _rel);
   }
 
-  var _keyboardMessageHandler = function (m) {
-    //DB("_keyboardMessageHandler:"+m);
-    if (m[0] != "piano1") { return; }
+  var listenerIBC = function (m) {
+    //DB.post("synthIBCin",  m);
+    if (m[0] != "keyboard1") { return; }
     if (m[2] == undefined) {
       _play(m[1], 1.0, 0);
     } if (m[2]) {
@@ -1115,7 +1162,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _nameDOM.onmousedown = function () {
     if (_nameDOM.style.background == "") {
       _nameDOM.style.background="#880";
-      _ibcId = IBC.addListener(_keyboardMessageHandler);
+      _ibcId = IBC.addListener(listenerIBC);
     } else {
       _nameDOM.style.background="";
       _ibcId = IBC.delListener(_ibcId);
@@ -1397,7 +1444,7 @@ var Lowpass = function (ctx) {
 
 
 
-// Keeps track of all possible sound destinations. The main context destination 
+// Keeps track of all possible sound destinations. The main context destination
 // is always and more including delay and lowpass filters.
 var Destinations = (function (ctx) {
   var self = [];
@@ -2340,7 +2387,7 @@ var saveSongLK3 = function () {
 
         // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
         if (part.playable instanceof Synthesizer) {
-          for (var i=0; i<part.tickLength; ++i) { 
+          for (var i=0; i<part.tickLength; ++i) {
             if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
           }
         } else {
@@ -2558,7 +2605,7 @@ var saveSongLK2 = function () {
 
         // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
         if (part.playable instanceof Synthesizer) {
-          for (var i=0; i<part.tickLength; ++i) { 
+          for (var i=0; i<part.tickLength; ++i) {
             if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
           }
         } else {
@@ -2725,7 +2772,7 @@ var saveSongLK1 = function () {
 
         // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
         if (part.playable instanceof Synthesizer) {
-          for (var i=0; i<part.tickLength; ++i) { 
+          for (var i=0; i<part.tickLength; ++i) {
             if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
           }
         } else {
@@ -2829,7 +2876,7 @@ Base64('base64digits...').forEach(function(x){s+=("0"+x.toString(16)).slice(-2);
 */
 var saveSongLK0 = function () {
   var pattern=[];
-  var synthParts=[]; 
+  var synthParts=[];
 
   // Over each part...
   Sheet0.phrase(0).parts.map(function (part) {
@@ -2901,60 +2948,44 @@ var restoreSongLK0 = function (keyboard, drumKit) {
 
 
 /******************************************************************************
-
- Event loops
-
-******************************************************************************/
-var popupToggle = function (id) {
-  var e = document.getElementById(id);
-  var opacity;
-
-  if (e.style.display == "none") { // If off enable it and ramp opacity from 0 to 1
-    e.style.opacity = opacity = 0;
-    e.style.display = "";
-    e.style.position = "fixed";
-    e.style.top = (window.innerHeight/2 - e.clientHeight/2) + "px"; // Always be centering
-    e.style.left = (window.innerWidth/2 - e.clientWidth/2) + "px";
-  } else {
-    opacity = 100;
-  }
-
-  var fn = function() {
-    opacity -= 5;
-    e.style.opacity = Abs(opacity/100);
-    if (opacity ==0) {
-      e.style.display = "none";
-      return;
-    }
-    if (opacity == -100) return;
-
-    setTimeout(fn, 10);
-  }
-
-  fn();
-
-}
-
-/*
-var reset = function (event) {
-  if (Pause) {
-    Pause = false;
-    DB.post('pause', 'resume');
-  }
-  //Beat = BeatInitial;
-  //nextBeatTime = ctx.currentTime + 0.25;
-  TickerTimer.rewind();
-}
-*/
-
-
-/******************************************************************************
   TickerTimer - Manage ticks and time
 
   Ticks represent periodic time units that need to be sequentially
   considered when creating and emitting audio on time.  This will
   make sure enough ticks have been consumed so that there is at most
   1 second of audio processed.
+
+  The older method notes:
+
+    Periodically high-light whatever beat is currently being heard.
+    It uses the web audio context's currentTime as a time reference.
+
+    Context.currentTime--+   +------------ nextBeatTime, Beat=3
+                         |   | +---currentTime+1.0
+                         v   v |
+           |--0--|--1--|--2--|--3--|--0--|--1--|--2--|--...
+           ^           ^ ^   ^
+     initial           | |   final
+             Beat=2----+ +----beatf=2.6
+
+    Periodically tell each part in the current phrase to send their notes
+    out to the audio context.  Called eveyr 50ms from onload.
+
+    Beat is increment and all of it's ticks rendered each call.
+    nextBeatTimeis also incremented.  They form an invariant.
+
+    Render a beat at a time which means each tick in each part at this beat
+    moment are written.  nextBeatTime is the cursor in time delimiting audio
+    written and audio to be written.
+
+    A quasi-realtime cursor that needs to stay ahead of the audio context's
+    time.  This cursor represents the next beat/tick to render and the
+    beat/ticks that have already been rendered.
+
+    nextBeatTime incremented each time a beat is rendered. initially == ctx.currentTime
+
+    Anytime the beat window is adjusted, and Beat is out of bounds, it should be
+    set to initial.
 ******************************************************************************/
 var TickerTimer = (function (ctx) {
   // Settings
@@ -2993,10 +3024,10 @@ var TickerTimer = (function (ctx) {
     }
     fn()
   }
-  
+
   var _pause = function () {
     var highlight = true;
-    var id = false; 
+    var id = false;
     var color = '#f00';
     var e = document.getElementsByClassName('pause')[0];
     if (paused = !paused) { // Did we switch into pause mode?
@@ -3046,6 +3077,7 @@ var TickerTimer = (function (ctx) {
     time = 0;
     return self;
   };
+  self.now = () => ctx.currentTime;
   // Derive the actual current tick (which will most likely have already been processed)
   // When deriving the live beat for DOM highlighting, must do so within the current active beat range
   // So the distance between (BeatTime - currentTime) % beatDuration is how beats to subtract from Beat
@@ -3094,6 +3126,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
       ticks[i].firstChild.style.backgroundColor = (i<start || end<i) ? "#444" : "";
     }
   }
+  self.getRange = function () { return tickertimer.getRange(); }
   self.setLength = function (c) { tickertimer.setLength(c); self.refreshHeader(); return self; }
   self.setStart = function (i) { tickertimer.setStart(i); self.refreshHeader(); return self; }
   self.setEnd = function (i) { tickertimer.setEnd(i); self.refreshHeader(); return self; }
@@ -3102,6 +3135,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
       part.play(tick, time);
     });
   }
+  self.tickerTimer = () => tickertimer;
 
   // Create the tick columns and the top row tick marks. Part div's will be inserted/removed later.
   // [ [[0]] [[1]] ... ]
@@ -3143,7 +3177,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
     var measures = document.getElementById('addmeasures').value;
     var beats    = document.getElementById('addbeats').value;
     var ticks    = document.getElementById('addticks').value;
-    PartSynth(PhraseSheet, 2, 2*20, 61, measures*beats*ticks, Synthesizers[0]);
+    PartSynth(PhraseSheet, 2, 2*20, 0, 60, measures*beats*ticks, Synthesizers[0]);
     _addphrase.children[0].style.display="none";
   };
 
@@ -3152,9 +3186,9 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
 
 
 /******************************************************************************
-  PartSynth - Model a part which for now is a drawable synth grid.
+  PartSynth - Model a part which for now is a drawable synth/piano or drumkit grid.
 ******************************************************************************/
-var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth, playable) {
+var PartSynth = function (phraseSheetObj, tickIdx, height, KeyBeg, KeyEnd, TickCount, playable) {
   // Consider parent
   var phrase = phraseSheetObj.element(); // Parent object's element
 
@@ -3164,8 +3198,8 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
   part.className = "window";
   part.style.top = Math.max(height, phrase.firstChild.firstChild.scrollHeight)+"px";
 
-  // Header  - left most cells of row
-  var title    = CreateAppendChild('div', part, "Part");
+  // Header - left most cells of row
+  var title = CreateAppendChild('div', part, "Part");
   var knobs = CreateAppendChild('div', part);
   knobs.className = "knobs";
 
@@ -3175,34 +3209,48 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
   // Grid tick header
   var headerTicks = CreateAppendChild('div', body);
 
-  for (var y=0; y<GridWidth; y++) {
-    let header = 
-      0 == y%8 ? CreateAppendChild('p', headerTicks, "*") :
-      0 == y%4 ? CreateAppendChild('p', headerTicks, "+")
+  for (var t=0; t<TickCount; t++) {
+    let header =
+      0 == t%8 ? CreateAppendChild('p', headerTicks, "*") :
+      0 == t%4 ? CreateAppendChild('p', headerTicks, "+")
                : CreateAppendChild('p', headerTicks, "-");
     header.onmouseover = function (tick) {
       if (brushToPlay()) { self.playTick(tick, 0); }
-    }.bind(null, y);
+    }.bind(null, t);
   }
 
   // Container of rows of label and ticks
   var grid = CreateAppendChild('div', body);
+  var GridHeight = KeyEnd - KeyBeg;
 
   // Create ticks
-  for (var y = GridHeight - 1; 0 <= y; y--) {
+  for (var y = 0; y<=GridHeight; y++) {
     if (playable instanceof Synthesizer) {
 
       let note = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][y%12];
       let nat = 1 == note.length;
       let label = nat ? note : NBSP; // Natural notes are 1 char long
 
-      let row = CreateAppendChild("div", grid); // A row: Container of label and ticks
+      let row = CreateInsertChild("div", grid); // A row: Container of label and ticks
       row.className = note.charAt(0) + (nat ? " nat" : " shp");
-  
+
       let header = CreateAppendChild("p", row, label); // White keys show note
+
+      header.onmousedown = function (y) {
+        let timer = phraseSheetObj.tickerTimer();
+        if (!timer.isPaused(event) && listenerID ) {
+          let row = KeyEnd - KeyBeg - y;
+          let tick = timer.tickLive()-tickIdx;
+          grid.children[row].children[1].children[tick].innerText = "*";
+        }
+        // Play the sound if recording or live audio is enabled
+        if (brushToPlay() || listenerID) { playable.play(y + KeyBeg, 1, 0, 0); }
+
+      }.bind(null, y);
+
       let notes = CreateAppendChild("div", row); // Row of ticks
 
-      for (var x=0; x<GridWidth; x++) {
+      for (var x=0; x<TickCount; x++) {
         var tick = CreateAppendChild('p', notes, NBSP); // A tick
         // Action Clicking
         tick.onmousedown = function (e) {
@@ -3217,12 +3265,26 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
           else if (e.target.innerText == "*") playable.play(y, .5, 0); // Play it
         }.bind(0, y);
       }
+
     } else {
-      let row = CreateAppendChild("div", grid); // A row: Container of label and ticks
+      let row = CreateInsertChild("div", grid); // A row: Container of label and ticks
       row.className = "drumkit";
       let header = CreateAppendChild("p", row, playable.name(y));
+
+      header.onmousedown = function (y) {
+        let timer = phraseSheetObj.tickerTimer();
+        if (!timer.isPaused(event) && listenerID ) {
+          let row = KeyEnd - KeyBeg - y;
+          let tick = timer.tickLive()-tickIdx;
+          grid.children[row].children[1].children[tick].innerText = "*";
+        }
+        // Play the sound if recording or live audio is enabled
+        if (brushToPlay() || listenerID) { playable.play(y + KeyBeg, 1, 0, 0); }
+
+      }.bind(null, y);
+
       let notes = CreateAppendChild("div", row);
-      for (var x=0; x<GridWidth; x++) {
+      for (var x=0; x<TickCount; x++) {
         var tick = CreateAppendChild('p', notes, NBSP);
         // Action Clicking
         tick.onmousedown = function (e) {
@@ -3245,11 +3307,43 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
   collapse.className = "actor";
   collapse.onmousedown = e => ToggleElementDisplay(grid);
 
-  // Toggle brushToPlay knob
   knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
+
+  // Toggle brushToPlay knob
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
     () => (headerTicks.style.color=null, "@("),
     () => (headerTicks.style.color="inherit", "@)"));
+
+  knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
+
+  // Toggle Recording
+  let listenerID = null;
+  var recordKnob = CreateAppendChild('p', knobs, "#");
+  var listenerIBC = function (m) {
+
+    let timer = phraseSheetObj.tickerTimer();
+    if (timer.isPaused() || m[0] != "keyboard1") { return; }
+
+    let tick = timer.tickLive()-tickIdx;
+
+    if (m[2]) {
+      let row = KeyEnd-KeyBeg - m[1];
+      grid.children[row].children[1].children[tick].innerText = "*";
+      playable.play(m[1], .5, 0, 0);
+    }
+  }
+
+  recordKnob.onmousedown = function () {
+    if (recordKnob.style.background == "") {
+      recordKnob.style.background="#800";
+      listenerID = IBC.addListener(listenerIBC);
+    } else {
+      recordKnob.style.background = "";
+      IBC.delListener(listenerID);
+      listenerID = null;
+    }
+    IBC(["tickclick", 0, 0]); // This tells any active part to stop listening to keyboard events.
+  }
 
   // Clicking title will raise it.  Dragging title will move it around the phrase/sheet
   title.onmousedown = function (e) {
@@ -3257,7 +3351,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
 
     phraseSheetObj.partsResetZ(); // Raise this phrase and reset others
     part.style.zIndex = 1;
-    
+
     // Intial state
     var tickHeight = phrase.firstChild.firstChild.scrollHeight;
     var tickWidth  = phrase.lastChild.offsetLeft / (phrase.childElementCount-1); // Tick width take average width of all ticks
@@ -3280,36 +3374,33 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
   self.element = () => part;
   self.startTick = function () { return tickIdx; }
   self.isOnTick = function (t) {
-    return tickIdx <= t && t < tickIdx + GridWidth;
+    return tickIdx <= t && t < tickIdx + TickCount;
   }
 
   let ticks = function (y) { return grid.children[y].children[1]; };
 
   self.play = function (gtick, time) {
-    let tick = gtick - tickIdx;
-    if ( 0 <= tick && tick < GridWidth ) {
-      self.playTick(tick, time);
-    }
+    self.playTick(gtick - tickIdx, time);
   }
 
   self.playTick = function (tick, time) {
-    if ( 0 <= tick && tick < GridWidth ) {
-      for ( var y=0; (y < GridHeight); ++y ) {
-        let row = ticks(y).children;
-        var note = row[tick];
-        if (note.innerText == "*") {
-          var sustain=0;
-          var next = tick+1;
-          while (next < GridWidth
-                 && row[next].innerText == "-") {
-            ++sustain;
-            ++next;
-          }
-          playable.play(GridHeight-y-1, .5, time, sustain);
+    if (tick < 0 || TickCount <= tick) {
+      DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
+      return;
+    }
+    for (let y=0; (y <= GridHeight); ++y ) {
+      let row = ticks(y).children;
+      var note = row[tick];
+      if (note.innerText == "*") {
+        var sustain=0;
+        var next = tick+1;
+        while (next < TickCount
+               && row[next].innerText == "-") {
+          ++sustain;
+          ++next;
         }
+        playable.play(GridHeight-y, .5, time, sustain);
       }
-    } else {
-      DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+GridWidth-1}`);
     }
   }
 
@@ -3319,150 +3410,72 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, GridHeight, GridWidth
 }
 
 
-/* Periodically high-light whatever beat is currently being heard.
-   It uses the web audio context's currentTime as a time reference.
-
- Context.currentTime--+   +------------ nextBeatTime, Beat=3
-                      |   | +---currentTime+1.0
-                      v   v |
-        |--0--|--1--|--2--|--3--|--0--|--1--|--2--|--...
-        ^           ^ ^   ^
-  initial           | |   final
-          Beat=2----+ +----beatf=2.6
-
-  Periodically tell each part in the current phrase to send their notes
-  out to the audio context.  Called eveyr 50ms from onload.
-
-  Beat is increment and all of it's ticks rendered each call.
-  nextBeatTimeis also incremented.  They form an invariant.
-
-  Render a beat at a time which means each tick in each part at this beat moment are written.
-  nextBeatTime is the cursor in time delimiting audio written and audio to be written.
-
-  A quasi-realtime cursor that needs to stay ahead of the audio context's time.  This cursor represents the next beat/tick to render
-  and the beat/ticks that have already been rendered.
-
-  nextBeatTime incremented each time a beat is rendered. initially == ctx.currentTime
-
-  The rendering loop needs to:
-   * At start: nextBeatTime and Beat are set well beyond ctx.currentTime
-   * Eventually ctx catches up to within a second of nextBeatTime triggering sequencing
-   * Render Beat until BeatFinal is reached
-  ----------
-   * Iterate over each sheet (multiple sheets?).
-   * Determine the current phrase based on the global beat counter.  Each phrase will have a fixed max beat count.
-   * Over each part, determine the current beat and render the ticks
-   * Increment the global beat index
-
-   Anytime the beat window is adjusted, and Beat is out of bounds, it should be set to initial.
-*/
-
-var sequencerLoop = function () {
-/*
-  if (Pause || (0 == Sheet0.length())) return;
-  while (nextBeatTime <= (ctx.currentTime + 1.0)) { // Try to keep 1 second of audio rendered ahead of the current time.
-    var _phrasebeat = Sheet0.phraseRefAndLocalBeat(Beat);
-    var _phrase = _phrasebeat[0].phrase;
-    var _phraseBeat = _phrasebeat[1];
-    // Over each part in the current phrase, play the ticks associated with specific phrase-beat.
-    _phrase.parts.map(function(p){ p.playTicks(_phraseBeat, nextBeatTime); });
-    // Increment beat state
-    nextBeatTime += BeatDuration;
-    if (Beat == BeatInitial) { saveSongLK3(); } // On the initial beat, upate the URL's get string. TODO: add a button for this.
-    if (BeatFinal < (Beat += 1)) { Beat = BeatInitial + (Beat - BeatFinal - 1); }
-  } // while
-*/
+/******************************************************************************
+ Event loop handlers
+******************************************************************************/
+var sequencerHandler = function () {
   if (TickerTimer.isPaused()) { return; }
   let tt = TickerTimer();
-  if (tt) {
-    let [tick, time] = tt; // Tick to process and time to emit
-
+  if (tt) { // This might be false implying the CTX output buffer has enough (1 sec) prebuffered
+    let [tick, time] = tt; // Tick to process, future time to send audio
     PhraseSheet.play(tick, time);
-
   }
-} // sequencerLoop
+}
 
+var renderHandler = function (PhraseSheet) {
+  let lastTick = 0;
+  let lastVisible = 0;
+  let phrase = PhraseSheet.element();
+  let children= phrase.children;
 
-var rendererLoop = (function (_lastRef, _lastPhrase, _lastBeat, _lastTick) { return function () {
-  if ((ctx.currentTime <= TickerTimer.lastTime() ) && PhraseSheet != null) { // Only if audio has been queued and a Grid exists
-    let phrase = PhraseSheet.element();
-    var tick = TickerTimer.tickLive();
+  // Scroll the grid so current tick is visible
+  let scrollPhraseWindow = function (tick) {
+    // Zooming in Chrome alters these so they must be dynamically queried
+    var tickWidth = children.item(0).getBoundingClientRect().width;
+    var phraseWidth = phrase.getBoundingClientRect().width;
 
-    // Scroll the grid so current tick is centered somewhere
-    var tickWidth = phrase.children.item(1).offsetLeft - phrase.children.item(0).offsetLeft;
+    // Adding the phrase window's scroll amount to the phrase window's width
+    // gives the location of the last visible tick, dividing by tickWidth
+    // for the tick index.
+    var visibleTick = Round((phraseWidth + phrase.scrollLeft) / tickWidth)-2;
 
-    var pos = Floor(phrase.clientWidth / tickWidth / 2);
+    if (visibleTick < children.length) {
+      children[lastVisible].firstChild.style.textDecoration="";
+      children[visibleTick].firstChild.style.textDecoration="underline";
+      lastVisible = visibleTick;
+    }
 
-    phrase.scrollLeft =
-      phrase.children.item(tick).offsetLeft
-      - (pos-1) * tickWidth
-      - phrase.children.item(0).offsetLeft; // The row labels are a different size
+    var pos = Floor(phraseWidth / tickWidth / 2);
 
-    let element = phrase.children.item(_lastTick);
-    element.style.background=""; 
+    // If the current active phrase range is in the viewport, don't scroll it.
+    if (visibleTick < PhraseSheet.getRange()[1]) {
+      phrase.scrollLeft =
+        children[tick].offsetLeft
+        - (pos-1) * tickWidth;
+        //- children.item(0).offsetLeft; // The row labels are a different size
+    }
+  }
 
+  let updateHighlight = function (tick) {
+    let element = phrase.children.item(lastTick);
+    element.style.background="";
     element = phrase.children.item(tick);
-    element.style.background="red"; 
-    _lastTick = tick;
+    element.style.background="red";
   }
 
-  // Old renderer
-  /*
-  if ((nextBeatTime <= ctx.currentTime) || (0 == Sheet0.length())) return;
-  var beatf = (Beat - (nextBeatTime - ctx.currentTime) / BeatDuration);
-  var beat = Mod(Floor(beatf)-BeatInitial, BeatFinal-BeatInitial+1)+BeatInitial;
-
-  // Determine the realtime phrase and beat for the sheet (TODO implement multiple sheets)
-  var _phrasebeat = Sheet0.phraseRefAndLocalBeat(beat);
-  var ref = _phrasebeat[0];
-  var beatLocal = _phrasebeat[1];
-  var phrase = ref.phrase;
-
-  var ticksper = phrase.tickCount / phrase.beatCount; // local ticksper
-  var tick = (beatLocal * ticksper) + Floor((beatf - Floor(beatf)) * ticksper); // Local tick
-
-  // Unhighlight the last beats in the last phrase highlighted.
-  if (_lastBeat != beatLocal && _lastPhrase) {
-    for (var p=0; (p < _lastPhrase.partCount()); ++p) {
-      var part = _lastPhrase.part(p);
-      part.elementBeat(_lastBeat).style.backgroundColor = "";
-    }
-    if (_lastRef) { _lastRef.unhighlightBeat(); } // TODO: Conditional hack when BeatInitial/Final changed
-  }
-
-  // Over all parts highlight beat and part labels
-  for (var p=0; (p < phrase.partCount()); ++p) {
-    var part = phrase.part(p);
-    if (_lastBeat != beatLocal) { // Highlight the current active beat
-      part.elementBeat(beatLocal).style.backgroundColor = "green";
-    }
-
-    if (_lastTick != tick) {
-      // Highlight the part name
-      if ('.' != part.elementTick(tick).innerText) {
-        part.elementName.style.color = part.playable.color // Update part name's high-light every tick
-
-        if (part.playable instanceof Synthesizer) { // Highlight this part's keyboard with it's synth's color
-          part.playable.highlight(part.key(tick));
-        }
-      } else {
-        part.elementName.style.color = "" // Unhighlight part's name every tick
-        if (part.playable instanceof Synthesizer) { // Unhighlight this part's keyboard highlight (if any)
-          part.playable.unhighlight();
-        }
-      }
+  return () => {
+    var tick = TickerTimer.tickLive();
+    // Update when audio in the CTX pipeline,
+    // phrase sheet exist, tick has changed.
+    if ( (tick != lastTick)
+         && (ctx.currentTime <= TickerTimer.lastTime())
+         && (PhraseSheet != null) ) {
+      scrollPhraseWindow(tick);
+      updateHighlight(tick);
+      lastTick = tick;
     }
   }
-
-  // Tell the phrase's icon to highlight its beat marker
-  if (ref) ref.highlightBeat(beatLocal); // TODO need the condition for emtpy sheets.
-
-  _lastRef = ref;
-  _lastPhrase = phrase;
-  _lastBeat = beatLocal;
-  _lastTick = tick;
-  */
-};})(null, null, null, null);
+};
 
 
 
@@ -3475,6 +3488,10 @@ var rendererLoop = (function (_lastRef, _lastPhrase, _lastBeat, _lastTick) { ret
 var setupControls = function (keyboard) {
   //document.getElementById('speed').onmouseenter = function (event) { event.target.focus(); }
   //document.getElementById('speed').onmouseleave = function (event) { event.target.blur(); }
+
+  document.getElementById('volume').oninput = function (e) {
+    Volume = e.srcElement.value / 100.0;
+  }
 
 /*
   document.getElementById('volume').onkeydown = function (event) {
@@ -3569,6 +3586,44 @@ var setupControls = function (keyboard) {
     }); // function
   } // function
 
+  window.onmouseup = function () { MouseIsDown = false; }
+
+  window.onkeydown = function (event) {
+    if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
+    if (event.keyCode == 82) { // Pressing 'r' will rewind the playback.
+      TickerTimer.rewind();
+    }
+    if (event.keyCode == 32) { // Pressing 'r' will rewind the playback.
+      TickerTimer.rewind();
+    }
+    if (event.keyCode == 80) {
+      TickerTimer.pause(event); // Pressing 'p' will pause the playback.
+      event.stopPropagation(); // TODO This doesn't prevent spacebar from scrolling the main window so for now 'p' will pause the sequencer.
+    }
+    DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code);
+    if (event.keyCode == 67) { IBC(["tickclear"]); } // Clear whatever the cursor is on
+    if (event.keyCode == 68) { IBC(["tickmove", -1]); } // Retard cursor key 'd'
+    if (event.keyCode == 70) { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
+  }
+
+  // Stop tablets and phones from scrolling and resizing?
+  document.body.addEventListener(
+    'touchstart',
+    function (event) {
+      if (event.touches.length=='fack') {
+        event.preventDefault();
+      }
+      DB(event.touches);
+    },
+    true);
+
+
+  // Prevent space from scrolling browser window as it's used for DAW controls.
+  window.addEventListener('keydown', function(e) {
+    if (e.keyCode == 32 && e.target == document.body) {
+      e.preventDefault();
+    }
+  });
 } // setupControls ()
 
 
@@ -3590,9 +3645,9 @@ var setupControls = function (keyboard) {
 
   Sheet of one phrase.  Phrase of parts visually divided into two measures,
   measures/bars of four beats, beats divided into X number of ticks.
-    x, xx x. .. x, x. xx x.       Tick order:  1 3 
-    ,, .. x. .. ,, .. .x .x                    |/| 
-                                               2 4 
+    x, xx x. .. x, x. xx x.       Tick order:  1 3
+    ,, .. x. .. ,, .. .x .x                    |/|
+                                               2 4
   Official      Me
   ------------- --------
   Measure / Bar
@@ -3604,7 +3659,6 @@ var setupControls = function (keyboard) {
 [18, 21, 25, 18, 21, 25, 18, 21, 26, 16, 20, 23, 16, 20, 23, 16, 20, 25, 13, 18, 20, 13, 18, 20, 13, 17, 20, 18, 21, 25, 18, 21, 25, 18, 25, 30, 25, 29, 32, 30, 33, 37, 30, 37, 41, 42, 45, 30].map(function(n,i){Sheet0.phrase(0).part(2).setKey(i,n-12);})
 
 ******************************************************************************/
-var Slider = new DOMSlider();
 var Sheet0; // New hotness
 var Keyboard0;
 var DrumKit0;
@@ -3612,66 +3666,16 @@ var Synthesizer0;
 var Synthesizer1;
 var Synthesizer2;
 var Synthesizer3;
-
-//var Delay0;
-//var Lowpass0;
-//var currentReference = false;
-//var BeatInitial = 0; // Inclusive
-//var BeatFinal = 0; // Inclusive
-
-document.getElementById('volume').oninput = function (e) {
-  Volume = e.srcElement.value / 100.0;
-}
-
 var DragOverTickState = 1;
 var Volume = 0.5; // A global value shared by all output gain logic
 var BeatDuration = 60/parseInt(document.getElementById('speed').innerText);
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
-window.onmouseup = function () { MouseIsDown = false; }
-
-window.onkeydown = function (event) {
-  if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
-  if (event.keyCode == 82) { // Pressing 'r' will rewind the playback.
-    TickerTimer.rewind();
-  }
-  if (event.keyCode == 32) { // Pressing 'r' will rewind the playback.
-    TickerTimer.rewind();
-  }
-  if (event.keyCode == 80) {
-    TickerTimer.pause(event); // Pressing 'p' will pause the playback.
-    event.stopPropagation(); // TODO This doesn't prevent spacebar from scrolling the main window so for now 'p' will pause the sequencer.
-  }
-  DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code);
-  if (event.keyCode == 67) { IBC(["tickclear"]); } // Clear whatever the cursor is on
-  if (event.keyCode == 68) { IBC(["tickmove", -1]); } // Retard cursor key 'd'
-  if (event.keyCode == 70) { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
-}
-
-// Stop tablets and phones from scrolling and resizing?
-document.body.addEventListener(
-  'touchstart',
-  function (event) {
-    if (event.touches.length=='fack') {
-      event.preventDefault();
-    }
-    DB(event.touches);
-  },
-  true);
-
-
-// Prevent space from scrolling browser window as it's used for DAW controls.
-window.addEventListener('keydown', function(e) {
-  if (e.keyCode == 32 && e.target == document.body) {
-    e.preventDefault();
-  }
-});
 
 /******************************************************************************
   onload
 ******************************************************************************/
-var addphrase;
 var midi = null;
 var PhraseSheet = PhraseSheet("phrase", 128, TickerTimer);
 
@@ -3679,28 +3683,26 @@ function Main () {
   DB("::onload");
   //IBC.debug();
 
-  //Sheet0 = new Sheet(); // Global sheet object
-
-  document.getElementById('addsynth').onmousedown = function () { 
+  document.getElementById('addsynth').onmousedown = function () {
     var s = new Synthesizer(ctx, false, 1, keyboard, "#84f");
     document.getElementById('synths').appendChild(s.element);
   }
 
-  document.getElementById('addFilterDelay').onmousedown = function () { 
+  document.getElementById('addFilterDelay').onmousedown = function () {
     var d = new Delay(ctx);
     Destinations.push(d);
     document.getElementById('filters').appendChild(d.element);
   }
 
-  document.getElementById('addFilterLowpass').onmousedown = function () { 
+  document.getElementById('addFilterLowpass').onmousedown = function () {
     var filt = new Lowpass(ctx);
     Destinations.push(filt);
     document.getElementById('filters').appendChild(filt.element);
   }
 
-  // Create a piano object and DOM element.  61 keys, starting at C2.
-  var keyboard = new PianoKeyboard("piano1", 61, 0, 1, 65.4064);
-  //var keyboard2 = new PianoKeyboard("piano1",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
+  // Create a piano object and DOM element.  61 keys, starting at C0.
+  var keyboard = new PianoKeyboard("piano1", 128, 0, 0, 65.4064);
+  //var keyboard2 = new PianoKeyboard("piano2",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
   // MIDI fun
   function onMIDISuccess( m ) {
@@ -3710,24 +3712,24 @@ function Main () {
   function onMIDIFailure(msg) { DB.error("MIDI "+msg ); }
 
   if (navigator.requestMIDIAccess) {
-    navigator.
-    requestMIDIAccess({"sysex":true, "software":true}).then(onMIDISuccess, onMIDIFailure);
+    navigator
+      .requestMIDIAccess({"sysex":true, "software":true})
+      .then(onMIDISuccess, onMIDIFailure);
   }
 
   setupControls(keyboard); // Setup menus and moveable buttons.
 
   // Load the audio asynchronously and create the default drumkit.
-  var filenames = ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"];
-  var drumKit = new Drumkit(ctx, "orange", filenames);
+  var drumKit = new Drumkit(ctx, "orange", ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
 
   Keyboard0 = keyboard;
   DrumKit0 = drumKit
 
   // LiveKa7 v3
-  restoreSongLK3(keyboard, drumKit); //, hyphen.song());
+  //restoreSongLK3(keyboard, drumKit); //, hyphen.song());
 
   // LiveKa7 v2
-  restoreSongLK2(keyboard, drumKit);
+  //restoreSongLK2(keyboard, drumKit);
 
   // LiveKa7 v1
   if (!Synthesizer0) {
@@ -3751,10 +3753,10 @@ function Main () {
     document.getElementById('synths').appendChild(Synthesizer3.element);
   }
 
-  restoreSongLK1(keyboard, drumKit);
+  //restoreSongLK1(keyboard, drumKit);
 
   // LiveKa7 v0
-  restoreSongLK0(keyboard, drumKit); // Parse get string
+  //restoreSongLK0(keyboard, drumKit); // Parse get string
 
   // Effects
   if (!Destinations[1]) {
@@ -3769,48 +3771,14 @@ function Main () {
     document.getElementById('filters').appendChild(e.element);
   }
 
-  // Start me up
-  //BeatFinal = Sheet0.beatCount()-1; // Set playback range to end of song.
-  //Sheet0.updateBeatMarkers();
-
-  //PhraseGlobalCounter = Sheet0.phraseCount();
-
-  // Begin event loops
-  //nextBeatTime = ctx.currentTime+1.0;
-
-
-  // TODO Global hack mechanism to create a new phrase.
-  /*
-  addphrase = function (e) {
-    var shouldUpdateRange = (BeatFinal == Sheet0.beatCount()-1);
-    var measures = document.getElementById('addmeasures').value;
-    var beats    = document.getElementById('addbeats').value;
-    var ticks    = document.getElementById('addticks').value;
-    var phrase = new Phrase(false, measures, beats, ticks, keyboard);
-    phrase.createPart(Synthesizer1);
-    phrase.createPart(Synthesizer2);
-    phrase.createPart(Synthesizer3);
-    phrase.createPart(Synthesizer0);
-    for (var n=0; n<drumKit.length; ++n) { phrase.createPartFixed(drumKit, n) }
-
-    Sheet0.add(new PhraseReference(phrase));
-
-    if (shouldUpdateRange) { // Set playback range to end of song.
-      BeatFinal = Sheet0.beatCount()-1;
-      Sheet0.updateBeatMarkers();
-    }
-  }
-  */
-
-  PartSynth(PhraseSheet, 8, 1*20, 16, 32, DrumKit0 );
-  PartSynth(PhraseSheet, 8, 16*20, 61, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  PartSynth(PhraseSheet, 8, 1*20, 0, 15, 32, DrumKit0 );
+  PartSynth(PhraseSheet, 8, 16*20, 0, 60, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
   //PartSynth(PhraseSheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
   PhraseSheet.setStart(8).setEnd(8+32-1);
 
-
-  setInterval(sequencerLoop, 50);
-  setInterval(rendererLoop, 50); // This should only update every tick
+  setInterval(sequencerHandler, 50);
+  setInterval(renderHandler(PhraseSheet), 50); // This should only update every tick
 
   DB("--onload [" + DB.status() + "]");
 } // Main
