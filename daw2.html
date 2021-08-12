@@ -78,7 +78,7 @@
   <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
 </div>
 
-<p><img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.jpg" onclick="ctx.resume()"/></p>
+<p><img id="pauseicon" title="PSYCHEDELIC PAWS"  alt="PSYCHEDELIC PAWS" style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.jpg" onclick="ctx.resume()"/></p>
 
 
 <script type="text/javascript">//<![CDATA[
@@ -95,6 +95,7 @@ var Pow   = Math.pow;
 var Abs   = Math.abs;
 var Rnd   = Math.random;
 var Mod   = function (n,d) { return n - d * Math.floor(n/d); };
+var Trunc2 = function (f) { return Round(f*100)/100; }
 
 // Array of integers: []  OR  [0..a-1]  OR  [a..b]
 var Range = function (a, b) {
@@ -959,13 +960,13 @@ var Drumkit = function (ctx, color, keyStart, filenames) {
    frequency begins.
 
   Key Note Freq      Key Note Freq
-    0 C-1  8.1758     69 A4   440/Middle A
-    9 A-1 13.75       81 A5   880
-   21 A0  27.5        93 A6  1760
-   33 A1  55         105 A7  3520
-   45 A2 110         117 A8  7040
-   57 A3 220         127 G9 12543.8540
-   60 C4 261.6256/Middle C
+    0 C-1  8.1758       69 A4   440/Middle A
+    9 A-1 13.75         81 A5   880
+   21 A0  27.5 88Piano  93 A6  1760
+   33 A1  55           105 A7  3520
+   45 A2 110           108 C8  4186.0090 88Piano
+   57 A3 220           117 A8  7040
+   60 C4 261.6256/MidC 127 G9 12543.8540
 */
 var KeyFreq = function (freqa0) {
 
@@ -3134,7 +3135,7 @@ var TickerTimer = (function (ctx) {
   self.jiffy = function () { return jiffy; }
   self.getRange = function () { return [start, end]; }
   return self;
-})(ctx);
+})(ctx); // TickerTimer
 
 
 /******************************************************************************
@@ -3144,9 +3145,9 @@ var TickerTimer = (function (ctx) {
 var PhraseSheet = function (id, tickCount, tickertimer) {
   var element = ElementById(id); // phrase
   var knobs = element.previousElementSibling;
-
   let ticks = []; // The row of ticks [ [header [parts]] ... ]
   let parts = []; // List of all Part objects created.  Their elements will be scattered about the tick.
+  let tickLastRender = 0;
 
   var self = function () { };
   self.element = function () { return element; }
@@ -3172,11 +3173,52 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   self.setStart = function (i) { tickertimer.setStart(i); self.refreshHeader(); return self; }
   self.setEnd = function (i) { tickertimer.setEnd(i); self.refreshHeader(); return self; }
   self.play = function (tick, time) {
-    self.partsOnTick(tick).forEach( part => {
+    self.partsOnTick(tick).forEach( (part) => {
       part.play(tick, time);
     });
   }
   self.tickerTimer = () => tickertimer;
+  self.isPaused = ()=>tickertimer.isPaused();
+
+  let lastVisible = 0; // DEBUGGING mark the rightmost visible tick header in the scrollable viewing phrase element
+
+  self.render = function (tick) {
+
+    let children = element.children;
+  
+    // Scroll the grid so current tick is visible
+
+    // Zooming in Chrome alters these so they must be dynamically queried
+    var tickWidth = children[0].getBoundingClientRect().width;
+    var phraseWidth = element.getBoundingClientRect().width;
+
+    // Adding the phrase window's scroll amount to the phrase window's width
+    // gives the location of the last visible tick, dividing by tickWidth
+    // for the tick index.
+    var visibleTick = Round((phraseWidth + element.scrollLeft) / tickWidth)-2;
+
+    if (visibleTick < children.length) { // DEBUGGING see comment above
+      children[lastVisible].firstChild.style.textDecoration="";
+      children[visibleTick].firstChild.style.textDecoration="underline";
+      lastVisible = visibleTick;
+    }
+
+    var pos = Floor(phraseWidth / tickWidth / 2);
+
+    // If the current active phrase range is in the viewport, don't scroll it.
+    if (visibleTick < PhraseSheet.getRange()[1]) {
+      element.scrollLeft =
+        children[tick].offsetLeft
+        - (pos-1) * tickWidth;
+    }
+
+    // Highlight the full vertical tick
+
+    children[tickLastRender].className="";
+    children[tick].className="phrasehighlight";
+
+    tickLastRender = tick;
+  }
 
   // Create the tick columns and the top row tick marks. Part div's will be inserted/removed later.
   // [ [[0]] [[1]] ... ]
@@ -3233,6 +3275,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
 var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, TickCount, playable) {
   // Consider parent
   let phrase = phraseSheetObj.element(); // Parent object's element
+  let timer = phraseSheetObj.tickerTimer();
 
   // Creat part window
   // []
@@ -3269,19 +3312,20 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
     let key = keyBeg + ii;
     if (playable instanceof Synthesizer) {
 
-      let note = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][key%12];
-      let octave = (key-12)%12;
-      let nat = 1 == note.length;
-      let label = nat ? note : NBSP; // Natural notes are 1 char long
+      let note = key%12;
+      let octave = Floor((key-12)/12); // MIDI octaves start at C-1 up to G9
+      let noteLabel = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][note];
+      let nat = 1 == noteLabel.length; // Natural notes are 1 char long
+      let label = nat ? noteLabel + (0==note?octave:"") : NBSP;
 
       let row = CreateInsertChild("div", grid); // A row: Container of label and ticks
-      row.className = note.charAt(0) + (nat ? " nat" : " shp");
+      row.className = noteLabel.charAt(0) + (nat ? " nat" : " shp");
+      row.title = `${Trunc2(KeyFreq(key))}Hz  ${key}  ${noteLabel}${octave}`;
 
       let header = CreateAppendChild("p", row, label); // White keys show note
 
       header.onmousedown = function () {
-        let timer = phraseSheetObj.tickerTimer();
-        if (!timer.isPaused(event) && listenerID ) {
+        if (!phraseSheetObj.isPaused() && listenerID ) {
           let tick = timer.tickLive()-tickIdx;
           row.children[1].children[tick].innerText = "*";
         }
@@ -3314,8 +3358,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
       let header = CreateAppendChild("p", row, playable.name(key));
 
       header.onmousedown = function () {
-        let timer = phraseSheetObj.tickerTimer();
-        if (!timer.isPaused(event) && listenerID ) {
+        if (!phraseSheetObj.isPaused(event) && listenerID ) {
           let tick = timer.tickLive()-tickIdx;
           row.children[1].children[tick].innerText = "*";
         }
@@ -3362,8 +3405,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   let recordKnob = CreateAppendChild('p', knobs, "#");
   let listenerIBC = function (m) {
 
-    let timer = phraseSheetObj.tickerTimer();
-    if (timer.isPaused() || m[0] != "keyboard1") { return; }
+    if (phraseSheetObj.isPaused() || m[0] != "keyboard1") { return; }
 
     let tick = timer.tickLive()-tickIdx;
 
@@ -3455,71 +3497,29 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
 
 
 /******************************************************************************
- Event loop handlers
+ Event loop handler callbacks
 ******************************************************************************/
-var sequencerHandler = function () {
-  if (TickerTimer.isPaused()) { return; }
-  let tt = TickerTimer();
-  if (tt) { // This might be false implying the CTX output buffer has enough (1 sec) prebuffered
-    let [tick, time] = tt; // Tick to process, future time to send audio
-    PhraseSheet.play(tick, time);
-  }
+var sequencerHandler = function (phraseObj) {
+  return function () {
+    if (phraseObj.isPaused()) { return; }
+    let tt = TickerTimer(); // returns [tick to process, time audio is written/buffered]
+    if (tt) { // This might be false implying the CTX output buffer has enough (1 sec) prebuffered
+      PhraseSheet.play.apply(null, tt);
+    }
+  };
 }
 
-var renderHandler = function (PhraseSheet) {
-  let lastTick = 0;
-  let lastVisible = 0;
-  let phrase = PhraseSheet.element();
-  let children= phrase.children;
-
-  // Scroll the grid so current tick is visible
-  let scrollPhraseWindow = function (tick) {
-    // Zooming in Chrome alters these so they must be dynamically queried
-    var tickWidth = children.item(0).getBoundingClientRect().width;
-    var phraseWidth = phrase.getBoundingClientRect().width;
-
-    // Adding the phrase window's scroll amount to the phrase window's width
-    // gives the location of the last visible tick, dividing by tickWidth
-    // for the tick index.
-    var visibleTick = Round((phraseWidth + phrase.scrollLeft) / tickWidth)-2;
-
-    if (visibleTick < children.length) {
-      children[lastVisible].firstChild.style.textDecoration="";
-      children[visibleTick].firstChild.style.textDecoration="underline";
-      lastVisible = visibleTick;
-    }
-
-    var pos = Floor(phraseWidth / tickWidth / 2);
-
-    // If the current active phrase range is in the viewport, don't scroll it.
-    if (visibleTick < PhraseSheet.getRange()[1]) {
-      phrase.scrollLeft =
-        children[tick].offsetLeft
-        - (pos-1) * tickWidth;
-        //- children.item(0).offsetLeft; // The row labels are a different size
-    }
-  }
-
-  let updateHighlight = function (tick) {
-    let element = phrase.children.item(lastTick);
-    element.style.background="";
-    element = phrase.children.item(tick);
-    element.style.background="red";
-  }
-
-  return () => {
+var renderHandler = function (lastTick, phraseObj) {
+  return function () {
     var tick = TickerTimer.tickLive();
-    // Update when audio in the CTX pipeline,
-    // phrase sheet exist, tick has changed.
-    if ( (tick != lastTick)
-         && (ctx.currentTime <= TickerTimer.lastTime())
-         && (PhraseSheet != null) ) {
-      scrollPhraseWindow(tick);
-      updateHighlight(tick);
+    // Update when audio in the CTX pipeline and tick changed
+    if ( tick != lastTick
+         && ctx.currentTime <= TickerTimer.lastTime()) {
+      phraseObj.render(tick);
       lastTick = tick;
     }
-  }
-};
+  };
+}.bind(null, 0);
 
 
 
@@ -3743,7 +3743,7 @@ function Main () {
     document.getElementById('filters').appendChild(filt.element);
   }
 
-  // Create a piano object and DOM element.  61 keys, starting at C0.
+  // Create a piano object and DOM element.  88 keys, starting at 21/A0.
   Keyboard0 = new PianoKeyboard("piano1", 21, 88);
   //var keyboard2 = new PianoKeyboard("piano2",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
@@ -3817,7 +3817,7 @@ function Main () {
 
   PhraseSheet.setStart(8).setEnd(8+32-1);
 
-  setInterval(sequencerHandler, 50);
+  setInterval(sequencerHandler(PhraseSheet), 50);
   setInterval(renderHandler(PhraseSheet), 50); // This should only update every tick
 
   DB("--onload [" + DB.status() + "]");

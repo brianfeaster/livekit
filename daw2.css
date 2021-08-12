@@ -1,3 +1,6 @@
+/******************************************************************************
+  General
+******************************************************************************/
 body {
  margin:0 0 0 1ch;
  background:#000;
@@ -37,10 +40,50 @@ h1 {
   white-space:nowrap;
 }
 
+
+/******************************************************************************
+  Common 
+******************************************************************************/
+.mustshift:hover { background:red }
+
+.knobs > p {
+  display:inline-block;
+  background:#066;
+}
+
+
+.actor {
+  background-color:#066;
+  border: solid 1px #0000;
+  margin: 1px;
+}
+
+.actor:hover {
+  border:solid 1px #0ff
+}
+
+
+.volume  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; text-align:center}
+.volume:hover { border: solid 1px #a0a }
+.volume > p { display: none }
+.volume:hover > p { display: inline-block; }
+
+
+#addphrase { display:inline-block; }
+#addphrase > div > input { font-size:inherit; width:3ch; }
+
+
+/******************************************************************************
+ Song List Menu
+******************************************************************************/
 .songList > p:hover {
   background:#808
 }
 
+
+/******************************************************************************
+  Window 
+******************************************************************************/
 .window {
   display:inline-block;
   margin:0;
@@ -69,6 +112,10 @@ h1 {
   margin-top:-1px;
 }
 
+
+/******************************************************************************
+ Window Mini
+******************************************************************************/
 .windowmini {
   display:inline-block;
   vertical-align:top;
@@ -92,61 +139,10 @@ h1 {
   border: dashed 1px #444;
 }
 
-.actor {
-  background-color:#066;
-  border: solid 1px #0000;
-  margin: 1px;
-}
 
-.actor:hover {
-  border:solid 1px #0ff
-}
-
-
-.knobs > p {
-  display:inline-block;
-  background:#066;
-}
-
-.mustshift:hover { background:red }
-
-/*
-.phrases {
-  display:inline-block;
-  min-width: 1em;
-  min-height: 1em;
-  padding:0;
-}
-
-.phrases > div { margin:1ch; }
-.phrases > div > p { display:inline-block; background:#880 }
-.phrases > div > div { display:inline-block ; margin-left:1ch; }
-.phrases > div > div:last-child { display:block; border:solid 1px #880 }
-
-.phrases .partlist > b {
-  font-weight:normal;
-  display:inline-block;
-  text-align:center;
-  width:2em;
-  margin-right:.5em;
-  background:gray
-}
-
-.part { border:none; padding:0; margin:0 }
-.part > div { display:inline-block; vertical-align:top; }
-.part > b { display:inline-block; width:2em; vertical-align:top; text-align:center; background:#888 }
-.part > .beat      { border:0px; padding:0px; margin:1px; height:2.0em; width:2.1em; background:#222; color:#999 }
-.part > .beatfirst { background:#333 }
-.part > .beat:hover { border: solid 1px #a0a; margin:0px }
-.part > .beat > .tick { border:0; padding:0; margin:0; height:1em; width:1em; display:flex; justify-content:center; align-items:center; }
-.part > .beat .tick:nth-child(1) { float:left; }
-.part > .beat .tick:nth-child(2) { float:left; clear:both; }
-.part > .beat .tick:nth-child(1):hover { background-color:yellow}
-.part > .beat .tick:nth-child(2):hover { background-color:yellow}
-.part > .beat .tick:nth-child(3):hover { background-color:yellow}
-.part > .beat .tick:nth-child(4):hover { background-color:yellow}
-*/
-
+/******************************************************************************
+  Piano horizontal
+******************************************************************************/
 .piano {
  text-align:center; 
  color: black;
@@ -182,34 +178,32 @@ h1 {
 }
 
 
-.name  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; height:1em;}
-.name:hover { border: solid 1px #a0a }
+/******************************************************************************
+  Phrase
+******************************************************************************/
 
-.volume  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; text-align:center}
-.volume:hover { border: solid 1px #a0a }
-.volume > p { display: none }
-.volume:hover > p { display: inline-block; }
-
-
-#addphrase { display:inline-block; }
-#addphrase > div > input { font-size:inherit; width:3ch; }
-
-
-.phrase { height:40ch; overflow:scroll; width:calc(100vw - 2ch); white-space:nowrap; position:relative; }
+.phrase { height:50ch; overflow:scroll; width:calc(100vw - 2ch); white-space:nowrap; position:relative; }
 .phrase > div { background-color:#112; height:1000%; display:inline-block; }
-.phrase > div > p { color:#8ff; border:solid 1px transparent; background-color:#22F; position:sticky; top:0; z-index:2; }
+.phrase > div > p { border:solid 1px transparent; background-color:#22F; position:sticky; top:0; z-index:2; }
 .phrase > div > div { position: absolute;; }
+
+.phrase > div.phrasehighlight { background-color:blueviolet; }
+
 .phrase > div:hover     { background-color:blue; }
 .phrase > div:hover > p { background-color:blue; }
 .phrase > div > p:hover { border-color:cyan; }
 
+
+/******************************************************************************
+  PartSynth,  piano and drummit variants
+******************************************************************************/
 /* Header of ticks */
 .partpiano > div:nth-child(1) { color:#8ff; }
 .partpiano > div:nth-child(1) > p { border:solid 1px transparent; background-color:#444b; display:inline-block; }
 .partpiano > div:nth-child(1) > p:hover { border-color:cyan; }
 
 /* Label natural */
-.partpiano > div:nth-child(2) > div.nat > p { color:black; background-color:white; width:4ch; right:calc(100%); text-align:right; position:absolute; }
+.partpiano > div:nth-child(2) > div.nat > p { color:black; background-color:darkgrey; width:4ch; right:calc(100%); text-align:right; position:absolute; }
 /* Label sharp */
 .partpiano > div:nth-child(2) > div.shp > p { background-color:black; width:2.0ch; right:calc(100% + 2.0ch); position:absolute; z-index:1; }
 
@@ -222,9 +216,8 @@ h1 {
 .partpiano > div:nth-child(2) > div.drumkit > div,
 .partpiano > div:nth-child(2) > div.drumkit > div > p { height:1pc; }
 
-/* Natural labels */
+/* Natural key labels */
 .partpiano > div:nth-child(2) > div.nat > p { height:1.66em; }
-/* Labels */
 .partpiano > div:nth-child(2) > div.B.nat > p { margin-top: .06em; }
 .partpiano > div:nth-child(2) > div.A.nat > p { margin-top:-.23em; }
 .partpiano > div:nth-child(2) > div.G.nat > p { margin-top:-.51em; }
@@ -232,10 +225,9 @@ h1 {
 .partpiano > div:nth-child(2) > div.E.nat > p { margin-top:-.08em; }
 .partpiano > div:nth-child(2) > div.D.nat > p { margin-top:-.37em; }
 .partpiano > div:nth-child(2) > div.C.nat > p { margin-top:-.66em; }
-
+/* Sharp key labels */
 .partpiano > div:nth-child(2) > div.A.shp > p { margin-top: .15em; }
 .partpiano > div:nth-child(2) > div.F.shp > p { margin-top:-.15em; }
-
 .partpiano > div:nth-child(2) > div.D.shp > p { margin-top: .15em; }
 .partpiano > div:nth-child(2) > div.C.shp > p { margin-top:-.15em; }
 
@@ -253,8 +245,9 @@ h1 {
 
 /* Highlight label and [ticks] when hovering anywhere on full row */
 .partpiano > div:nth-child(2) > div:hover > div,
-.partpiano > div:nth-child(2) > div:hover > p { background-color:blue; }
+.partpiano > div:nth-child(2) > div:hover > p { color:yellow; background-color:blue; }
 /* Highligh any tick */
 .partpiano > div:nth-child(2) > div > div > p:hover { background:cyan; }
 
-/* ex ch PC EM /*
+
+/* ex ch PC EM -- CSS units/*
