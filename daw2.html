@@ -11,7 +11,7 @@
 </head>
 <body _oncontextmenu="return false;">
 
-<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:10em; position:fixed; right:0; bottom:0"></p>
+<p id="xDB" style="width:24em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:10em; position:fixed; right:0; bottom:0"></p>
 
 
 <div style="float:right">&#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</div>
@@ -96,6 +96,21 @@ var Abs   = Math.abs;
 var Rnd   = Math.random;
 var Mod   = function (n,d) { return n - d * Math.floor(n/d); };
 
+// Array of integers: []  OR  [0..a-1]  OR  [a..b]
+var Range = function (a, b) {
+  return   (a == undefined) ? []
+         : (b == undefined) ? [...Array(a).keys()]
+         : [...Array(b+1-a).keys()].map( n => n+a );
+}
+
+var RangeMap = function (rng, f) {
+  return (rng instanceof Array ? Range(...rng) : Range(rng)).map(f);
+}
+
+var RangeForEach = function (rng, f) {
+  return (rng instanceof Array ? Range(...rng) : Range(rng)).forEach(f);
+}
+
 var CreateAppendChild = function (name, element, text) {
   var e = element.appendChild(document.createElement(name));
   if (text != undefined) { e.innerText = text; }
@@ -119,12 +134,12 @@ var ElementById = function(id) {
 };
 
 
-/* A clickable DOM element object
+/* A click-toggleable element object
 
    A DOM element is created and added to parent. When clicked, the appropriate
    handler will be called.  Each callback will receive the event and should
-   return a string representing the true or false state.  The current state and
-   associated DOM element can be queried.
+   return a string set to the innerText.  The current state and associated
+   element have getters.
 
    USAGE::
    let a = AppendNewToggleActor(document.body, false, "myclass", ()=>"yes", ()=>"no");
@@ -137,7 +152,7 @@ var AppendNewToggleActor = function (parent, state, className, callbackTrue, cal
   let act = (event) => element.innerText = (state ? callbackTrue : callbackFalse)(event);
   // Event handler: toggle state
   element.onmousedown = (event) => (state = !state, act(event));
-  // Call a handler so everything is synched.
+  // Call a handler at instantiation so everything is synched
   act();
   // Return state
   let self = () => state;
@@ -679,25 +694,21 @@ var Slider = function () {
   audio synthesis.
 
   USAGE::
-    var kb = new PianoKeyboard(id, keyCount, startKey, startOctave, startFrequency);
+    var kb = new PianoKeyboard(id, startKey, keyCount, startOctave);
 
   CONSTRUCTOR PARAMETERS::
     id             DOM element id to add the new piano element.
+    startKey       Initial key using MIDI note values 0..127 == C-1..G9
     keyCount       Number of keys
-    startKey       Initial key (0==C, 1==C#, ... 11=B)
-    startOctave    Initial octave
-    startFrequency First specified key's frequency
 
   METHODS::
-    .keyElement(key)       Get the DOM element representing the white or black
-                           key  Indexed between 0 and number of keys-1.
-    .freq(key)             Frequency of key.
+DEPREATED    .freq(key)             Frequency of key.
     .setStartFrequency(f)  Reset base frequencies of the keyboard (first note's freq)
     .highlight(key, color) Highlight the key using color.  Overrides its last
                            color, if any, by pushing new color on a stack.
     .unhighlight(key)      Removes last/top highlighted color and reverts to
                            its previous color (if any)
-    .midi(event)
+    .midi(event)           MIDI message to interpret and perform
 
   GLOBALS::
     IBC: Keyboard will broadcast the physical press.  Listener will act on the
@@ -705,97 +716,91 @@ var Slider = function () {
          etc.  Performance is a concern.  Audio stream related messages should
          avoid the IBC and manage private callback lists.
 ******************************************************************************/
-var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequency) {
+var PianoKeyboard = function (id, keyStart, keyCount) {
   //// Private
   var self = this;
   var element = document.getElementById(id);
   DB.check(element, "ERROR: PianoKeyboard: Element id=" + id + " not found in DOM.");
   var _keysDOM = []; // Keeps track of the DOM elements which represent the white and black keys in order.
-  var _frequencies = [];
+  //var _frequencies = [];
   var _highlights = []; // Array of stacks.  An empty stack implies no high-light.
   var _highlightColor = "#f8f"
+  var notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-  // Helpers to play and set and unset key's high-light
-  var keyDown = function(key) {
+  // Helpers to set/unset key highlight
+
+  var keyPress = function(key) {
     self.highlight(key, _highlightColor); // Set current key high-light
     IBC(["keyboard1", key, true]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
   }
-  var keyUp = function(key) {
+
+  var keyRelease = function(key) {
     self.unhighlight(key, _highlightColor);
     IBC(["keyboard1", key, false]); // Notify listeners a key was pressed  ["piano1", 12, stopPlaying]
   }
 
-  var _createDOM = function () {
-    var notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    startKey += startOctave * 12; // Adjust initial key to account for octave
-    for (let ii=0; (ii < keyCount); ++ii) {
-      let key = ii + startKey;
-      let newKey;
-      if (2 == notes[key % 12].length) { // Create the sharp key
-        newKey = CreateAppendChild('p', element);
-      } else { // Create the natural key
-        newKey = CreateAppendChild('div', element)
-        // Create the key's label (only natural keys)
-        var octave = Floor(key / 12);
-        let note   = key % 12;
-        newKey.innerText = notes[note] + (note==0?octave:'');
-      }
-
-      // Register mouse event handlers for every keyboard DOM element representing a key.
-      newKey.onmouseover  = function(k) {
-        if (MouseIsDown) { keyDown(k); }
-      }.bind(null, key);
-
-      newKey.onmousedown  = function(k) {
-        MouseIsDown=true; keyDown(k);
-      }.bind(null, key);
-
-      newKey.onmouseleave = function (k) {
-        if (MouseIsDown) { keyUp(k); }
-      }.bind(null, key);
-
-      newKey.onmouseup = keyUp.bind(null,key);
-
-      _keysDOM.push(newKey); // Keep track of each created key.
-      _frequencies.push(startFrequency * Pow(2, key/12.0));
-      _highlights.push([]);
+  RangeForEach(keyCount, (i) => {
+    let key = keyStart + i;
+    let newKey;
+    // Sharp or natural key.
+    if (2 == notes[key % 12].length) {
+      newKey = CreateAppendChild('p', element);
+    } else {
+      newKey = CreateAppendChild('div', element)
+      // Natural key gets a note/octave label
+      var octave = Floor((key-12) / 12);
+      let note = key % 12;
+      newKey.innerText = notes[note] + (note==0?octave:'');
     }
-  };
 
-  //// Construct
-  _createDOM();
+    // Register mouse event handlers for every keyboard DOM element representing a key.
+    newKey.onmouseover  = function () { if (MouseIsDown) { keyPress(key); } };
+    newKey.onmousedown  = function () { MouseIsDown=true; keyPress(key); };
+    newKey.onmouseleave = function () { if (MouseIsDown) { keyRelease(key); } };
+    newKey.onmouseup    = function () { keyRelease(key); }
+
+    _keysDOM.push(newKey); // Keep track of each created key.
+    _highlights.push([]);
+  });
+
   DB.check(keyCount == _keysDOM.length, "ERROR: PianoKeyboard: Created incorrect number of keys.");
-  DB.check(keyCount == _frequencies.length, "ERROR: PianoKeyboard: Created incorrect number of frequencies.");
 
-  // Public methods
-
-  this.keyElement = function (i) { return _keysDOM[i]; }
-  this.freq = function (k) { return _frequencies[k] + Rnd()*0.5 - 0.25; } // Adding a random [0..1] value to the freq in an attempt to get rid of beating.  Ended up with a phaser effect when equal notes are played instead.
-  this.setStartFrequency = function (newStartFrequency) {
-    for (var i=0; (i < keyCount); ++i) _frequencies[i] = newStartFrequency * Pow(2, i/12.0);
-  }
   this.highlight = function (key, color)  {
-    if ((0 <= key) && (key < keyCount)) {
-      _highlights[key].push(color);
-      _keysDOM[key].style.backgroundColor = color;
+    let i = key - keyStart;
+    if ((0 <= i) && (i < keyCount)) {
+      _highlights[i].push(color);
+      _keysDOM[i].style.backgroundColor = color;
     }
   }
+
   this.unhighlight = function (key, color) {
-    var i;
-    var stk = _highlights[key];
+    let i = key - keyStart;
+    let stk = _highlights[i];
     if (!stk) return; // Invalid key keys are ignored.
     if (color) { // Remove color from stack (could be anywhere)
-      i = stk.indexOf(color);
-      if (-1 < i) { stk.splice(i, 1); }
+      let s = stk.indexOf(color);
+      if (-1 < s) { stk.splice(s, 1); }
     } else {
       stk.pop(); // If no color passed, pop last color
     }
     // Set the key's color to the top of the stack
-    i = stk.length;
-    _keysDOM[key].style.backgroundColor = (0 < i) ? stk[i-1] : "";
+    let l = stk.length;
+    _keysDOM[i].style.backgroundColor = (0 < l) ? stk[l-1] : "";
   }
-  this.midi = function (event) {
-    var d = event.data;
+
+  /*
+    Voice Message        octet 1         octet 2          octet 3
+    -------------     ----------- ----------------- -----------------
+    Note off                8x    Key number        Note off velocity
+    Note on                 9x    Key number        Note on velocity
+    Polyphonic Key Pressure Ax    Key number        Amount of pressure
+    Control Change          Bx    Controller number Controller value
+    Program Change          Cx    Program number    None
+    Channel Pressure        Dx    Pressure value    None            
+    Pitch Bend              Ex    MSB               LSB
+  */
+  this.midi = function (msg) {
+    var d = msg.data;
     var c = d[0];
     var k = d[1];
     if ((144 <= c) && (c<=159) && (0 <= k) && (k < keyCount)) {
@@ -893,21 +898,22 @@ var AudioBuffers = function (ctx, filenames) {
     .connect(destination, idx) Set destination to destination
     .connected(idx)            Get destination to destination
 ******************************************************************************/
-var Drumkit = function (ctx, color, filenames) {
+var Drumkit = function (ctx, color, keyStart, filenames) {
   //// Local
   var audioBuffers = new AudioBuffers(ctx, filenames)
   var bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
   var destination = Array(audioBuffers.length).fill(Destinations.input(0)); // Default destination of each sound to default
   //// Public
   this.length = audioBuffers.length;
-  this.name = function (pad) {
-    return (undefined == pad) ? "TR-808" : audioBuffers.fileName(pad).slice(0,-4); // Chop ".raw"
+  this.name = function (key) {
+    return (undefined == key) ? "TR-808" : audioBuffers.fileName(key-keyStart).slice(0,-4); // Chop ".raw"
    }
   this.color = color
   this.play = function (pad, vol, when) {
-    var audioBuffer = audioBuffers.audioBuffer(pad);
+    let key = pad - keyStart;
+    var audioBuffer = audioBuffers.audioBuffer(key);
     if (!audioBuffer) {
-      DB.error(`Drumkit.play offset ${pad} expect 0..${this.length-1}`);
+      DB.error(`Drumkit.play offset ${pad} expect ${keyStart}..${keyStart+this.length-1}`);
       return; // Do nothing if no audio buffer.
     }
     var now = (when || ctx.currentTime); // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
@@ -916,7 +922,7 @@ var Drumkit = function (ctx, color, filenames) {
     source.onended = function() { source.disconnect(); } // When the audio stops, remove it from the graph.
     var gain = ctx.createGain(); // Ramp
 
-    if (pad == 0) { // HACK: need to generalize a sound pipeline
+    if (key == 0) { // HACK: need to generalize a sound pipeline
       // Loop the bass noise for one second with a LPF and gain ramp.
       source.playbackRate.setValueAtTime(0.39, now);
       source.playbackRate.linearRampToValueAtTime(0.37, now+bassReleaseTime);
@@ -940,11 +946,44 @@ var Drumkit = function (ctx, color, filenames) {
       source.start(when);
     }
 
-    gain.connect(destination[pad]);
+    gain.connect(destination[key]);
   }
   this.connect = function (dest, idx) { destination[idx] = dest; }
   this.connected = function (idx) { return destination[idx]; }
 } // Drumkit
+
+
+/* MIDI key to frequency converter
+
+   Key 21 (A-natural sub-contra-octave) is the key the base
+   frequency begins.
+
+  Key Note Freq      Key Note Freq
+    0 C-1  8.1758     69 A4   440/Middle A
+    9 A-1 13.75       81 A5   880
+   21 A0  27.5        93 A6  1760
+   33 A1  55         105 A7  3520
+   45 A2 110         117 A8  7040
+   57 A3 220         127 G9 12543.8540
+   60 C4 261.6256/Middle C
+*/
+var KeyFreq = function (freqa0) {
+
+  // Table of base frequency multipliers
+  let keymult = RangeMap(128, (k) => Pow(2, (k-21)/12.0));
+
+  let self = (k) => keymult[k] * freqa0;// + Rnd()*0.5 - 0.25;
+
+  self.setFreqA0 = (f) => freqa0=f;
+
+  return self;
+
+}(27.5);
+
+DB.check( KeyFreq(21)==27.5, "KeyFreq frequency mismatch key 21 != 27.5Hz");
+DB.check( KeyFreq(69)==440, "KeyFreq frequency mismatch key 69 != 440Hz");
+DB.check( KeyFreq(105)==3520, "KeyFreq frequency mismatch key 105 != 3520Hz");
+DB.check( KeyFreq(117)==7040, "KeyFreq frequency mismatch key 117 != 7040Hz");
 
 
 /******************************************************************************
@@ -1097,7 +1136,9 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     var hold = when==0;
     var at = hold ? ctx.currentTime : when;
     var osc = ctx.createOscillator(); // Create and add to table if not already
-    osc.frequency.value = keyboard.freq(key); // Ask the keyboard object for the frequency of this key
+    // Adding a random [0..1] value to the freq in an attempt to get rid of beating.
+    // Ended up with a phaser effect when equal notes are played instead.
+    osc.frequency.value = KeyFreq(key);
     osc.type = _waveforms[_waveformIdx];
     osc.onended = function(osc){ osc.disconnect(); }.bind(null, osc);
     osc.start(at);
@@ -1118,7 +1159,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _playStart = function (key, vol) {
     var at = ctx.currentTime; // Start now
     var osc = ctx.createOscillator();
-    osc.frequency.value = keyboard.freq(key); // Ask the keyboard object for the frequency of this key
+    osc.frequency.value = KeyFreq(key);
     osc.type = _waveforms[_waveformIdx];
     osc.start(at);
     osc.onended = function(osc){ osc.disconnect(); }.bind(null, osc);
@@ -1185,9 +1226,9 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   this.waveform = function () { return _waveforms[_waveformIdx]; }
   var _lastKey = -1;
   this.highlight = function (key) {
-      keyboard.unhighlight(_lastKey, color); // Remove last high-light
-      keyboard.highlight(key, color); // Set new high-light
-      _lastKey = key
+    keyboard.unhighlight(_lastKey, color); // Remove last high-light
+    keyboard.highlight(key, color); // Set new high-light
+    _lastKey = key
   };
   this.unhighlight = function () {
     keyboard.unhighlight(_lastKey, color); // Remove last high-light
@@ -3158,8 +3199,8 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
 
   // Add a brushToPlay toggle button
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
-    ()=>(ticks.forEach(t=>t.firstChild.style.color=null), "@("),
-    ()=>(ticks.forEach(t=>t.firstChild.style.color="inherit"), "@)"));
+    ()=>(ticks.forEach(t=>t.firstChild.style.color=null), ")("),
+    ()=>(ticks.forEach(t=>t.firstChild.style.color="inherit"), "()"));
   DB([brushToPlay(), brushToPlay.element()]);
 
   // Reset the TickerTimer state object
@@ -3186,30 +3227,31 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
 
 
 /******************************************************************************
-  PartSynth - Model a part which for now is a drawable synth/piano or drumkit grid.
+  PartSynth - Model a part which for now is a drawable synth/piano or drumkit
+              grid.
 ******************************************************************************/
-var PartSynth = function (phraseSheetObj, tickIdx, height, KeyBeg, KeyEnd, TickCount, playable) {
+var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, TickCount, playable) {
   // Consider parent
-  var phrase = phraseSheetObj.element(); // Parent object's element
+  let phrase = phraseSheetObj.element(); // Parent object's element
 
   // Creat part window
   // []
-  var part = CreateAppendChild('div', phrase.children[tickIdx]); // The Part element
+  let part = CreateAppendChild('div', phrase.children[tickIdx]); // The Part element
   part.className = "window";
   part.style.top = Math.max(height, phrase.firstChild.firstChild.scrollHeight)+"px";
 
   // Header - left most cells of row
-  var title = CreateAppendChild('div', part, "Part");
-  var knobs = CreateAppendChild('div', part);
+  let title = CreateAppendChild('div', part, "Part");
+  let knobs = CreateAppendChild('div', part);
   knobs.className = "knobs";
 
-  var body = CreateAppendChild('div', part);
+  let body = CreateAppendChild('div', part);
   body.className = "partpiano";
 
   // Grid tick header
-  var headerTicks = CreateAppendChild('div', body);
+  let headerTicks = CreateAppendChild('div', body);
 
-  for (var t=0; t<TickCount; t++) {
+  for (let t=0; t<TickCount; t++) {
     let header =
       0 == t%8 ? CreateAppendChild('p', headerTicks, "*") :
       0 == t%4 ? CreateAppendChild('p', headerTicks, "+")
@@ -3220,14 +3262,15 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, KeyBeg, KeyEnd, TickC
   }
 
   // Container of rows of label and ticks
-  var grid = CreateAppendChild('div', body);
-  var GridHeight = KeyEnd - KeyBeg;
+  let grid = CreateAppendChild('div', body);
 
   // Create ticks
-  for (var y = 0; y<=GridHeight; y++) {
+  RangeForEach(keyCount, (ii) => {
+    let key = keyBeg + ii;
     if (playable instanceof Synthesizer) {
 
-      let note = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][y%12];
+      let note = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][key%12];
+      let octave = (key-12)%12;
       let nat = 1 == note.length;
       let label = nat ? note : NBSP; // Natural notes are 1 char long
 
@@ -3236,74 +3279,72 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, KeyBeg, KeyEnd, TickC
 
       let header = CreateAppendChild("p", row, label); // White keys show note
 
-      header.onmousedown = function (y) {
+      header.onmousedown = function () {
         let timer = phraseSheetObj.tickerTimer();
         if (!timer.isPaused(event) && listenerID ) {
-          let row = KeyEnd - KeyBeg - y;
           let tick = timer.tickLive()-tickIdx;
-          grid.children[row].children[1].children[tick].innerText = "*";
+          row.children[1].children[tick].innerText = "*";
         }
         // Play the sound if recording or live audio is enabled
-        if (brushToPlay() || listenerID) { playable.play(y + KeyBeg, 1, 0, 0); }
+        if (brushToPlay() || listenerID) { playable.play(key, 1, 0, 0); }
 
-      }.bind(null, y);
+      };
 
       let notes = CreateAppendChild("div", row); // Row of ticks
 
-      for (var x=0; x<TickCount; x++) {
-        var tick = CreateAppendChild('p', notes, NBSP); // A tick
+      for (let x=0; x<TickCount; x++) {
+        let tick = CreateAppendChild('p', notes, NBSP); // A tick
         // Action Clicking
         tick.onmousedown = function (e) {
-          var txt = e.target.innerText;
+          let txt = e.target.innerText;
           DragOverTickState = txt == NBSP ? 1 : 2;
           MouseIsDown = true; // Set global state
           e.target.innerText = txt == NBSP ? "*" : NBSP;
         }
         // Action Hovering/dragging
-        tick.onmouseover = function (y, e) {
+        tick.onmouseover = function (e) {
           if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
-          else if (e.target.innerText == "*") playable.play(y, .5, 0); // Play it
-        }.bind(0, y);
+          else if (e.target.innerText == "*") playable.play(key, .5, 0); // Play it
+        };
       }
 
     } else {
       let row = CreateInsertChild("div", grid); // A row: Container of label and ticks
       row.className = "drumkit";
-      let header = CreateAppendChild("p", row, playable.name(y));
+      let header = CreateAppendChild("p", row, playable.name(key));
 
-      header.onmousedown = function (y) {
+      header.onmousedown = function () {
         let timer = phraseSheetObj.tickerTimer();
         if (!timer.isPaused(event) && listenerID ) {
-          let row = KeyEnd - KeyBeg - y;
           let tick = timer.tickLive()-tickIdx;
-          grid.children[row].children[1].children[tick].innerText = "*";
+          row.children[1].children[tick].innerText = "*";
         }
         // Play the sound if recording or live audio is enabled
-        if (brushToPlay() || listenerID) { playable.play(y + KeyBeg, 1, 0, 0); }
+        if (brushToPlay() || listenerID) { playable.play(key, 1, 0, 0); }
 
-      }.bind(null, y);
+      };
 
       let notes = CreateAppendChild("div", row);
-      for (var x=0; x<TickCount; x++) {
-        var tick = CreateAppendChild('p', notes, NBSP);
+      for (let x=0; x<TickCount; x++) {
+        let tick = CreateAppendChild('p', notes, NBSP);
         // Action Clicking
         tick.onmousedown = function (e) {
-          var txt = e.target.innerText;
+          let txt = e.target.innerText;
           DragOverTickState = txt == NBSP ? 1 : 2;
           MouseIsDown = true; // Set global state
           e.target.innerText = txt == NBSP ? "*" : NBSP;
         }
         // Action Hovering/dragging
-        tick.onmouseover = function (y, e) {
+        tick.onmouseover = function (e) {
           if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "*" : NBSP) } // Continue painting
-          else if (e.target.innerText != NBSP && brushToPlay()) playable.play(y, .5, 0); // Play it
-        }.bind(0, y);
+          else if (e.target.innerText != NBSP && brushToPlay()) playable.play(key, .5, 0); // Play it
+        };
       }
     }
-  }
+  });
 
   // Toggle-body knob
-  var collapse = CreateAppendChild('p', knobs, "-");
+  let collapse = CreateAppendChild('p', knobs, "-");
   collapse.className = "actor";
   collapse.onmousedown = e => ToggleElementDisplay(grid);
 
@@ -3311,15 +3352,15 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, KeyBeg, KeyEnd, TickC
 
   // Toggle brushToPlay knob
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
-    () => (headerTicks.style.color=null, "@("),
-    () => (headerTicks.style.color="inherit", "@)"));
+    () => (headerTicks.style.color=null, ")("),
+    () => (headerTicks.style.color="inherit", "()"));
 
   knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
 
   // Toggle Recording
   let listenerID = null;
-  var recordKnob = CreateAppendChild('p', knobs, "#");
-  var listenerIBC = function (m) {
+  let recordKnob = CreateAppendChild('p', knobs, "#");
+  let listenerIBC = function (m) {
 
     let timer = phraseSheetObj.tickerTimer();
     if (timer.isPaused() || m[0] != "keyboard1") { return; }
@@ -3327,7 +3368,9 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, KeyBeg, KeyEnd, TickC
     let tick = timer.tickLive()-tickIdx;
 
     if (m[2]) {
-      let row = KeyEnd-KeyBeg - m[1];
+      if (m[1] < keyBeg || keyBeg+keyCount <= m[1]) { return; }
+      // Rows are in reverse order, also compensate for the lfirst supported MIDI note
+      let row = keyCount - (m[1] - keyBeg) - 1;
       grid.children[row].children[1].children[tick].innerText = "*";
       playable.play(m[1], .5, 0, 0);
     }
@@ -3353,9 +3396,9 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, KeyBeg, KeyEnd, TickC
     part.style.zIndex = 1;
 
     // Intial state
-    var tickHeight = phrase.firstChild.firstChild.scrollHeight;
-    var tickWidth  = phrase.lastChild.offsetLeft / (phrase.childElementCount-1); // Tick width take average width of all ticks
-    var leftMargin = phrase.offsetLeft-phrase.scrollLeft; // Account for element's margin and scrolled offset
+    let tickHeight = phrase.firstChild.firstChild.scrollHeight;
+    let tickWidth  = phrase.lastChild.offsetLeft / (phrase.childElementCount-1); // Tick width take average width of all ticks
+    let leftMargin = phrase.offsetLeft-phrase.scrollLeft; // Account for element's margin and scrolled offset
     phrase.onmousemove = function (offset, e) {
        if (!MouseIsDown) { phrase.onmousemove = null; return; } // Maybe stop handling this event
        // Adjust part's vertical position
@@ -3377,31 +3420,32 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, KeyBeg, KeyEnd, TickC
     return tickIdx <= t && t < tickIdx + TickCount;
   }
 
-  let ticks = function (y) { return grid.children[y].children[1]; };
 
   self.play = function (gtick, time) {
     self.playTick(gtick - tickIdx, time);
   }
+
+  let ticks = function (y) { return grid.children[y].children[1]; };
 
   self.playTick = function (tick, time) {
     if (tick < 0 || TickCount <= tick) {
       DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
       return;
     }
-    for (let y=0; (y <= GridHeight); ++y ) {
-      let row = ticks(y).children;
-      var note = row[tick];
+    RangeForEach(keyCount, (i) => {
+      let row = ticks(i).children;
+      let note = row[tick];
       if (note.innerText == "*") {
-        var sustain=0;
-        var next = tick+1;
+        let sustain = 0;
+        let next = tick + 1;
         while (next < TickCount
                && row[next].innerText == "-") {
           ++sustain;
           ++next;
         }
-        playable.play(GridHeight-y, .5, time, sustain);
+        playable.play(keyBeg + keyCount-i-1, .5, time, sustain);
       }
-    }
+    });
   }
 
   phraseSheetObj.partAdd(self);
@@ -3681,10 +3725,9 @@ var PhraseSheet = PhraseSheet("phrase", 128, TickerTimer);
 
 function Main () {
   DB("::onload");
-  //IBC.debug();
 
   document.getElementById('addsynth').onmousedown = function () {
-    var s = new Synthesizer(ctx, false, 1, keyboard, "#84f");
+    var s = new Synthesizer(ctx, false, 1, Keyboard0, "#84f");
     document.getElementById('synths').appendChild(s.element);
   }
 
@@ -3701,12 +3744,12 @@ function Main () {
   }
 
   // Create a piano object and DOM element.  61 keys, starting at C0.
-  var keyboard = new PianoKeyboard("piano1", 128, 0, 0, 65.4064);
+  Keyboard0 = new PianoKeyboard("piano1", 21, 88);
   //var keyboard2 = new PianoKeyboard("piano2",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
   // MIDI fun
   function onMIDISuccess( m ) {
-    m.inputs.forEach( e => {e.onmidimessage=function(e){keyboard.midi(e);};} );
+    m.inputs.forEach( e => {e.onmidimessage=function(e){Keyboard0.midi(e);};} );
   }
 
   function onMIDIFailure(msg) { DB.error("MIDI "+msg ); }
@@ -3717,46 +3760,43 @@ function Main () {
       .then(onMIDISuccess, onMIDIFailure);
   }
 
-  setupControls(keyboard); // Setup menus and moveable buttons.
+  setupControls(Keyboard0); // Setup menus and moveable buttons.
 
   // Load the audio asynchronously and create the default drumkit.
-  var drumKit = new Drumkit(ctx, "orange", ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
-
-  Keyboard0 = keyboard;
-  DrumKit0 = drumKit
+  DrumKit0 = new Drumkit(ctx, "orange", 21, ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
 
   // LiveKa7 v3
-  //restoreSongLK3(keyboard, drumKit); //, hyphen.song());
+  //restoreSongLK3(Keyboard0, DrumKit0); //, hyphen.song());
 
   // LiveKa7 v2
-  //restoreSongLK2(keyboard, drumKit);
+  //restoreSongLK2(Keyboard0, DrumKit0);
 
   // LiveKa7 v1
   if (!Synthesizer0) {
-    Synthesizer0 = new Synthesizer(ctx, false, 2, keyboard, "#84f");
+    Synthesizer0 = new Synthesizer(ctx, false, 2, Keyboard0, "#84f");
     document.getElementById('synths').appendChild(Synthesizer0.element);
   }
 
 
   if (!Synthesizer1) {
-    Synthesizer1 = new Synthesizer(ctx, false, 1, keyboard, "#4f4");
+    Synthesizer1 = new Synthesizer(ctx, false, 1, Keyboard0, "#4f4");
     document.getElementById('synths').appendChild(Synthesizer1.element);
   }
 
   if (!Synthesizer2) {
-    Synthesizer2 = new Synthesizer(ctx, false, 2, keyboard, "#44f");
+    Synthesizer2 = new Synthesizer(ctx, false, 2, Keyboard0, "#44f");
     document.getElementById('synths').appendChild(Synthesizer2.element);
   }
 
   if (!Synthesizer3) {
-    Synthesizer3 = new Synthesizer(ctx, false, 3, keyboard, "#84f");
+    Synthesizer3 = new Synthesizer(ctx, false, 3, Keyboard0, "#84f");
     document.getElementById('synths').appendChild(Synthesizer3.element);
   }
 
-  //restoreSongLK1(keyboard, drumKit);
+  //restoreSongLK1(Keyboard0, DrumKit0);
 
   // LiveKa7 v0
-  //restoreSongLK0(keyboard, drumKit); // Parse get string
+  //restoreSongLK0(Keyboard0, DrumKit0); // Parse get string
 
   // Effects
   if (!Destinations[1]) {
@@ -3771,8 +3811,8 @@ function Main () {
     document.getElementById('filters').appendChild(e.element);
   }
 
-  PartSynth(PhraseSheet, 8, 1*20, 0, 15, 32, DrumKit0 );
-  PartSynth(PhraseSheet, 8, 16*20, 0, 60, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  PartSynth(PhraseSheet, 8, 1*20, 21, 16, 32, DrumKit0 );
+  PartSynth(PhraseSheet, 8, 16*20, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
   //PartSynth(PhraseSheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
   PhraseSheet.setStart(8).setEnd(8+32-1);
@@ -3804,4 +3844,8 @@ function PreMain (i) {
 
 window.onload = PreMain.bind(null,0)
 
+//IBC.debug();
+/* T O D O
+ Synth listener that crashes (key out of bounds) denies other synths from receiving
+*/
 //]]></script></body></html>
