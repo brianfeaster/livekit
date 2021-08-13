@@ -197,27 +197,37 @@ h1 {
 /******************************************************************************
   PartSynth,  piano and drummit variants
 ******************************************************************************/
+
 /* Header of ticks */
 .partpiano > div:nth-child(1) { color:#8ff; }
 .partpiano > div:nth-child(1) > p { border:solid 1px transparent; background-color:#444b; display:inline-block; }
+.partpiano > div:nth-child(1) > p:nth-child(4n+1) { border-left:solid 1px #555; }
 .partpiano > div:nth-child(1) > p:hover { border-color:cyan; }
 
-/* Label natural */
-.partpiano > div:nth-child(2) > div.nat > p { color:black; background-color:darkgrey; width:4ch; right:calc(100%); text-align:right; position:absolute; }
-/* Label sharp */
-.partpiano > div:nth-child(2) > div.shp > p { background-color:black; width:2.0ch; right:calc(100% + 2.0ch); position:absolute; z-index:1; }
-
-/* Rows of [label [ticks]] */
+/* Row and each descendants [label [ticks]] */
 .partpiano > div:nth-child(2) > div > p,
 .partpiano > div:nth-child(2) > div > div,
 .partpiano > div:nth-child(2) > div > div > p { height:1em; }
 
-.partpiano > div:nth-child(2) > div.drumkit > p,
-.partpiano > div:nth-child(2) > div.drumkit > div,
-.partpiano > div:nth-child(2) > div.drumkit > div > p { height:1pc; }
+/* Container of ticks */
+.partpiano > div:nth-child(2) > div > div { background:#222B; }
 
-/* Natural key labels */
-.partpiano > div:nth-child(2) > div.nat > p { height:1.66em; }
+/* Tick */
+.partpiano > div:nth-child(2) > div > div > p { border:solid 1px transparent; display:inline-block; }
+.partpiano > div:nth-child(2) > div > div > p:nth-child(4n+1) { border-left:solid 1px #333; }
+
+/* Label natural keys */
+.partpiano > div:nth-child(2) > div.nat > p {
+  color:black;
+  text-align:right;
+  background-color:darkgrey;
+  height:1.66em;
+  width:4ch;
+  right:calc(100%);
+  position:absolute;
+}
+
+/* Label specific natural key */
 .partpiano > div:nth-child(2) > div.B.nat > p { margin-top: .06em; }
 .partpiano > div:nth-child(2) > div.A.nat > p { margin-top:-.23em; }
 .partpiano > div:nth-child(2) > div.G.nat > p { margin-top:-.51em; }
@@ -225,28 +235,43 @@ h1 {
 .partpiano > div:nth-child(2) > div.E.nat > p { margin-top:-.08em; }
 .partpiano > div:nth-child(2) > div.D.nat > p { margin-top:-.37em; }
 .partpiano > div:nth-child(2) > div.C.nat > p { margin-top:-.66em; }
-/* Sharp key labels */
+
+/* Label sharp keys */
+.partpiano > div:nth-child(2) > div.shp > p {
+  background-color:black;
+  width:2.0ch;
+  right:calc(100% + 2.0ch);
+  position:absolute;
+  z-index:1;
+}
+
+/* Label specific sharp key */
 .partpiano > div:nth-child(2) > div.A.shp > p { margin-top: .15em; }
 .partpiano > div:nth-child(2) > div.F.shp > p { margin-top:-.15em; }
 .partpiano > div:nth-child(2) > div.D.shp > p { margin-top: .15em; }
 .partpiano > div:nth-child(2) > div.C.shp > p { margin-top:-.15em; }
 
-/* drumk kit beat label */
-.partpiano > div:nth-child(2) > div.drumkit > p { color:#770; background-color:#220; position:absolute; right:calc(100%); }
-
-/* tick */
-.partpiano > div:nth-child(2) > div > div > p { border:solid 1px transparent; display:inline-block; }
-
-/* any row of ticks */
-.partpiano > div:nth-child(2) > div > div { background:#222B; }
-
-/* row of sharp ticks */
+/* Container of sharp ticks */
 .partpiano > div:nth-child(2) > div.shp > div { background:#1b1b1bBB; }
 
-/* Highlight label and [ticks] when hovering anywhere on full row */
-.partpiano > div:nth-child(2) > div:hover > div,
-.partpiano > div:nth-child(2) > div:hover > p { color:yellow; background-color:blue; }
-/* Highligh any tick */
+
+/* Drumkit */
+
+/* Row and each descendant [label [ticks]] */
+.partpiano > div:nth-child(2) > div.drumkit > p,
+.partpiano > div:nth-child(2) > div.drumkit > div,
+.partpiano > div:nth-child(2) > div.drumkit > div > p { height:1pc; }
+
+/* Label beat name */
+.partpiano > div:nth-child(2) > div.drumkit > p { color:#770; background-color:#220; position:absolute; right:calc(100%); }
+
+/* Hover Highlights */
+
+/* Label and container of ticks */
+.partpiano > div:nth-child(2) > div:hover > p,
+.partpiano > div:nth-child(2) > div:hover > div { color:yellow; background-color:blue; }
+
+/* Tick */
 .partpiano > div:nth-child(2) > div > div > p:hover { background:cyan; }
 
 
