@@ -1161,7 +1161,6 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _output.onmousedown = function (event) {
     if (++_filterIdx == Destinations.length) { _filterIdx = 0; }
     _output.innerText = Destinations.name(_filterIdx); // ["main", "delay","lowpass"][_filterIdx];
-    //self.connect(Destinations.input(_filterIdx));
   }
 
   var _play = function (key, vol, when, sustain) {
@@ -1303,13 +1302,21 @@ var Delay = function (ctx) {
   var _gai = 0.50; // Release time in seconds for both the filter and gain.
 
   var _destId = 0;
-  var _destination = Destinations.input(_destId); // Initial destination is global destination
+  var _destination;
+  var _delay, _gain;
 
-  var _delay = ctx.createDelay(1); _delay.delayTime.value = _del;
-  var _gain  = ctx.createGain(); _gain.gain.value = _gai;
-  _delay.connect(_gain);
-  _gain.connect(_delay);
-  _gain.connect(_destination);
+  var make = function () {
+    _gain  = ctx.createGain();
+    _delay = ctx.createDelay(1);
+    _delay.connect(_gain);
+    _delay.delayTime.value = _del;
+    _gain.gain.value = _gai;
+    _gain.connect(_delay);
+    _destination = Destinations.input(_destId); // Initial destination is global destination
+    _gain.connect(_destination);
+  };
+
+  make();
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowmini";
@@ -1393,11 +1400,19 @@ var Delay = function (ctx) {
   // NEW
   this.dest = function () { return _destId; }
   this.connect = function (d) {
-    _gain.disconnect(_destination); // Is this needed?
-    _destId = d;
-    _destination = Destinations.input(_destId);;
-    _gain.connect(_destination);
-    _output.innerText = Destinations.name(_destId);
+    if (d == null) {
+      if (_destination != Destinations.input(_destId)) {
+        make();
+        return true;
+      }
+    } else {
+      _gain.disconnect(_destination); // Is this needed?
+      _destId = d;
+      _destination = Destinations.input(_destId);;
+      _gain.connect(_destination);
+      _output.innerText = Destinations.name(_destId);
+    }
+    return false;
   }
   this.export = function () {
     var bytes = [0]; // TYPE
@@ -1435,13 +1450,17 @@ var Lowpass = function (ctx) {
   var _f = .9; // Attack tiem in seconds.
   var _q = 0.0; // Release time in seconds for both the filter and gain.
   var _destId = 0;
-  var _destination = Destinations.input(_destId);
+  var _destination;
+  var _lowpass;
 
-  var _lowpass = ctx.createBiquadFilter();
-  _lowpass.frequency.value = 10000.0*(1.0-_f);
-  _lowpass.Q.value = _q * 100.0;
-
-  _lowpass.connect(_destination); // New
+  var make = function () {
+    _lowpass = ctx.createBiquadFilter();
+    _lowpass.frequency.value = 10000.0*(1.0-_f);
+    _lowpass.Q.value = _q * 100.0;
+    _destination = Destinations.input(_destId);
+    _lowpass.connect(_destination); // New
+  }
+  make();
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowmini";
@@ -1517,12 +1536,13 @@ var Lowpass = function (ctx) {
   }
   // NEW
   this.dest = function () { return _destId; }
-  this.connect = function (d) {
-    _lowpass.disconnect(_destination); // Is this needed?
-    _destId = d;
-    _destination = Destinations.input(_destId);;
-    _lowpass.connect(_destination);
-    _lowpass.innerText = Destinations.name(_destId);
+  this.connect = function () {
+    if (_destination != Destinations.input(_destId)) {
+      _lowpass.disconnect(_destination); // Is this needed?
+      make();
+      return true;
+    }
+    return false;
   }
   this.export = function () {
     var bytes = [0]; // TYPE
@@ -1578,16 +1598,28 @@ var Destinations = (function (ctx) {
     fuse.input = function () { return fuse; };
     fuse.connect(ctx.destination);
 
-    // Any filters in my array that are connected to oldFuse
-    // get reconnected to new fuse;
-    self.slice(1).forEach( (filter, i) => {
-      if (filter.dest() == 0) {
-        DB(`Reconnecting ${i} ${filter.name()} to ${fuse.name()}`);
-        filter.connect(0);
-      }
-    });
+    // Sweep through for any filters that are connected to a filter
+    // that doesn't match the filter in this array.  Update them.  Repeat.
+    // For a filter like delay which can continue to produce samples, a new
+    // one needs to be created and the exisintg one replaced.  This algorithm
+    // will run again and update any filters depending on it until all filters point
+    // to a filter in this array.
 
-    // TODO reset connection to fuse from all the playables. *sigh*  Do I need this though?  They're supposed to dynamically connect their outputs when creating a new sound.
+    // get reconnected to new fuse;
+    var updateCount = 0;
+    while (updateCount < self.length) { // Sanity check: Don't expect to update more filters than exists
+      var updated = false;
+      self.slice(1).forEach( (filter, i) => {
+        if (filter.connect()) {
+          DB(`Reconnected ${i} ${filter.name()} to ${filter.dest()}`);
+          ++updateCount;
+          updated = true;
+        }
+      });
+      if (!updated) { break; }
+    }
+
+    // Reset connection to fuse from all the playables. *sigh*  Do I need this though?  They're supposed to dynamically connect their outputs when creating a new sound.
   }
 
   //self.uncut = function () { fuse.gain.setValueAtTime(1, ctx.currentTime); }
