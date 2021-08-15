@@ -30,11 +30,11 @@
 <div class="window">
   <div>PHRASE</div>
   <div class="knobs">
-    <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:5ch" />
+    <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:6ch" />
     <!--p id="mainVolume">vol</p-->
     <p id="speed" class="actor" contenteditable="true">60</p>
-    <p class="actor reset" onmousedown="TickerTimer.rewind()">|&gt;</p>
-    <p class="actor pause" onmousedown="TickerTimer.pause()">||</p>
+    <p class="actor reset" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
+    <p class="actor pause" onmousedown="TickerTimer.pause(this)">||</p>
     <div id="addphrase">
       <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
         <div id="createphrase" style="background:#066; text-align:center">Create</div>
@@ -160,6 +160,16 @@ var PauseFeedback = function (id, op) {
   };
   fn();
 }
+
+// Blink e with color, or stop when color false
+var blinkify = (e, color) => (
+  e.blinker = color
+    ? () => (
+        e.style.backgroundColor =
+          !e.style.backgroundColor && color || "",
+        setTimeout(e.blinker, 200))
+    : () => e.style.backgroundColor = ""
+)();
 
 
 /* A click-toggleable element object
@@ -824,7 +834,7 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
     Polyphonic Key Pressure Ax    Key number        Amount of pressure
     Control Change          Bx    Controller number Controller value
     Program Change          Cx    Program number    None
-    Channel Pressure        Dx    Pressure value    None            
+    Channel Pressure        Dx    Pressure value    None
     Pitch Bend              Ex    MSB               LSB
   */
   this.midi = function (msg) { // TODO This should not be here
@@ -1399,6 +1409,8 @@ var Delay = function (ctx) {
   }
   // NEW
   this.dest = function () { return _destId; }
+  // Update destination to passed in filter index otherwise update destination
+  // if it changed in the filter stack.  Return true if a change occurred.
   this.connect = function (d) {
     if (d == null) {
       if (_destination != Destinations.input(_destId)) {
@@ -1408,7 +1420,7 @@ var Delay = function (ctx) {
     } else {
       _gain.disconnect(_destination); // Is this needed?
       _destId = d;
-      _destination = Destinations.input(_destId);;
+      _destination = Destinations.input(_destId);
       _gain.connect(_destination);
       _output.innerText = Destinations.name(_destId);
     }
@@ -1536,6 +1548,7 @@ var Lowpass = function (ctx) {
   }
   // NEW
   this.dest = function () { return _destId; }
+  // Update destination if it changed in the filter stack.  Return true if a change occurred.
   this.connect = function () {
     if (_destination != Destinations.input(_destId)) {
       _lowpass.disconnect(_destination); // Is this needed?
@@ -1573,7 +1586,7 @@ var Destinations = (function (ctx) {
 
   self.name = function (i) { return self[i].name(); }
   self.input = function (i) { return self[i].input(); }
-  self.nextId = function (id) { 
+  self.nextId = function (id) {
     let ret = (id+1) % self.length;
     DB(`nextId ${id} -> ${ret}  ${self.length}`);
     return ret;
@@ -1611,13 +1624,14 @@ var Destinations = (function (ctx) {
       var updated = false;
       self.slice(1).forEach( (filter, i) => {
         if (filter.connect()) {
-          DB(`Reconnected ${i} ${filter.name()} to ${filter.dest()}`);
+          //DB(`Reconnected ${i} ${filter.name()} to ${filter.dest()}`);
           ++updateCount;
           updated = true;
         }
       });
       if (!updated) { break; }
     }
+    DB.check(updateCount < self.length, "Updated more filters than exists");
 
     // Reset connection to fuse from all the playables. *sigh*  Do I need this though?  They're supposed to dynamically connect their outputs when creating a new sound.
   }
@@ -3137,7 +3151,7 @@ var restoreSongLK0 = function (keyboard, drumKit) {
   tickNext() => [1, 100.50]             100.10
   tickNext() => [2, 100.75]             100.15
   tickNext() => [3, 101.00]             100.19
-  tickNext() => false                   100.20  when currentTime is over 
+  tickNext() => false                   100.20  when currentTime is over
   tickRender() => 0                     100.21
   tickRender() => false                 100.30
   tickRender() => 1                     100.32
@@ -3154,7 +3168,7 @@ var TickerTimer = (function (ctx) {
   let start  = 0; // Start tick
   let end    = length-1; // End tick
   // Dynamic state
-  let paused = true;
+  let paused = false;
   let tickCue = 0;
   let tick    = -1;
   let time    = -1;
@@ -3162,30 +3176,14 @@ var TickerTimer = (function (ctx) {
   let render    = -1;
   var now = -1;
 
-
   /* Last emitted time +jiffy - CurrentTime / jiffy -> number of ticks back from tick the real time tick count is */
-  var _pause = function () {
-    let highlight = true;
-    let intervalId = false;
-    let color = '#f00';
-    let e = document.getElementsByClassName('pause')[0];
-
+  var _pause = function (e) {
     if (paused = !paused) { // Did we switch into pause mode?
       tickCue = renderCue = self.currentTick(); // Force next tick and render to current realtime.
-
       Destinations.cut();
-      e.style.backgroundColor = color;
-      // Blink the pause button.
-      intervalId = setInterval(function(){
-                         e.style.backgroundColor = (paused && (highlight =! highlight)) ? color : '';
-                         if (!paused) { clearInterval(intervalId); }
-                       },
-                       500);
-    } else {
-      e.style.backgroundColor = '';
-      clearInterval(intervalId);
     }
-      DB.post('TickerTimer._pause', paused);
+    blinkify(e, paused&&"#f00");
+    DB.post('TickerTimer._pause', paused);
   }
 
 
@@ -3237,12 +3235,12 @@ var TickerTimer = (function (ctx) {
 
 
   self.tick = self;
-  self.pause     = function ()  { _pause(); }
+  self.pause     = function (e)  { _pause(e); }
   self.setJiffy  = function (s) { jiffy = s; };
   self.setStart  = function (i) { if (i<=end) { start = i; length=end-start+1; if (paused) { tickCue = renderCue = start; } } return self; };
   self.setEnd    = function (i) { if (start<=i) { end = i; length=end-start+1; } return self; };
-  self.rewind = function (newTick) { // Reset state so next tick is 0 and next time will be nowish.
-    if (paused) { _pause(); }
+  self.rewind = function (e, newTick) { // Reset state so next tick is 0 and next time will be nowish.
+    if (paused) { _pause(e); }
     // Rewind to specified tick or the usual start tick
     tickCue = renderCue = (newTick == null) ? start : newTick;
     return self;
@@ -3259,7 +3257,6 @@ var TickerTimer = (function (ctx) {
     //                           tick- = 2.48
     let ticksAhead = Floor(tick - (time - now) / jiffy);
     return Mod(ticksAhead-start, length)+start;
-    // 
   }
   self.isPaused = function () { return paused; }
   self.lastTime = function () { return time + jiffy; }
@@ -3309,12 +3306,12 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
     });
   }
   self.tickerTimer = () => tickertimer;
-  self.pause = function () {
-    tickertimer.pause();
+  self.pause = function (e) {
+    tickertimer.pause(e);
   }
 
-  self.rewind = function () { tickertimer.rewind(); }
-  self.jump   = function () { tickertimer.rewind(markedTick); }
+  self.rewind = function (e) { tickertimer.rewind(e); }
+  self.jump   = function (e) { tickertimer.rewind(e, markedTick); }
 
   self.isPaused = ()=>tickertimer.isPaused();
 
@@ -3323,7 +3320,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   self.render = function (tick) {
 
     let children = element.children;
-  
+
     // Scroll the grid so current tick is visible
 
     // Zooming in Chrome alters these so they must be dynamically queried
@@ -3396,9 +3393,8 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
 
   // Reset the TickerTimer state object
   tickertimer
-    .setStart(0) 
+    .setStart(0)
     .setEnd(tickCount-1)
-    //.rewind();
 
   // Create new parts when this button is activated
   var _addphrase = document.getElementById('addphrase');
@@ -3671,7 +3667,7 @@ var setupControls = function (keyboard, phrasesheet) {
   //document.getElementById('speed').onmouseleave = function (event) { event.target.blur(); }
 
   document.getElementById('volume').oninput = function (e) {
-    Volume = e.srcElement.value / 100.0;
+    Destinations.input(0).gain.value = e.srcElement.value / 100.0;
   }
 
 /*
@@ -3772,14 +3768,15 @@ var setupControls = function (keyboard, phrasesheet) {
   window.onmouseup = function () { MouseIsDown = false; }
 
   window.onkeydown = function (event) {
+    let pauseElement = document.getElementsByClassName('pause')[0];
     if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
     DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code);
 
-    if (indexOfCharCode("P", event.keyCode) != -1) { phrasesheet.pause(); }
-    else if (indexOfCharCode("R", event.keyCode) != -1) { phrasesheet.rewind(); } // Rewind the playback.
+    if (indexOfCharCode("P", event.keyCode) != -1) { phrasesheet.pause(pauseElement); }
+    else if (indexOfCharCode("R", event.keyCode) != -1) { phrasesheet.rewind(pauseElement); } // Rewind the playback.
     else if (indexOfCharCode(" ", event.keyCode) != -1) { // Pause or jump to mark
-      if (phrasesheet.isPaused()) { phrasesheet.jump(); }
-      else { phrasesheet.pause(); }
+      if (phrasesheet.isPaused()) { phrasesheet.jump(pauseElement); }
+      else { phrasesheet.pause(pauseElement); }
     }
     /* Old:  Cursor around tick
     else if (event.keyCode == 67) { IBC(["tickclear"]); } // Clear whatever the cursor is on
