@@ -73,7 +73,7 @@
   </div>
 </div>
 
-<div id="skeuomorph" style="display:none; padding:50px; width:700px; min-height:200px; background-color:#444; background-image:url('brushedMetalBackground.jpg')" onmousedown="popupToggle('skeuomorph')">
+<div id="skeuomorph" style="display:none; padding:50px; width:700px; min-height:200px; background-color:#444; background-image:url('brushedMetalBackground.jpg'); z-index:1" onmousedown="popupToggle('skeuomorph')">
   <b style="position:absolute; right:1ch; top:1ch">[X]</b>
   <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
 </div>
@@ -98,11 +98,14 @@ var Mod   = function (n,d) { return n - d * Math.floor(n/d); };
 var Trunc2 = function (f) { return Round(f*100)/100; }
 var indexOfCharCode = (s, c)=>s.split('').map(c=>c.charCodeAt()).indexOf(c);
 
-// Array of integers: []  OR  [0..a-1]  OR  [a..b]
+var ElementById = function(id) { return document.getElementById(id); };
+
+// Generate ary of ints: []  OR  [0..a-1]  OR  [a..b]
+// This doesn't work for 0,0 var range=(a,b)=>[...Array(Math.abs((b||0)-(a||0)+!!b-0)).keys()].map(n=>n+a*!!b);
 var Range = function (a, b) {
-  return   (a == undefined) ? []
-         : (b == undefined) ? [...Array(a).keys()]
-         : [...Array(b+1-a).keys()].map( n => n+a );
+  return (a == undefined) ? [] :
+         (b == undefined) ? [...Array(a).keys()] :
+         [...Array(b+1-a).keys()].map( n => n+a );
 }
 
 var RangeMap = function (rng, f) {
@@ -131,9 +134,32 @@ var ToggleElementDisplay = function (e1, e2) {
   if (e2) { e2.style.display = off ? "none" : ""; } // e2's style is opposite e1.
 };
 
-var ElementById = function(id) {
- return document.getElementById(id);
-};
+  // Show an image for a bit in the center of the screen.  Presented after hitting 'pause'.
+var PauseFeedback = function (id, op) {
+  op = op | 0.0;
+  var icon = document.getElementById(id);
+  var style = icon.style;
+  var opacity = 1.0;
+  style.display = "";
+  style.opacity = opacity;
+  style.position = "fixed";
+  style.top      = (window.innerHeight/2 - icon.height/2) + "px";
+  style.left     = (window.innerWidth/2 - icon.width/2) + "px";
+  if (op == 1.0) { return; }
+  let fn = function() {
+    icon.style.opacity = opacity;
+    if (opacity <= op) {
+      opacity = 1.0;
+      style.display="none";
+      style.opacity = opacity;
+      return;
+    } else {
+      opacity-=0.05;
+      setTimeout(fn, 50);
+    }
+  };
+  fn();
+}
 
 
 /* A click-toggleable element object
@@ -738,7 +764,7 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
 
   var keyRelease = function(key) {
     self.unhighlight(key, _highlightColor);
-    IBC(["keyboard1", key, false]); // Notify listeners a key was pressed  ["piano1", 12, stopPlaying]
+    IBC(["keyboard1", key, false]); // Notify listeners a key was released  ["piano1", 12, stopPlaying]
   }
 
   RangeForEach(keyCount, (i) => {
@@ -801,7 +827,7 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
     Channel Pressure        Dx    Pressure value    None            
     Pitch Bend              Ex    MSB               LSB
   */
-  this.midi = function (msg) {
+  this.midi = function (msg) { // TODO This should not be here
     var d = msg.data;
     var c = d[0];
     var k = d[1];
@@ -909,7 +935,7 @@ var Drumkit = function (ctx, color, keyStart, filenames) {
   //// Local
   var audioBuffers = new AudioBuffers(ctx, filenames)
   var bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
-  var destination = Array(audioBuffers.length).fill(Destinations.input(0)); // Default destination of each sound to default
+  var destinations = Array(audioBuffers.length).fill(0); // Default destination of each sound to default
   //// Public
   this.length = audioBuffers.length;
   this.name = function (key) {
@@ -953,17 +979,16 @@ var Drumkit = function (ctx, color, keyStart, filenames) {
       source.start(when);
     }
 
-    gain.connect(destination[key]);
+    gain.connect(Destinations.input(destinations[key]));
   }
-  this.connect = function (dest, idx) { destination[idx] = dest; }
-  this.connected = function (idx) { return destination[idx]; }
+  this.connect = function (dest, idx) { destinations[idx] = dest; }
+  this.connected = function (idx) { return destinations[idx]; }
 } // Drumkit
 
 
-/* MIDI key to frequency converter
+/* MIDI key and frequency manager
 
-   Key 21 (A-natural sub-contra-octave) is the key the base
-   frequency begins.
+   Key 21 (A-natural sub-contra-octave) is set to the base frequency
 
   Key Note Freq      Key Note Freq
     0 C-1  8.1758       69 A4   440/Middle A
@@ -1020,6 +1045,9 @@ DB.check( KeyFreq(117)==7040, "KeyFreq frequency mismatch key 117 != 7040Hz");
     .unhighlight()        Remove my highlight from the keyboard object.
     .connect(d)           Sets output destination
     .destination()        Return output destination
+
+  EVENTS::
+    The name element will toggle receiving MIDI messages via IBC
 ******************************************************************************/
 var SynthGlobalCounter = 0;
 var Synthesizers = [];
@@ -1034,8 +1062,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
   var _waveformIdx = type;
   var _filterIdx = 0;
+  //var _destination = Destinations.input(_filterIdx); // This is dynamic now due to the CTX fuse.
   var _mouseMoved;
-  var _destination = Destinations.input(0); // Initial destination is global destination
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowmini";
@@ -1132,8 +1160,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _output.innerText = "[main]"
   _output.onmousedown = function (event) {
     if (++_filterIdx == Destinations.length) { _filterIdx = 0; }
-    _output.innerText = ["main", "delay","lowpass"][_filterIdx];
-    self.connect(Destinations.input(_filterIdx));
+    _output.innerText = Destinations.name(_filterIdx); // ["main", "delay","lowpass"][_filterIdx];
+    //self.connect(Destinations.input(_filterIdx));
   }
 
   var _play = function (key, vol, when, sustain) {
@@ -1159,7 +1187,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     gain.gain.linearRampToValueAtTime(0,              at + _att + sus + _rel);
 
     osc.connect(gain);
-    gain.connect(_destination);
+    gain.connect(Destinations.input(_filterIdx));
   }
 
   var playing = [];
@@ -1177,7 +1205,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     gain.gain.linearRampToValueAtTime(vol*0.5*Volume, at + _att);
 
     osc.connect(gain);
-    gain.connect(_destination);
+    gain.connect(Destinations.input(_filterIdx));
 
     playing[key] = [osc, gain, at+_att]; // Keep track of this oscillator and envelope
   }
@@ -1196,14 +1224,14 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   }
 
   var listenerIBC = function (m) {
-    //DB.post("synthIBCin",  m);
+    //DB.post("Synthesizer.listenerIBC",  m);
     if (m[0] != "keyboard1") { return; }
     if (m[2] == undefined) {
-      _play(m[1], 1.0, 0);
+      _play(m[1], 0.5, 0);
     } if (m[2]) {
-      _playStart(m[1], 1.0);
+      _playStart(m[1], 0.5);
     } else {
-      _playStop(m[1], 1.0);
+      _playStop(m[1], 0.5);
     }
   }
 
@@ -1240,11 +1268,14 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   this.unhighlight = function () {
     keyboard.unhighlight(_lastKey, color); // Remove last high-light
   };
+  /*
   this.connect = function(d) {
-    _destination = d;
-    _output.innerText = Destinations.name(Destinations.index(d));
+    //_destination = d;
+    _filterIdx = Destinations.index(d);
+    _output.innerText = Destinations.name(_filterIdx);
   };
-  this.destination = function () { return _destination; };
+  */
+  this.destination = function () { return _filterIdx; };
 } // Synthesizer
 
 
@@ -1268,17 +1299,17 @@ var Delay = function (ctx) {
   //// Local
   var self = this;
   var _name = "delay";
-  var _del = 0.01; // Attack tiem in seconds.
+  var _del = 0.40; // Attack tiem in seconds.
   var _gai = 0.50; // Release time in seconds for both the filter and gain.
 
-  var _destination = Destinations.input(0); // Initial destination is global destination
+  var _destId = 0;
+  var _destination = Destinations.input(_destId); // Initial destination is global destination
 
-  var _delay = ctx.createDelay(1); _delay.delayTime.value = 0.50;
-  var _gain  = ctx.createGain(); _gain.gain.value = 0.90;
+  var _delay = ctx.createDelay(1); _delay.delayTime.value = _del;
+  var _gain  = ctx.createGain(); _gain.gain.value = _gai;
   _delay.connect(_gain);
   _gain.connect(_delay);
   _gain.connect(_destination);
-  var _input = _gain;
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowmini";
@@ -1345,22 +1376,28 @@ var Delay = function (ctx) {
   _output.style.position = "relative"
   _output.className = "volume"
   _output.innerText = "[main]"
+
   _output.onmousedown = function (event) {
-    _gain.disconnect(_destination);
-    var dst = Destinations.next(_destination);
-    _destination = dst.input()
-    _output.innerText = dst.name();
-    _gain.connect(_destination);
+    self.connect(Destinations.nextId(_destId));
   }
 
   //// Public
   this.element = _element;
   this.name = function () { return _name; }
-  this.input = function () { return _input; }
+  this.input = function () { return _gain; }
   this.getParams = function () { return [_del, _gai]; }
   this.setParams = function (ps) {
     _delay.delayTime.value = _del = ps[0];
     _gain.gain.value = _gai = ps[1];
+  }
+  // NEW
+  this.dest = function () { return _destId; }
+  this.connect = function (d) {
+    _gain.disconnect(_destination); // Is this needed?
+    _destId = d;
+    _destination = Destinations.input(_destId);;
+    _gain.connect(_destination);
+    _output.innerText = Destinations.name(_destId);
   }
   this.export = function () {
     var bytes = [0]; // TYPE
@@ -1397,12 +1434,14 @@ var Lowpass = function (ctx) {
   var _name = "lowpass";
   var _f = .9; // Attack tiem in seconds.
   var _q = 0.0; // Release time in seconds for both the filter and gain.
+  var _destId = 0;
+  var _destination = Destinations.input(_destId);
 
   var _lowpass = ctx.createBiquadFilter();
   _lowpass.frequency.value = 10000.0*(1.0-_f);
   _lowpass.Q.value = _q * 100.0;
 
-  _lowpass.connect(ctx.destination);
+  _lowpass.connect(_destination); // New
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowmini";
@@ -1476,6 +1515,15 @@ var Lowpass = function (ctx) {
     _q = ps[1];
     _lowpass.Q.value = _q * 100.0;
   }
+  // NEW
+  this.dest = function () { return _destId; }
+  this.connect = function (d) {
+    _lowpass.disconnect(_destination); // Is this needed?
+    _destId = d;
+    _destination = Destinations.input(_destId);;
+    _lowpass.connect(_destination);
+    _lowpass.innerText = Destinations.name(_destId);
+  }
   this.export = function () {
     var bytes = [0]; // TYPE
     bytes.push(_name.length); // NAME LEN
@@ -1497,13 +1545,19 @@ var Lowpass = function (ctx) {
 var Destinations = (function (ctx) {
   var self = [];
 
-  ctx.destination.name = function () { return "main"; };
-  ctx.destination.input = function () { return ctx.destination; };
-
-  self.push(ctx.destination);
+  var fuse = ctx.createGain();
+  fuse.name = function () { return "mainFuse"; };
+  fuse.input = function () { return fuse; };
+  fuse.connect(ctx.destination);
+  self.push(fuse);
 
   self.name = function (i) { return self[i].name(); }
   self.input = function (i) { return self[i].input(); }
+  self.nextId = function (id) { 
+    let ret = (id+1) % self.length;
+    DB(`nextId ${id} -> ${ret}  ${self.length}`);
+    return ret;
+  }
   self.next = function (d) { // Return destination after d in array.
     var i = 1 + self.findIndex( function (v,i) { return d== v.input(); } )
     return self[i % self.length];
@@ -1512,6 +1566,32 @@ var Destinations = (function (ctx) {
     var i = self.findIndex( function (v,i) { return d==v || d==v.input(); } )
     return (0 <= i) ? i : 0;
   }
+  self.cut = function () {
+    let oldFuse = fuse;
+    // Silence current gainf use
+    fuse.gain.setValueAtTime(0, ctx.currentTime);
+    fuse.disconnect(ctx.destination);
+
+    // Create new fuse gain and connect to CTX
+    fuse = self[0] = ctx.createGain();
+    fuse.name = function () { return "mainFuseNew"; };
+    fuse.input = function () { return fuse; };
+    fuse.connect(ctx.destination);
+
+    // Any filters in my array that are connected to oldFuse
+    // get reconnected to new fuse;
+    self.slice(1).forEach( (filter, i) => {
+      if (filter.dest() == 0) {
+        DB(`Reconnecting ${i} ${filter.name()} to ${fuse.name()}`);
+        filter.connect(0);
+      }
+    });
+
+    // TODO reset connection to fuse from all the playables. *sigh*  Do I need this though?  They're supposed to dynamically connect their outputs when creating a new sound.
+  }
+
+  //self.uncut = function () { fuse.gain.setValueAtTime(1, ctx.currentTime); }
+
   return self;
 })(ctx);
 
@@ -2386,7 +2466,7 @@ var saveSongLK3 = function () {
     bytes.push(adsr[0]); // Attack
     bytes.push(adsr[2]); // Sustain
     bytes.push(adsr[3]); // Release
-    bytes.push(Destinations.index(s.destination())); // Release
+    bytes.push(s.destination());
   });
 
   for (var i=0; i<Sheet0.length(); ++i) {
@@ -2998,141 +3078,156 @@ var restoreSongLK0 = function (keyboard, drumKit) {
 /******************************************************************************
   TickerTimer - Manage ticks and time
 
+  The default behavior is to return [tick, time] representing the
+  current tick to process and at what future time.
+
   Ticks represent periodic time units that need to be sequentially
   considered when creating and emitting audio on time.  This will
-  make sure enough ticks have been consumed so that there is at most
+  make sure enough ticks have been processed so that there is at most
   1 second of audio processed.
 
-  The older method notes:
 
-    Periodically high-light whatever beat is currently being heard.
-    It uses the web audio context's currentTime as a time reference.
+  Start rendering just a bit after currentTime?
+     ...---------------------------...
+           ^  ^=========^=========^
+ currentTime  tick0time tick1time lastTime
+              ^render0
 
-    Context.currentTime--+   +------------ nextBeatTime, Beat=3
-                         |   | +---currentTime+1.0
-                         v   v |
-           |--0--|--1--|--2--|--3--|--0--|--1--|--2--|--...
-           ^           ^ ^   ^
-     initial           | |   final
-             Beat=2----+ +----beatf=2.6
+  tickCued   =  0;  -1     -1     -1    -1      -1
+  let tick   = -1;  0      1      2      3      3
+  let time   = -1;  100.25 100.50 100.75 101.00 101.00   (time+jiffy) - CurrentTime should be a second
 
-    Periodically tell each part in the current phrase to send their notes
-    out to the audio context.  Called eveyr 50ms from onload.
+  renderedCued = 0
+  tickRender = -1;  -1     -1     -1     -1     0
 
-    Beat is increment and all of it's ticks rendered each call.
-    nextBeatTimeis also incremented.  They form an invariant.
+          calls                     ctx.currentTime
+  tickNext() => [0, 100.25]             100.00
+  tickNext() => [1, 100.50]             100.10
+  tickNext() => [2, 100.75]             100.15
+  tickNext() => [3, 101.00]             100.19
+  tickNext() => false                   100.20  when currentTime is over 
+  tickRender() => 0                     100.21
+  tickRender() => false                 100.30
+  tickRender() => 1                     100.32
+  tickNext() => [4, 101.25]             100.35
 
-    Render a beat at a time which means each tick in each part at this beat
-    moment are written.  nextBeatTime is the cursor in time delimiting audio
-    written and audio to be written.
+  Idea:  base tick on CurrentTime - Time of last "first" tick.  The math will be just a sub and div
 
-    A quasi-realtime cursor that needs to stay ahead of the audio context's
-    time.  This cursor represents the next beat/tick to render and the
-    beat/ticks that have already been rendered.
-
-    nextBeatTime incremented each time a beat is rendered. initially == ctx.currentTime
-
-    Anytime the beat window is adjusted, and Beat is out of bounds, it should be
-    set to initial.
 ******************************************************************************/
 var TickerTimer = (function (ctx) {
   // Settings
-  let paused = true;
   let jiffy = .25; // Tick length in seconds (speed of music)
-  let lead  = 1.0; // Audio lead pre-buffer length in seconds
+  let lead  = 1.0; // Audio pre-buffer length in seconds
   let length = 8; // Total number of ticks
   let start  = 0; // Start tick
   let end    = length-1; // End tick
-  // Dynamic State
-  let tick = end; // Cyclic tick between a subrange of start..end
-  let time = 0; // Time to output audio for the tick
+  // Dynamic state
+  let paused = true;
+  let tickCue = 0;
+  let tick    = -1;
+  let time    = -1;
+  let renderCue = 0;
+  let render    = -1;
+  var now = -1;
 
-  // Show an image for a bit in the center of the screen.  Presented after hitting 'pause'.
-  var _pauseFeedback = function (id, op) {
-    var icon = document.getElementById(id);
-    var opacity=1.0;
-    op = op | 0.0;
-    icon.style.position = "fixed";
-    icon.style.display = "";
-    icon.style.top = (window.innerHeight/2 - icon.height/2) + "px";
-    icon.style.left = (window.innerWidth/2 - icon.width/2) + "px";
-    icon.style.opacity = opacity;
-    if (op == 1.0) { return; }
-    var fn = function() {
-      icon.style.opacity = opacity;
-      if (opacity <= op) {
-        opacity = 1.0;
-        icon.style.display="none";
-        icon.style.opacity = opacity;
-        return;
-      } else {
-        opacity-=0.05;
-        setTimeout(fn, 50);
-      }
-    }
-    fn()
-  }
 
+  /* Last emitted time +jiffy - CurrentTime / jiffy -> number of ticks back from tick the real time tick count is */
   var _pause = function () {
-    var highlight = true;
-    var id = false;
-    var color = '#f00';
-    var e = document.getElementsByClassName('pause')[0];
+    let highlight = true;
+    let intervalId = false;
+    let color = '#f00';
+    let e = document.getElementsByClassName('pause')[0];
+
     if (paused = !paused) { // Did we switch into pause mode?
-      DB.post('TickerTimer._pause', 'suspend');
-      // Show a pause icon.  Currently a psychedelic kitteh.
-      _pauseFeedback("pauseicon");
+      tickCue = renderCue = self.currentTick(); // Force next tick and render to current realtime.
+
+      Destinations.cut();
       e.style.backgroundColor = color;
       // Blink the pause button.
-      id = setInterval(function(){
+      intervalId = setInterval(function(){
                          e.style.backgroundColor = (paused && (highlight =! highlight)) ? color : '';
-                         if (!paused) { clearInterval(id); }
+                         if (!paused) { clearInterval(intervalId); }
                        },
                        500);
     } else {
-      DB.post('TickerTimer._pause', 'resume');
       e.style.backgroundColor = '';
-      clearInterval(id);
+      clearInterval(intervalId);
     }
+      DB.post('TickerTimer._pause', paused);
   }
 
+
+  // Debugging message
+  let self = function (f, r) {
+    //DB.post("next Tick", `${paused} ${tickCue} ${tick} ${time}   ${now}   ${renderCue} ${render} => ${r} ${f?"RRRRRRR":"ttt"} `);
+    return r;
+  };
+
   // Request the next tick and time to render it.  False implies not ready.
-  let self = function () {
-    let now = ctx.currentTime;
-    // Skip if "lead" seconds have already been processed
-    if (now + lead <= time) { return false; }
-    // Increment tick.  Wrap to "start" if past "end"
-    if (end < ++tick) { tick = start; }
-    // Increment time to emit audio by another jiffy.  If we fell behind, start again in 1/4 sec
-    time += jiffy;
-    if (time < now) { time = now + 0.25; }
-    // Return next tick to process and time to render it
+  self.nextTick = function () {
+    now = ctx.currentTime; // Debugging: update early for more debugging info
+    if (paused) { // Paused: Skip rendering
+      return false;
+    } else if (tickCue != -1) { // Un-paused:  Send this cued tick and set time to now
+      tick = tickCue;
+      tickCue = -1;
+      time = now;
+    } else if (now + lead <= time) { // Buffer full, skip rendering
+      return false;
+    } else { // Normal running, next tick and inc time
+      ++tick;
+      if (end < tick) { tick = start; } // Keep tick within selected tick range
+      time += jiffy;
+      if (time < now) { time = now; } // Reset time if we fell behind now
+    }
+    // Return processing details/instructions: "Generate sound at 'time' from notes at 'tick'"
     return [tick, time];
   };
+
+  // Request the next rendering tick.  False implies tick hasn't moved.
+  self.nextRender = function () {
+    now = ctx.currentTime; // Debugging: update 'now' for extra info
+    let ret = false;  // Default return value
+    if (renderCue != -1) { // Cued (running or paused)...
+      if (renderCue != render) { // Update with cue.
+        render = renderCue;
+        ret = render;
+      } // Skip, already on cue.
+      renderCue = -1;
+    } else if (!paused) { // Normal running...
+      let currentTick = self.currentTick();
+      if (currentTick != render) { // Update with new tick.
+        ret = render = currentTick;
+      } // Skip, on same tick
+    } // Paused,..always skip.
+    return ret;
+  }
+
+
   self.tick = self;
   self.pause     = function ()  { _pause(); }
-  self.pauseFeedback = function (id, op)  { _pauseFeedback(id, op); }
   self.setJiffy  = function (s) { jiffy = s; };
-  self.setStart  = function (i) { if (i<=end) { start = i; } return self; };
-  self.setEnd    = function (i) { if (start<=i) { end = i; } return self; };
-  self.setLength = function (i) { length=i; if (length<=end) { end = length-1; } return self; };
-  self.rewind = function (markedTick) { // Reset state so next tick is 0 and next time will be nowish.
+  self.setStart  = function (i) { if (i<=end) { start = i; length=end-start+1; if (paused) { tickCue = renderCue = start; } } return self; };
+  self.setEnd    = function (i) { if (start<=i) { end = i; length=end-start+1; } return self; };
+  self.rewind = function (newTick) { // Reset state so next tick is 0 and next time will be nowish.
     if (paused) { _pause(); }
     // Rewind to specified tick or the usual start tick
-    tick = (markedTick == null) ? end : markedTick-1;
-    time = 0;
+    tickCue = renderCue = (newTick == null) ? start : newTick;
     return self;
   };
   self.now = () => ctx.currentTime;
   // Derive the actual current tick (which will most likely have already been processed)
   // When deriving the live beat for DOM highlighting, must do so within the current active beat range
-  // So the distance between (BeatTime - currentTime) % beatDuration is how beats to subtract from Beat
-  // to get the live beat.  But if this is less than BeatInitial, must add the BeatRange to compensate..
-  self.tickLive = function () {
-    let now = ctx.currentTime;
-    let ticksAhead = tick - (time - now) / jiffy;
-    let tickLive = Mod(Floor(ticksAhead)-start, end-start+1)+start;
-    return tickLive;
+  // So the distance between (BeatTime - currentTime) / beatDuration is how beats to subtract from Beat
+  // to get the live beat.  But if this is less than BeatInitial, mod the BeatRange to compensate..
+  self.currentTick = function () {
+    now = ctx.currentTime;
+    //               |4.00 now4.12 2|4.25    3|4.5    4|4.75  5|5.00=TIME 6|
+    //   time - now  = .88 % .25 = 3.52 ceil=4  tick- = 2
+    //                           tick- = 2.48
+    let ticksAhead = Floor(tick - (time - now) / jiffy);
+    return Mod(ticksAhead-start, length)+start;
+    // 
   }
   self.isPaused = function () { return paused; }
   self.lastTime = function () { return time + jiffy; }
@@ -3174,7 +3269,6 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
     }
   }
   self.getRange = function () { return tickertimer.getRange(); }
-  self.setLength = function (c) { tickertimer.setLength(c); self.refreshHeader(); return self; }
   self.setStart = function (i) { tickertimer.setStart(i); self.refreshHeader(); return self; }
   self.setEnd = function (i) { tickertimer.setEnd(i); self.refreshHeader(); return self; }
   self.play = function (tick, time) {
@@ -3184,7 +3278,6 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   }
   self.tickerTimer = () => tickertimer;
   self.pause = function () {
-    DB(`PhraseSheet.pause`);
     tickertimer.pause();
   }
 
@@ -3271,9 +3364,8 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
 
   // Reset the TickerTimer state object
   tickertimer
-    .setLength(tickCount)
+    .setStart(0) 
     .setEnd(tickCount-1)
-    .setStart(0);
     //.rewind();
 
   // Create new parts when this button is activated
@@ -3302,7 +3394,6 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   let timer = phraseSheetObj.tickerTimer();
 
   // Creat part window
-  // []
   let part = CreateAppendChild('div', phrase.children[tickIdx]); // The Part element
   part.className = "window";
   part.style.top = Math.max(height, phrase.firstChild.firstChild.scrollHeight)+"px";
@@ -3350,14 +3441,25 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
       let header = CreateAppendChild("p", row, label); // White keys show note
 
       header.onmousedown = function () {
+        // Record a note if a key label is pressed.
         if (!phraseSheetObj.isPaused() && listenerID ) {
-          let tick = timer.tickLive()-tickIdx;
+          let tick = timer.currentTick()-tickIdx;
           row.children[1].children[tick].innerText = "*";
         }
-        // Play the sound if recording or live audio is enabled
-        if (brushToPlay() || listenerID) { playable.play(key, 1, 0, 0); }
-
+        // Play the key's sound if recording or live audio is enabled
+        if (brushToPlay() || listenerID) {
+          MouseIsDown = true;
+          IBC(["keyboard1", key, true]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
+        }
       };
+
+      header.onmouseover = function () { if (MouseIsDown) { IBC(["keyboard1", key, true]); } };
+      header.onmouseup = function () {
+        if (brushToPlay() || listenerID) {
+          IBC(["keyboard1", key, false]); // Notify listeners a key was released  ["piano1", 12, startPlaying]
+        }
+      };
+      header.onmouseleave = function () { if (MouseIsDown) {IBC(["keyboard1", key, false]); } }
 
       let notes = CreateAppendChild("div", row); // Row of ticks
 
@@ -3372,8 +3474,11 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
         }
         // Action Hovering/dragging
         tick.onmouseover = function (e) {
-          if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) } // Continue painting
-          else if (e.target.innerText == "*") playable.play(key, .5, 0); // Play it
+          if (MouseIsDown) {
+            e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) // Continue painting
+          } else if (e.target.innerText == "*") {
+            playable.play(key, .5, 0); // Play it
+          }
         };
       }
 
@@ -3384,7 +3489,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
 
       header.onmousedown = function () {
         if (!phraseSheetObj.isPaused(event) && listenerID ) {
-          let tick = timer.tickLive()-tickIdx;
+          let tick = timer.currentTick()-tickIdx;
           row.children[1].children[tick].innerText = "*";
         }
         // Play the sound if recording or live audio is enabled
@@ -3404,8 +3509,11 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
         }
         // Action Hovering/dragging
         tick.onmouseover = function (e) {
-          if (MouseIsDown) { e.target.innerText = (DragOverTickState == 1 ? "*" : NBSP) } // Continue painting
-          else if (e.target.innerText != NBSP && brushToPlay()) playable.play(key, .5, 0); // Play it
+          if (MouseIsDown) {
+            e.target.innerText = (DragOverTickState == 1 ? "*" : NBSP); // Continue painting
+          } else if (e.target.innerText != NBSP && brushToPlay()) {
+            playable.play(key, .5, 0); // Play it
+          }
         };
       }
     }
@@ -3432,7 +3540,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
 
     if (phraseSheetObj.isPaused() || m[0] != "keyboard1") { return; }
 
-    let tick = timer.tickLive()-tickIdx;
+    let tick = timer.currentTick()-tickIdx;
 
     if (m[2]) {
       if (m[1] < keyBeg || keyBeg+keyCount <= m[1]) { return; }
@@ -3518,40 +3626,12 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   phraseSheetObj.partAdd(self);
 
   return self;
-}
-
-
-/******************************************************************************
- Event loop handler callbacks
-******************************************************************************/
-var sequencerHandler = function (phraseObj) {
-  return function () {
-    if (phraseObj.isPaused()) { return; }
-    let tt = TickerTimer(); // returns [tick to process, time audio is written/buffered]
-    if (tt) { // This might be false implying the CTX output buffer has enough (1 sec) prebuffered
-      PhraseSheet.play.apply(null, tt);
-    }
-  };
-}
-
-var renderHandler = function (lastTick, phraseObj) {
-  return function () {
-    var tick = TickerTimer.tickLive();
-    // Update when audio in the CTX pipeline and tick changed
-    if ( tick != lastTick
-         && ctx.currentTime <= TickerTimer.lastTime()) {
-      phraseObj.render(tick);
-      lastTick = tick;
-    }
-  };
-}.bind(null, 0);
+} // PartSynth
 
 
 
 /******************************************************************************
-
- Other functions
-
+ Run Time
 ******************************************************************************/
 
 var setupControls = function (keyboard, phrasesheet) {
@@ -3607,7 +3687,7 @@ var setupControls = function (keyboard, phrasesheet) {
   }
 */
 
-  // Currently using the HTML range input form
+  // Currently using the HTML form element "range"
   //document.getElementById('mainVolume').onmousedown = function(event) {
   //  Slider(event, Volume, v=>DB(Volume=v));
   //}
@@ -3663,23 +3743,20 @@ var setupControls = function (keyboard, phrasesheet) {
     if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
     DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code);
 
-    if (indexOfCharCode("R", event.keyCode) != -1) { // Pressing 'r' will rewind the playback.
-      phrasesheet.rewind();
-    }
-
-    // Toggle playback
     if (indexOfCharCode("P", event.keyCode) != -1) { phrasesheet.pause(); }
-    if (indexOfCharCode(" ", event.keyCode) != -1) {
+    else if (indexOfCharCode("R", event.keyCode) != -1) { phrasesheet.rewind(); } // Rewind the playback.
+    else if (indexOfCharCode(" ", event.keyCode) != -1) { // Pause or jump to mark
       if (phrasesheet.isPaused()) { phrasesheet.jump(); }
       else { phrasesheet.pause(); }
     }
-
-    if (event.keyCode == 67) { IBC(["tickclear"]); } // Clear whatever the cursor is on
-    if (event.keyCode == 68) { IBC(["tickmove", -1]); } // Retard cursor key 'd'
-    if (event.keyCode == 70) { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
+    /* Old:  Cursor around tick
+    else if (event.keyCode == 67) { IBC(["tickclear"]); } // Clear whatever the cursor is on
+    else if (event.keyCode == 68) { IBC(["tickmove", -1]); } // Retard cursor key 'd'
+    else if (event.keyCode == 70) { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
+    */
   }
 
-  // Stop tablets and phones from scrolling and resizing?
+  // Prevent tablets and phones from scrolling and resizing?
   document.body.addEventListener(
     'touchstart',
     function (event) {
@@ -3691,13 +3768,32 @@ var setupControls = function (keyboard, phrasesheet) {
     true);
 
 
-  // Prevent space from scrolling browser window as it's used for DAW controls.
+  // Prevent space from scrolling browser window as spacebar is useful control.
   window.addEventListener('keydown', function(e) {
     if (e.keyCode == 32 && e.target == document.body) {
       e.preventDefault();
     }
   });
-} // setupControls ()
+
+}; //setupControls
+
+
+var renderHandler = function (phraseObj) {
+  var tick = TickerTimer.nextRender();
+  if (tick !== false ) {
+    //DB.post("render Handler", `${tick}`);
+    phraseObj.render(tick);
+  }
+}
+
+var processHandler = function (phraseObj) {
+  let ticktime = TickerTimer.nextTick(); // returns [tick to process, time audio is written/buffered]
+  if (ticktime !== false) {
+    //DB.post("process Handler", `${ticktime}`);
+    PhraseSheet.play.apply(null, ticktime);
+  }
+}
+
 
 
 /******************************************************************************
@@ -3706,7 +3802,7 @@ var setupControls = function (keyboard, phrasesheet) {
 
  CONCEPTS Musical Definitions
 
- Pressing a physical key/pad creates a note message/event.
+ Pressing a physical key/pad creates a MIDI message/event.
 
  Sheet      >Arrangement of phrases
   Phrase    >Contains multiple parts
@@ -3715,24 +3811,15 @@ var setupControls = function (keyboard, phrasesheet) {
      Beat    >Physical division of Parts
       Tick   >Physical division of Beats which contain notes to play
 
-
-  Sheet of one phrase.  Phrase of parts visually divided into two measures,
-  measures/bars of four beats, beats divided into X number of ticks.
-    x, xx x. .. x, x. xx x.       Tick order:  1 3
-    ,, .. x. .. ,, .. .x .x                    |/|
-                                               2 4
   Official      Me
   ------------- --------
-  Measure / Bar
-  Part / Voice
+  Measure/Bar
+  Part/Voice
   Quarter note  Beat
   Shortest note Tick
 
-3/4 song -- paste the following into daw07 console
-[18, 21, 25, 18, 21, 25, 18, 21, 26, 16, 20, 23, 16, 20, 23, 16, 20, 25, 13, 18, 20, 13, 18, 20, 13, 17, 20, 18, 21, 25, 18, 21, 25, 18, 25, 30, 25, 29, 32, 30, 33, 37, 30, 37, 41, 42, 45, 30].map(function(n,i){Sheet0.phrase(0).part(2).setKey(i,n-12);})
-
 ******************************************************************************/
-var Sheet0; // New hotness
+var Sheet0;
 var Keyboard0;
 var DrumKit0;
 var Synthesizer0;
@@ -3742,13 +3829,7 @@ var Synthesizer3;
 var DragOverTickState = 1;
 var Volume = 0.5; // A global value shared by all output gain logic
 var BeatDuration = 60/parseInt(document.getElementById('speed').innerText);
-
-// It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
-var MouseIsDown = false;
-
-/******************************************************************************
-  onload
-******************************************************************************/
+var MouseIsDown = false; // It's nice to keep track of global mouse button state.  The window element will always catch this event and handle it.
 var midi = null;
 var PhraseSheet = PhraseSheet("phrase", 128, TickerTimer);
 
@@ -3777,7 +3858,7 @@ function Main () {
   //var keyboard2 = new PianoKeyboard("piano2",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
   // MIDI fun
-  function onMIDISuccess( m ) {
+  function onMIDISuccess( m ) { // TODO Keyboard0 should not be receiving MIDI commands.
     m.inputs.forEach( e => {e.onmidimessage=function(e){Keyboard0.midi(e);};} );
   }
 
@@ -3846,8 +3927,8 @@ function Main () {
 
   PhraseSheet.setStart(8).setEnd(8+32-1);
 
-  setInterval(sequencerHandler(PhraseSheet), 50);
-  setInterval(renderHandler(PhraseSheet), 50); // This should only update every tick
+  setInterval(processHandler.bind(null, PhraseSheet), 100);
+  setInterval(renderHandler.bind(null, PhraseSheet), 50);
 
   DB("--onload [" + DB.status() + "]");
 } // Main
@@ -3857,7 +3938,7 @@ function Main () {
 function PreMain (i) {
  DB.post("init", ctx.state)
  if (ctx.state == "suspended") {
-   TickerTimer.pauseFeedback("pauseicon", 1.0)
+   PauseFeedback("pauseicon", 1.0)
    ctx.resume()
    setTimeout(PreMain.bind(0, ++i), 100);
  } else {
@@ -3865,7 +3946,7 @@ function PreMain (i) {
    DB ("Starting AudioContext!");
    //ctx = window.AudioContext && new window.AudioContext();
    document.getElementById("pauseicon").style.clipPath = null;
-   TickerTimer.pauseFeedback("pauseicon")
+   PauseFeedback("pauseicon")
    setTimeout(Main, 100);
  }
 }

@@ -210,7 +210,7 @@ h1 {
 .partpiano > div:nth-child(2) > div > div > p { height:1em; }
 
 /* Container of ticks */
-.partpiano > div:nth-child(2) > div > div { background:#222B; }
+.partpiano > div:nth-child(2) > div > div { background:#3336; }
 
 /* Tick */
 .partpiano > div:nth-child(2) > div > div > p { border:solid 1px transparent; display:inline-block; }
@@ -252,7 +252,7 @@ h1 {
 .partpiano > div:nth-child(2) > div.C.shp > p { margin-top:-.15em; }
 
 /* Container of sharp ticks */
-.partpiano > div:nth-child(2) > div.shp > div { background:#1b1b1bBB; }
+.partpiano > div:nth-child(2) > div.shp > div { background:#10101066; }
 
 
 /* Drumkit */
@@ -272,7 +272,7 @@ h1 {
 .partpiano > div:nth-child(2) > div:hover > div { color:yellow; background-color:blue; }
 
 /* Tick */
-.partpiano > div:nth-child(2) > div > div > p:hover { background:cyan; }
+.partpiano > div:nth-child(2) > div > div > p:hover { background:darkcyan; }
 
 
 /* ex ch PC EM -- CSS units/*
