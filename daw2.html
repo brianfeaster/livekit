@@ -20,11 +20,8 @@
 <hr/>
 <div class="headerNav">
  <a onmousedown="window.location.href=window.location.pathname+''">Clear</a>
- <a onmousedown="popupToggle('skeuomorph')">Skeuomorph</a>
  <a onmousedown="popupToggle('pauseicon')">Kitteh</a>
  <a href="https://www.w3.org/TR/webaudio/">WebAudio</a>
- <a href="http://validator.w3.org/check/referer">XHTML</a>
- <a href="http://jigsaw.w3.org/css-validator/check/referer/">CSS</a>
 </div>
 
 <div class="window">
@@ -32,9 +29,9 @@
   <div class="knobs">
     <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:6ch" />
     <!--p id="mainVolume">vol</p-->
-    <p id="speed" class="actor" contenteditable="true">60</p>
-    <p class="actor reset" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
-    <p class="actor pause" onmousedown="TickerTimer.pause(this)">||</p>
+    <p id="speed" class="actor" title="TEMPO" contenteditable="true">60</p>
+    <p class="actor reset" title="PLAY" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
+    <p class="actor pause" title="PAUSE" onmousedown="TickerTimer.pause(this)">||</p>
     <div id="addphrase">
       <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
         <div id="createphrase" style="background:#066; text-align:center">Create</div>
@@ -42,9 +39,9 @@
         <input id="addbeats" value="4" type="number"/>Beats<br/>
         <input id="addticks" value="4" type="number"/>ticks<br/>
       </div>
-      <p class="actor">new</p>
+      <p class="actor" title="NEW PART">+</p>
     </div>
-    <!-- p style="font-weight:bold; color:black; background:yellow; border:dashed thick red" class="actor">&gt!}=-drop-={!&lt;</p -->
+    <!-- p style="font-weight:bold; color:black; background:yellow; border:dashed thick red" class="actor" title="THE DROP (USE SPARINGLY)">&gt!}=-DrOp-={!&lt;</p -->
   </div>
   <div id="phrase" class="phrase"></div>
 </div>
@@ -73,11 +70,6 @@
   </div>
 </div>
 
-<div id="skeuomorph" style="display:none; padding:50px; width:700px; min-height:200px; background-color:#444; background-image:url('brushedMetalBackground.jpg'); z-index:1" onmousedown="popupToggle('skeuomorph')">
-  <b style="position:absolute; right:1ch; top:1ch">[X]</b>
-  <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
-</div>
-
 <p><img id="pauseicon" title="PSYCHEDELIC PAWS"  alt="PSYCHEDELIC PAWS" style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.jpg" onclick="ctx.resume()"/></p>
 
 
@@ -94,7 +86,8 @@ var Ceil  = Math.ceil;
 var Pow   = Math.pow;
 var Abs   = Math.abs;
 var Rnd   = Math.random;
-var Mod   = function (n,d) { return n - d * Math.floor(n/d); };
+var Max   = Math.max;
+var Mod   = function (n,d) { return n - d * Floor(n/d); };
 var Trunc2 = function (f) { return Round(f*100)/100; }
 var indexOfCharCode = (s, c)=>s.split('').map(c=>c.charCodeAt()).indexOf(c);
 
@@ -134,40 +127,67 @@ var ToggleElementDisplay = function (e1, e2) {
   if (e2) { e2.style.display = off ? "none" : ""; } // e2's style is opposite e1.
 };
 
-  // Show an image for a bit in the center of the screen.  Presented after hitting 'pause'.
-var PauseFeedback = function (id, op) {
-  op = op | 0.0;
-  var icon = document.getElementById(id);
-  var style = icon.style;
-  var opacity = 1.0;
+
+// Reveal instantly an element in the center of the screen if 'show' == true,
+// otherwise un-reveal it by slowly reducing opacity over time.
+var revealCenter = function (id, show) {
+
+  // Show, reset styles
+  let e = document.getElementById(id);
+  let style = e.style;
   style.display = "";
-  style.opacity = opacity;
+  style.opacity = "";
   style.position = "fixed";
-  style.top      = (window.innerHeight/2 - icon.height/2) + "px";
-  style.left     = (window.innerWidth/2 - icon.width/2) + "px";
-  if (op == 1.0) { return; }
-  let fn = function() {
-    icon.style.opacity = opacity;
-    if (opacity <= op) {
-      opacity = 1.0;
+  style.top      = (window.innerHeight/2 - e.height/2) + "px";
+  style.left     = (window.innerWidth/2 - e.width/2) + "px";
+  // Leave on
+  if (show) { return; }
+  // Slowly vanish
+  (e.vanish = (opacity) => {
+    if (opacity <= 0.0) {
+      // Unshow, reset opacity
       style.display="none";
-      style.opacity = opacity;
-      return;
+      style.opacity = ""
     } else {
-      opacity-=0.05;
-      setTimeout(fn, 50);
+      style.opacity = opacity;
+      setTimeout(e.vanish.bind(null, opacity-0.05), 50);
     }
-  };
-  fn();
+  })(1.0);
 }
 
-// Blink e with color, or stop when color false
+/*  Slowly reveal or hide a DOM element.
+*/
+var popupToggle = function (id) {
+  let e = document.getElementById(id);
+  let style = e.style;
+  let op; // Opacity to start at
+  if (style.display == "none") { // If off enable it and ramp opacity from 0 to 1
+    style.display = "";
+    style.position = "fixed";
+    style.top = (window.innerHeight/2 - e.clientHeight/2) + "px"; // Always be centering
+    style.left = (window.innerWidth/2 - e.clientWidth/2) + "px";
+    op = style.opacity = -1; // Slowly reveal
+  } else {
+    op = 100; // Slowly disappear
+  }
+  (e.opacity = (o) => 
+    o <= -100
+      ? e.style.opacity=""
+      : o == 0
+        ? (style.opacity="", style.display="none")
+        : (style.opacity = Abs(o/100),
+           setTimeout( e.opacity.bind(null, o-5), 10))
+  )(op);
+  e.onmousedown = () => popupToggle(id);
+}
+
+
+
+// Blink element using color, stop blinking if color false
 var blinkify = (e, color) => (
   e.blinker = color
-    ? () => (
-        e.style.backgroundColor =
-          !e.style.backgroundColor && color || "",
-        setTimeout(e.blinker, 200))
+    ? () => (setTimeout( ()=>e.blinker(), 400),
+             e.style.backgroundColor = e.style.backgroundColor ? "" : color)
     : () => e.style.backgroundColor = ""
 )();
 
@@ -198,38 +218,6 @@ var AppendNewToggleActor = function (parent, state, className, callbackTrue, cal
   self.element = () => element;
   return self;
 };
-
-
-/*  Slowly reveal or hide a DOM element.
-*/
-var popupToggle = function (id) {
-  var e = document.getElementById(id);
-  var opacity;
-
-  if (e.style.display == "none") { // If off enable it and ramp opacity from 0 to 1
-    e.style.opacity = opacity = 0;
-    e.style.display = "";
-    e.style.position = "fixed";
-    e.style.top = (window.innerHeight/2 - e.clientHeight/2) + "px"; // Always be centering
-    e.style.left = (window.innerWidth/2 - e.clientWidth/2) + "px";
-  } else {
-    opacity = 100;
-  }
-
-  var self = function() {
-    opacity -= 5;
-    e.style.opacity = Abs(opacity/100);
-    if (opacity == 0) {
-      e.style.display = "none";
-      return;
-    }
-    if (opacity == -100) return;
-
-    setTimeout(self, 10);
-  }
-
-  self();
-}
 
 
 /******************************************************************************
@@ -803,7 +791,8 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
 
   DB.check(keyCount == _keysDOM.length, "ERROR: PianoKeyboard: Created incorrect number of keys.");
 
-  this.highlight = function (key, color)  {
+  self.highlight = function (key, color)  {
+    //DB.post("PianoKeyboard", ["highlight", key, color])
     let i = key - keyStart;
     if ((0 <= i) && (i < keyCount)) {
       _highlights[i].push(color);
@@ -811,7 +800,8 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
     }
   }
 
-  this.unhighlight = function (key, color) {
+  self.unhighlight = function (key, color) {
+    //DB.post("PianoKeyboard", ["unhighlight", key, color])
     let i = key - keyStart;
     let stk = _highlights[i];
     if (!stk) return; // Invalid key keys are ignored.
@@ -837,12 +827,18 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
     Channel Pressure        Dx    Pressure value    None
     Pitch Bend              Ex    MSB               LSB
   */
-  this.midi = function (msg) { // TODO This should not be here
+  self.midi = function (msg) { // TODO This should not be here
+    DB.post("PianoKeyboard", msg.data);
     var d = msg.data;
-    var c = d[0];
-    var k = d[1];
-    if ((144 <= c) && (c<=159) && (0 <= k) && (k < keyCount)) {
-      if (d[2]==0) { keyUp(k); } else { keyDown(k); }
+    var cmd = d[0];
+    var key = d[1];
+    if ((0x90 + 0 <= cmd) && (cmd <= 0x90+15) // channel 0..15
+        && (keyStart <= key) && (key < keyStart + keyCount)) {
+      if (d[2] == 0) {
+        keyRelease(key);
+      } else {
+        keyPress(key);
+      }
     }
   }
 } // PianoKeyboard
@@ -1224,7 +1220,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
 
     var osc = playing[key][0]; // Recover osc and gain
     var gain = playing[key][1];
-    var at = Math.max(playing[key][2], ctx.currentTime);
+    var at = Max(playing[key][2], ctx.currentTime);
     playing[key] = undefined;
 
     gain.gain.setValueAtTime(vol*0.5*Volume, at);
@@ -3242,7 +3238,7 @@ var TickerTimer = (function (ctx) {
   self.rewind = function (e, newTick) { // Reset state so next tick is 0 and next time will be nowish.
     if (paused) { _pause(e); }
     // Rewind to specified tick or the usual start tick
-    tickCue = renderCue = (newTick == null) ? start : newTick;
+    tickCue = renderCue = (newTick == undefined) ? start : newTick;
     return self;
   };
   self.now = () => ctx.currentTime;
@@ -3389,7 +3385,6 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
     ()=>(ticks.forEach(t=>t.firstChild.style.color=null), ")("),
     ()=>(ticks.forEach(t=>t.firstChild.style.color="inherit"), "()"));
-  DB([brushToPlay(), brushToPlay.element()]);
 
   // Reset the TickerTimer state object
   tickertimer
@@ -3424,7 +3419,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   // Creat part window
   let part = CreateAppendChild('div', phrase.children[tickIdx]); // The Part element
   part.className = "window";
-  part.style.top = Math.max(height, phrase.firstChild.firstChild.scrollHeight)+"px";
+  part.style.top = Max(height, phrase.firstChild.firstChild.scrollHeight)+"px";
 
   // Header - left most cells of row
   let title = CreateAppendChild('div', part, "Part");
@@ -3450,8 +3445,8 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
 
   // Container of rows of label and ticks
   let grid = CreateAppendChild('div', body);
+  //grid.className="grid";
 
-  // Create ticks
   RangeForEach(keyCount, (ii) => {
     let key = keyBeg + ii;
     if (playable instanceof Synthesizer) {
@@ -3550,6 +3545,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   // Toggle-body knob
   let collapse = CreateAppendChild('p', knobs, "-");
   collapse.className = "actor";
+  collapse.title = "MINIMIZE TOGGLE";
   collapse.onmousedown = e => ToggleElementDisplay(grid);
 
   knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
@@ -3558,21 +3554,21 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
     () => (headerTicks.style.color=null, ")("),
     () => (headerTicks.style.color="inherit", "()"));
+  brushToPlay.element().title="BRUSH PLAY";
 
   knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
 
   // Toggle Recording
   let listenerID = null;
   let recordKnob = CreateAppendChild('p', knobs, "#");
+  recordKnob.className = "actor";
+  recordKnob.title = "RECORD";
   let listenerIBC = function (m) {
-
     if (phraseSheetObj.isPaused() || m[0] != "keyboard1") { return; }
-
     let tick = timer.currentTick()-tickIdx;
-
     if (m[2]) {
       if (m[1] < keyBeg || keyBeg+keyCount <= m[1]) { return; }
-      // Rows are in reverse order, also compensate for the lfirst supported MIDI note
+      // Rows are in reverse order, also compensate for the first supported MIDI note
       let row = keyCount - (m[1] - keyBeg) - 1;
       grid.children[row].children[1].children[tick].innerText = "*";
       playable.play(m[1], .5, 0, 0);
@@ -3591,6 +3587,21 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
     IBC(["tickclick", 0, 0]); // This tells any active part to stop listening to keyboard events.
   }
 
+  knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
+
+  // Clear all ticks knobs
+  let clearKnob = CreateAppendChild('p', knobs, "X");
+  clearKnob.className = "mustshift";
+  clearKnob.title = "DELETE NOTES";
+  clearKnob.onmousedown = function (e) {
+    if (!e.shiftKey) { return; }
+    RangeForEach(keyCount, (y) => {
+      RangeForEach(TickCount, (x) => {
+        grid.children[y].children[1].children[x].innerText=NBSP;
+      })
+    })
+  }
+
   // Clicking title will raise it.  Dragging title will move it around the phrase/sheet
   title.onmousedown = function (e) {
     MouseIsDown = true; // Set global state
@@ -3605,8 +3616,8 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
     phrase.onmousemove = function (offset, e) {
        if (!MouseIsDown) { phrase.onmousemove = null; return; } // Maybe stop handling this event
        // Adjust part's vertical position
-       part.style.top = Math.max(offset + e.y, tickHeight) + "px";
-       // Move part to another tick TODO broken when moved beyond the last phrase grid column
+       part.style.top = Max(offset + e.y, tickHeight) + "px";
+       // Adjust part's horizontal position (Phrase's tick)
        let newTick = Floor((e.x-leftMargin+1) / tickWidth);
        if (newTick != tickIdx) {
          phrase.children[newTick].appendChild(part);
@@ -3778,11 +3789,6 @@ var setupControls = function (keyboard, phrasesheet) {
       if (phrasesheet.isPaused()) { phrasesheet.jump(pauseElement); }
       else { phrasesheet.pause(pauseElement); }
     }
-    /* Old:  Cursor around tick
-    else if (event.keyCode == 67) { IBC(["tickclear"]); } // Clear whatever the cursor is on
-    else if (event.keyCode == 68) { IBC(["tickmove", -1]); } // Retard cursor key 'd'
-    else if (event.keyCode == 70) { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
-    */
   }
 
   // Prevent tablets and phones from scrolling and resizing?
@@ -3862,9 +3868,10 @@ var MouseIsDown = false; // It's nice to keep track of global mouse button state
 var midi = null;
 var PhraseSheet = PhraseSheet("phrase", 128, TickerTimer);
 
-function Main () {
-  DB("::onload");
+function Start () {
+  DB.post("Start", DB.status());
 
+  DB.post("Start", "Buttons");
   document.getElementById('addsynth').onmousedown = function () {
     var s = new Synthesizer(ctx, false, 1, Keyboard0, "#84f");
     document.getElementById('synths').appendChild(s.element);
@@ -3883,10 +3890,12 @@ function Main () {
   }
 
   // Create a piano object and DOM element.  88 keys, starting at 21/A0.
+  DB.post("Start", "Keyboard");
   Keyboard0 = new PianoKeyboard("piano1", 21, 88);
   //var keyboard2 = new PianoKeyboard("piano2",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
   // MIDI fun
+  DB.post("Start", "MIDI");
   function onMIDISuccess( m ) { // TODO Keyboard0 should not be receiving MIDI commands.
     m.inputs.forEach( e => {e.onmidimessage=function(e){Keyboard0.midi(e);};} );
   }
@@ -3899,10 +3908,13 @@ function Main () {
       .then(onMIDISuccess, onMIDIFailure);
   }
 
+  DB.post("Start", "More Buttons");
   setupControls(Keyboard0, PhraseSheet); // Setup menus and moveable buttons.
 
+  DB.post("Start", "Noises");
+
   // Load the audio asynchronously and create the default drumkit.
-  DrumKit0 = new Drumkit(ctx, "orange", 21, ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
+  DrumKit0 = new Drumkit(ctx, "orange", 24, ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
 
   // LiveKa7 v3
   //restoreSongLK3(Keyboard0, DrumKit0); //, hyphen.song());
@@ -3950,41 +3962,40 @@ function Main () {
     document.getElementById('filters').appendChild(e.element);
   }
 
-  PartSynth(PhraseSheet, 8, 1*20, 21, 16, 32, DrumKit0 );
-  PartSynth(PhraseSheet, 8, 16*20, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  DB.post("Start", "Windows");
+  PartSynth(PhraseSheet, 8, 1*21, 24, 16, 32, DrumKit0 );
+  PartSynth(PhraseSheet, 8, 16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
   //PartSynth(PhraseSheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
   PhraseSheet.setStart(8).setEnd(8+32-1);
 
+  DB.post("Start", "Handlers");
   setInterval(processHandler.bind(null, PhraseSheet), 100);
   setInterval(renderHandler.bind(null, PhraseSheet), 50);
 
-  DB("--onload [" + DB.status() + "]");
 } // Main
 
 
 // Await for user gesture then restart WebAudio
-function PreMain (i) {
- DB.post("init", ctx.state)
+(function Main (i) {
  if (ctx.state == "suspended") {
-   PauseFeedback("pauseicon", 1.0)
+   revealCenter("pauseicon", true)
    ctx.resume()
-   setTimeout(PreMain.bind(0, ++i), 100);
+   setTimeout(Main.bind(0, ++i), 200);
  } else {
-
-   DB ("Starting AudioContext!");
-   //ctx = window.AudioContext && new window.AudioContext();
-   document.getElementById("pauseicon").style.clipPath = null;
-   PauseFeedback("pauseicon")
-   setTimeout(Main, 100);
+   DB.post("Main", "Starting AudioContext!");
+   revealCenter("pauseicon", false)
+   setTimeout( ()=>ElementById("pauseicon").style.clipPath="", 1100);
+   Start();
  }
-}
+})(0);
 
-
-window.onload = PreMain.bind(null,0)
 
 //IBC.debug();
-/* T O D O
- Synth listener that crashes (key out of bounds) denies other synths from receiving
-*/
-//]]></script></body></html>
+
+//]]></script></body></html><!--
+* Synth listener that crashes (key out of bounds) denies
+  other synths from receiving.
+* Moving part to another tick broken when moved beyond the
+  last phrase grid column.
+------------------------------------------------------------------------------/
