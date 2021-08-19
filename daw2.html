@@ -9,7 +9,7 @@
  <title>Liveka7 DAW</title>
  <link rel="stylesheet" href="daw2.css" type="text/css" media="screen" title="Shrewm"/>
 </head>
-<body _oncontextmenu="return false;">
+<body>
 
 <p id="xDB" style="width:24em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:10em; position:fixed; right:0; bottom:0"></p>
 
@@ -18,7 +18,8 @@
 
 <h1>Liveka7 Digital Audio Workstation 2<span style="font-family:monospace">&#x03b1;</span></h1>
 <hr/>
-<div class="headerNav">
+<div id="headerNav" class="headerNav">
+ <a id="info" style="background-color:#22f;width:2em;text-align:left;display:inline-block"></a>
  <a onmousedown="window.location.href=window.location.pathname+''">Clear</a>
  <a onmousedown="popupToggle('pauseicon')">Kitteh</a>
  <a href="https://www.w3.org/TR/webaudio/">WebAudio</a>
@@ -29,9 +30,9 @@
   <div class="knobs">
     <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:6ch" />
     <!--p id="mainVolume">vol</p-->
-    <p id="speed" class="actor" title="TEMPO" contenteditable="true">60</p>
+    <p id="bpm" class="actor" title="BPM" contenteditable="true">60</p>
     <p class="actor reset" title="PLAY" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
-    <p class="actor pause" title="PAUSE" onmousedown="TickerTimer.pause(this)">||</p>
+    <p id="pause" class="actor pause" title="PAUSE" onmousedown="TickerTimer.pause(this)">||</p>
     <div id="addphrase">
       <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
         <div id="createphrase" style="background:#066; text-align:center">Create</div>
@@ -48,7 +49,7 @@
 
 <div class="window">
   <div>SYNTHS</div>
-  <div class="knobs"> <p id="addsynth" class="actor">+</p> </div>
+  <div class="knobs"> <p id="freq" class="actor" contenteditable="true">27.5</p> <p id="addsynth" class="actor">+</p> </div>
   <div id="synths"></div>
 </div>
 
@@ -63,7 +64,7 @@
 
 <div class="window">
   <div>KEYBOARD</div>
-  <div class="knobs">&nbsp;<p id="freq" class="actor" contenteditable="true">65.4064</p></div>
+  <div class="knobs"></div>
   <div>
     <div id="piano1" class="piano"></div>
     <div id="piano2" class="piano"></div>
@@ -88,9 +89,7 @@ var Abs   = Math.abs;
 var Rnd   = Math.random;
 var Max   = Math.max;
 var Mod   = function (n,d) { return n - d * Floor(n/d); };
-var Trunc2 = function (f) { return Round(f*100)/100; }
-var indexOfCharCode = (s, c)=>s.split('').map(c=>c.charCodeAt()).indexOf(c);
-
+var Trunc2 = function (f) { return f.toFixed(2); }
 var ElementById = function(id) { return document.getElementById(id); };
 
 // Generate ary of ints: []  OR  [0..a-1]  OR  [a..b]
@@ -116,7 +115,7 @@ var CreateAppendChild = function (name, element, text) {
 };
 
 var CreateInsertChild = function (name, element, text) {
-  var e = element.insertBefore(document.createElement(name), element.firstChild);
+  var e = element.insertBefore(document.createElement(name),element.firstChild);
   if (text != undefined) { e.innerText = text; }
   return e;
 };
@@ -170,7 +169,7 @@ var popupToggle = function (id) {
   } else {
     op = 100; // Slowly disappear
   }
-  (e.opacity = (o) => 
+  (e.opacity = (o) =>
     o <= -100
       ? e.style.opacity=""
       : o == 0
@@ -729,7 +728,6 @@ var Slider = function () {
 
   METHODS::
 DEPREATED    .freq(key)             Frequency of key.
-    .setStartFrequency(f)  Reset base frequencies of the keyboard (first note's freq)
     .highlight(key, color) Highlight the key using color.  Overrides its last
                            color, if any, by pushing new color on a stack.
     .unhighlight(key)      Removes last/top highlighted color and reverts to
@@ -748,7 +746,6 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
   var element = document.getElementById(id);
   DB.check(element, "ERROR: PianoKeyboard: Element id=" + id + " not found in DOM.");
   var _keysDOM = []; // Keeps track of the DOM elements which represent the white and black keys in order.
-  //var _frequencies = [];
   var _highlights = []; // Array of stacks.  An empty stack implies no high-light.
   var _highlightColor = "#f8f"
   var notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -826,9 +823,10 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
     Program Change          Cx    Program number    None
     Channel Pressure        Dx    Pressure value    None
     Pitch Bend              Ex    MSB               LSB
+    The MIDI controller I use sends "note on" with 0 velocity as a "note off"
   */
   self.midi = function (msg) { // TODO This should not be here
-    DB.post("PianoKeyboard", msg.data);
+    //DB.post("PianoKeyboard", msg.data);
     var d = msg.data;
     var cmd = d[0];
     var key = d[1];
@@ -1006,16 +1004,12 @@ var Drumkit = function (ctx, color, keyStart, filenames) {
    60 C4 261.6256/MidC 127 G9 12543.8540
 */
 var KeyFreq = function (freqa0) {
-
-  // Table of base frequency multipliers
+  // Generate able of base frequency multipliers
   let keymult = RangeMap(128, (k) => Pow(2, (k-21)/12.0));
-
   let self = (k) => keymult[k] * freqa0;// + Rnd()*0.5 - 0.25;
-
   self.setFreqA0 = (f) => freqa0=f;
-
+  self.freq = () => freqa0;
   return self;
-
 }(27.5);
 
 DB.check( KeyFreq(21)==27.5, "KeyFreq frequency mismatch key 21 != 27.5Hz");
@@ -3158,6 +3152,7 @@ var restoreSongLK0 = function (keyboard, drumKit) {
 ******************************************************************************/
 var TickerTimer = (function (ctx) {
   // Settings
+  let bpm   = 60;
   let jiffy = .25; // Tick length in seconds (speed of music)
   let lead  = 1.0; // Audio pre-buffer length in seconds
   let length = 8; // Total number of ticks
@@ -3207,6 +3202,7 @@ var TickerTimer = (function (ctx) {
       if (time < now) { time = now; } // Reset time if we fell behind now
     }
     // Return processing details/instructions: "Generate sound at 'time' from notes at 'tick'"
+    ElementById("info").innerText = Trunc2(time-now);
     return [tick, time];
   };
 
@@ -3229,10 +3225,9 @@ var TickerTimer = (function (ctx) {
     return ret;
   }
 
-
   self.tick = self;
   self.pause     = function (e)  { _pause(e); }
-  self.setJiffy  = function (s) { jiffy = s; };
+  self.setBpm    = function (b) { bpm=b; jiffy = 15/bpm; };
   self.setStart  = function (i) { if (i<=end) { start = i; length=end-start+1; if (paused) { tickCue = renderCue = start; } } return self; };
   self.setEnd    = function (i) { if (start<=i) { end = i; length=end-start+1; } return self; };
   self.rewind = function (e, newTick) { // Reset state so next tick is 0 and next time will be nowish.
@@ -3246,8 +3241,8 @@ var TickerTimer = (function (ctx) {
   // When deriving the live beat for DOM highlighting, must do so within the current active beat range
   // So the distance between (BeatTime - currentTime) / beatDuration is how beats to subtract from Beat
   // to get the live beat.  But if this is less than BeatInitial, mod the BeatRange to compensate..
-  self.currentTick = function () {
-    now = ctx.currentTime;
+  self.currentTick = function (adj) {
+    now = ctx.currentTime + (adj||0);
     //               |4.00 now4.12 2|4.25    3|4.5    4|4.75  5|5.00=TIME 6|
     //   time - now  = .88 % .25 = 3.52 ceil=4  tick- = 2
     //                           tick- = 2.48
@@ -3257,6 +3252,7 @@ var TickerTimer = (function (ctx) {
   self.isPaused = function () { return paused; }
   self.lastTime = function () { return time + jiffy; }
   self.jiffy = function () { return jiffy; }
+  self.bpm = function () { return bpm; }
   self.getRange = function () { return [start, end]; }
   return self;
 })(ctx); // TickerTimer
@@ -3365,18 +3361,16 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
 
     header.onmousedown = function (idx, e) { // Handle updating sheet's start/end playback ticks and repeat marker
       if (e.which==3) { self.setEnd(idx); }
-      else if (e.which==1) {
-        if (e.shiftKey) {
-          // Handle marked tick in phrase sheet's header
-          if (markedTick != null) { ticks[markedTick].firstChild.style.color = ""; }
-          if (markedTick == idx) {
-            markedTick = null;
-          } else {
-            ticks[markedTick=idx].firstChild.style.color = "black";
-          }
+      else if (e.which==2 || (e.which==1 && e.metaKey)) {
+        // Handle marked tick in phrase sheet's header
+        if (markedTick != null) { ticks[markedTick].firstChild.style.color = ""; }
+        if (markedTick == idx) {
+          markedTick = null;
         } else {
-          self.setStart(idx);
+          ticks[markedTick=idx].firstChild.style.color = "black";
         }
+      } else {
+        self.setStart(idx);
       }
     }.bind(null, row);
   }
@@ -3385,6 +3379,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
     ()=>(ticks.forEach(t=>t.firstChild.style.color=null), ")("),
     ()=>(ticks.forEach(t=>t.firstChild.style.color="inherit"), "()"));
+  brushToPlay.element().title="BRUSH PLAY";
 
   // Reset the TickerTimer state object
   tickertimer
@@ -3423,6 +3418,9 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
 
   // Header - left most cells of row
   let title = CreateAppendChild('div', part, "Part");
+  title.className = "actor";
+  title.title="MOVE,MIN";
+
   let knobs = CreateAppendChild('div', part);
   knobs.className = "knobs";
 
@@ -3542,13 +3540,6 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
     }
   });
 
-  // Toggle-body knob
-  let collapse = CreateAppendChild('p', knobs, "-");
-  collapse.className = "actor";
-  collapse.title = "MINIMIZE TOGGLE";
-  collapse.onmousedown = e => ToggleElementDisplay(grid);
-
-  knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
 
   // Toggle brushToPlay knob
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
@@ -3556,7 +3547,19 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
     () => (headerTicks.style.color="inherit", "()"));
   brushToPlay.element().title="BRUSH PLAY";
 
-  knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
+
+  // Clear all ticks knobs
+  let clearKnob = CreateAppendChild('p', knobs, "X");
+  clearKnob.className = "actor mustshift";
+  clearKnob.title = "DELETE NOTES";
+  clearKnob.onmousedown = function (e) {
+    if (!e.shiftKey) { return; }
+    RangeForEach(keyCount, (y) => {
+      RangeForEach(TickCount, (x) => {
+        grid.children[y].children[1].children[x].innerText=NBSP;
+      })
+    })
+  }
 
   // Toggle Recording
   let listenerID = null;
@@ -3565,7 +3568,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   recordKnob.title = "RECORD";
   let listenerIBC = function (m) {
     if (phraseSheetObj.isPaused() || m[0] != "keyboard1") { return; }
-    let tick = timer.currentTick()-tickIdx;
+    let tick = timer.currentTick( timer.jiffy()/2 )-tickIdx; // Adjust by half a jiffy so performing can be near the beat/tick instead of on or after it as is done by the tick highlighting renderer.
     if (m[2]) {
       if (m[1] < keyBeg || keyBeg+keyCount <= m[1]) { return; }
       // Rows are in reverse order, also compensate for the first supported MIDI note
@@ -3587,23 +3590,16 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
     IBC(["tickclick", 0, 0]); // This tells any active part to stop listening to keyboard events.
   }
 
-  knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
-
-  // Clear all ticks knobs
-  let clearKnob = CreateAppendChild('p', knobs, "X");
-  clearKnob.className = "mustshift";
-  clearKnob.title = "DELETE NOTES";
-  clearKnob.onmousedown = function (e) {
-    if (!e.shiftKey) { return; }
-    RangeForEach(keyCount, (y) => {
-      RangeForEach(TickCount, (x) => {
-        grid.children[y].children[1].children[x].innerText=NBSP;
-      })
-    })
-  }
 
   // Clicking title will raise it.  Dragging title will move it around the phrase/sheet
+
   title.onmousedown = function (e) {
+    if (e.which == 3 && !e.metaKey) {
+      ToggleElementDisplay(grid);
+      event.stopPropagation(); // Keep event from elements
+      return;
+    }
+    if (e.which != 1 || e.ctrlKey) { return; }
     MouseIsDown = true; // Set global state
 
     phraseSheetObj.partsResetZ(); // Raise this phrase and reset others
@@ -3624,6 +3620,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
          tickIdx = newTick;
        }
     }.bind(null, part.offsetTop-e.y);
+    event.preventDefault(); // Keep event from browser
   };
 
 
@@ -3674,122 +3671,72 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
 ******************************************************************************/
 
 var setupControls = function (keyboard, phrasesheet) {
-  //document.getElementById('speed').onmouseenter = function (event) { event.target.focus(); }
-  //document.getElementById('speed').onmouseleave = function (event) { event.target.blur(); }
 
   document.getElementById('volume').oninput = function (e) {
     Destinations.input(0).gain.value = e.srcElement.value / 100.0;
   }
 
-/*
-  document.getElementById('volume').onkeydown = function (event) {
-    var newVol;
-    if (event.keyCode == 38) {
-      newVol = parseInt(event.target.innerText.replace("\n",""))+1;
-    }
-    else if (event.keyCode == 40) {
-      newVol = parseInt(event.target.innerText.replace("\n",""))-1;
+  // tODO Rethink mousehover == editable focus.  Fails when text box is empty and width very thin.
+  //document.getElementById('bpm').onmouseenter = function (event) { event.target.focus(); }
+  //document.getElementById('bpm').onmouseleave = function (event) { event.target.blur(); }
+  document.getElementById('bpm').onkeydown = function (event) {
+    var newBpm;
+    if (event.code == "ArrowUp") {
+      newBpm = parseInt(event.target.innerText)+1;
+    } else if (event.code == "ArrowDown") {
+      newBpm = parseInt(event.target.innerText)-1;
+    } else if (event.code == "Enter") {
+      newBpm = parseInt(event.target.innerText);
+      event.preventDefault(); // Prevent element's text receiving a newline
     } else {
+      event.stopPropagation(); // Stop global hot keys from receiving event
       return;
     }
-    if (isNaN(newVol) || newVol < 0 || 100 < newVol){
-      event.target.innerText = (Volume*100.0).toFixed(0);
+    if (isNaN(newBpm) || newBpm < 1 || 666 < newBpm){
+      event.target.innerText = TickerTimer.bpm();
     } else {
-      event.target.innerText = newVol;
-      Volume = newVol/100.0;
+      event.target.innerText = newBpm;
+      TickerTimer.setBpm(newBpm);
     }
   }
 
-
-  document.getElementById('volume').onkeypress = function (event) {
-    setTimeout(function() { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
-      if (event.keyCode == 13) {
-        var newVol = parseInt(event.target.innerText.replace("\n",""));
-        if (0 <= newVol && newVol <= 100) {
-          event.target.innerText = newVol;
-          Volume = newVol / 100.0;
-        } else {
-          event.target.innerText =  (Volume*100.0).toFixed(0);
-        }
-      } // if
-    }); // function
-  } // function
-
-  document.getElementById('volume').onchange = function (event) {
-        var newVol = parseInt(event.target.value);
-        if (0 <= newVol && newVol <= 100) {
-          event.target.value = newVol;
-          Volume = newVol / 100.0;
-        } else {
-          event.target.value =  (Volume*100.0).toFixed(0);
-        }
+  // TODO generalize input boxes
+  // Hitting enter will evaluate the box contents the pass to the callback
+  document.getElementById('freq').onkeydown = function (v) {
+    if (v.code == "Enter") {
+      let freq = parseFloat(v.target.innerText) || KeyFreq.freq();
+      KeyFreq.setFreqA0(v.target.innerText = freq);
+      v.preventDefault(); // Prevent form element from adding a newline
+    }
+    v.stopPropagation();
   }
-*/
-
-  // Currently using the HTML form element "range"
-  //document.getElementById('mainVolume').onmousedown = function(event) {
-  //  Slider(event, Volume, v=>DB(Volume=v));
-  //}
-
-  document.getElementById('speed').onkeydown = function (event) {
-    var newDuration;
-    if (event.keyCode == 38) { // UP ARROW
-      newDuration = parseInt(event.target.innerText.replace("\n",""))+1;
-    }
-    else if (event.keyCode == 40) { // DOWN ARROW
-      newDuration = parseInt(event.target.innerText.replace("\n",""))-1;
-    } else {
-      event.stopPropagation(); // No other element to get this event
-      return;
-    }
-    if (isNaN(newDuration) || newDuration < 0 || 666 < newDuration){
-      event.target.innerText = 60.0/BeatDuration;
-    } else {
-      event.target.innerText = newDuration;
-      BeatDuration = 60.0/newDuration;
-      TickerTimer.setJiffy(BeatDuration/4.0);
-    }
-    event.stopPropagation(); // No other element to get this event
-  }
-
-  document.getElementById('speed').onkeypress = function (event) {
-    setTimeout(function() { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
-      if (event.keyCode == 13) {
-        var newDuration = parseInt(event.target.innerText.replace("\n",""));
-        if (1 < newDuration && newDuration <= 666) {
-          event.target.innerText = newDuration;
-          BeatDuration = 60/newDuration;
-          TickerTimer.setJiffy(BeatDuration/4.0);
-        } else {
-          event.target.innerText =  60/BeatDuration;
-        }
-      } // if
-    }); // function
-  } // function
-
-
-  document.getElementById('freq').onkeypress = function (event) {
-    setTimeout(function () { // The GUI is slower than this event handler which ends up adding the newline after this code removes it.  So delay this code a bit.
-      if (event.keyCode == 13) {
-       keyboard.setStartFrequency(event.target.innerText = parseFloat(event.target.innerText.replace("\n","")));
-      } // if
-    }); // function
-  } // function
 
   window.onmouseup = function () { MouseIsDown = false; }
 
-  window.onkeydown = function (event) {
-    let pauseElement = document.getElementsByClassName('pause')[0];
-    if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
-    DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code);
+  // Global hot keys
+  window.onkeydown = function (v) {
+    if (v.code == "Slash") DB.clear(); // Pressing '/' will clear the DB (debug console) element.
+    DB.post("window.onkeydown", v.code);
 
-    if (indexOfCharCode("P", event.keyCode) != -1) { phrasesheet.pause(pauseElement); }
-    else if (indexOfCharCode("R", event.keyCode) != -1) { phrasesheet.rewind(pauseElement); } // Rewind the playback.
-    else if (indexOfCharCode(" ", event.keyCode) != -1) { // Pause or jump to mark
-      if (phrasesheet.isPaused()) { phrasesheet.jump(pauseElement); }
-      else { phrasesheet.pause(pauseElement); }
+    let pauseElement = ElementById('pause');
+    if (v.code == "KeyP") { phrasesheet.pause(pauseElement); }
+    else if (v.code == "KeyR") { phrasesheet.rewind(pauseElement); } // Rewind the playback.
+    else if (v.code == "Space") { // Pause or jump to mark
+      phrasesheet.isPaused()
+        ? phrasesheet.jump(pauseElement)
+        : phrasesheet.pause(pauseElement);
+      v.preventDefault(); // Prevent space from scrolling browser window
     }
   }
+
+  // Browser menu activated only with meta key.  The mouse event capture will
+  // be stopped early if meta+mouse3 and the contextmenu bubble will only
+  // bubble out if meta is active.
+  window.addEventListener(
+    "mousedown",
+    (v) => v.metaKey && v.which==3 && v.stopPropagation(),
+    true);
+  window.oncontextmenu = (v) => v.metaKey || v.preventDefault();
 
   // Prevent tablets and phones from scrolling and resizing?
   document.body.addEventListener(
@@ -3801,14 +3748,6 @@ var setupControls = function (keyboard, phrasesheet) {
       DB(event.touches);
     },
     true);
-
-
-  // Prevent space from scrolling browser window as spacebar is useful control.
-  window.addEventListener('keydown', function(e) {
-    if (e.keyCode == 32 && e.target == document.body) {
-      e.preventDefault();
-    }
-  });
 
 }; //setupControls
 
@@ -3825,7 +3764,7 @@ var processHandler = function (phraseObj) {
   let ticktime = TickerTimer.nextTick(); // returns [tick to process, time audio is written/buffered]
   if (ticktime !== false) {
     //DB.post("process Handler", `${ticktime}`);
-    PhraseSheet.play.apply(null, ticktime);
+    phraseObj.play.apply(null, ticktime);
   }
 }
 
@@ -3863,7 +3802,6 @@ var Synthesizer2;
 var Synthesizer3;
 var DragOverTickState = 1;
 var Volume = 0.5; // A global value shared by all output gain logic
-var BeatDuration = 60/parseInt(document.getElementById('speed').innerText);
 var MouseIsDown = false; // It's nice to keep track of global mouse button state.  The window element will always catch this event and handle it.
 var midi = null;
 var PhraseSheet = PhraseSheet("phrase", 128, TickerTimer);
@@ -3962,7 +3900,7 @@ function Start () {
     document.getElementById('filters').appendChild(e.element);
   }
 
-  DB.post("Start", "Windows");
+  DB.post("Start", "Sequences");
   PartSynth(PhraseSheet, 8, 1*21, 24, 16, 32, DrumKit0 );
   PartSynth(PhraseSheet, 8, 16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
   //PartSynth(PhraseSheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
@@ -3971,7 +3909,9 @@ function Start () {
 
   DB.post("Start", "Handlers");
   setInterval(processHandler.bind(null, PhraseSheet), 100);
-  setInterval(renderHandler.bind(null, PhraseSheet), 50);
+  setInterval(renderHandler.bind(null, PhraseSheet), 100);
+
+
 
 } // Main
 
@@ -3998,4 +3938,7 @@ function Start () {
   other synths from receiving.
 * Moving part to another tick broken when moved beyond the
   last phrase grid column.
+* BPMs don't seem to do much beyond 150
+  CreateAppendChild('p', PhraseSheet.element().parentElement.children[1]).id="info";
+  knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
 ------------------------------------------------------------------------------/

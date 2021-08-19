@@ -58,9 +58,8 @@ h1 {
   margin: 1px;
 }
 
-.actor:hover {
-  border:solid 1px #0ff
-}
+.actor:hover { border:solid 1px #0ff }
+.window > .actor:hover { border:solid 1px #0ff }
 
 
 .volume  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; text-align:center}
