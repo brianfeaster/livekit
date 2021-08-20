@@ -68,8 +68,8 @@ h1 {
 .volume:hover > p { display: inline-block; }
 
 
-#addphrase { display:inline-block; }
-#addphrase > div > input { font-size:inherit; width:3ch; }
+#addpart { display:inline-block; }
+#addpart > div > input { font-size:inherit; width:3ch; }
 
 
 /******************************************************************************
@@ -198,25 +198,25 @@ h1 {
 ******************************************************************************/
 
 /* Header of ticks */
-.partpiano > div:nth-child(1) { color:#8ff; }
-.partpiano > div:nth-child(1) > p { border:solid 1px transparent; background-color:#444b; display:inline-block; }
-.partpiano > div:nth-child(1) > p:nth-child(4n+1) { border-left:solid 1px #555; }
-.partpiano > div:nth-child(1) > p:hover { border-color:cyan; }
+.part > div:nth-child(1) { color:#8ff; }
+.part > div:nth-child(1) > p { border:solid 1px transparent; background-color:#444b; display:inline-block; }
+.part > div:nth-child(1) > p:nth-child(4n+1) { border-left:solid 1px #555; }
+.part > div:nth-child(1) > p:hover { border-color:cyan; }
 
 /* Row and each descendants [label [ticks]] */
-.partpiano > div:nth-child(2) > div > p,
-.partpiano > div:nth-child(2) > div > div,
-.partpiano > div:nth-child(2) > div > div > p { height:1em; }
+.part > div:nth-child(2) > div > p,
+.part > div:nth-child(2) > div > div,
+.part > div:nth-child(2) > div > div > p { height:1em; }
 
 /* Container of ticks */
-.partpiano > div:nth-child(2) > div > div { background:#3336; }
+.part > div:nth-child(2) > div > div { background:#3336; }
 
 /* Tick */
-.partpiano > div:nth-child(2) > div > div > p { border:solid 1px transparent; display:inline-block; }
-.partpiano > div:nth-child(2) > div > div > p:nth-child(4n+1) { border-left:solid 1px #333; }
+.part > div:nth-child(2) > div > div > p { border:solid 1px transparent; display:inline-block; }
+.part > div:nth-child(2) > div > div > p:nth-child(4n+1) { border-left:solid 1px #333; }
 
 /* Label natural keys */
-.partpiano > div:nth-child(2) > div.nat > p {
+.part > div:nth-child(2) > div.nat > p {
   color:black;
   text-align:right;
   background-color:darkgrey;
@@ -227,16 +227,16 @@ h1 {
 }
 
 /* Label specific natural key */
-.partpiano > div:nth-child(2) > div.B.nat > p { margin-top: .06em; }
-.partpiano > div:nth-child(2) > div.A.nat > p { margin-top:-.23em; }
-.partpiano > div:nth-child(2) > div.G.nat > p { margin-top:-.51em; }
-.partpiano > div:nth-child(2) > div.F.nat > p { margin-top:-.79em; }
-.partpiano > div:nth-child(2) > div.E.nat > p { margin-top:-.08em; }
-.partpiano > div:nth-child(2) > div.D.nat > p { margin-top:-.37em; }
-.partpiano > div:nth-child(2) > div.C.nat > p { margin-top:-.66em; }
+.part > div:nth-child(2) > div.B.nat > p { margin-top: .06em; }
+.part > div:nth-child(2) > div.A.nat > p { margin-top:-.23em; }
+.part > div:nth-child(2) > div.G.nat > p { margin-top:-.51em; }
+.part > div:nth-child(2) > div.F.nat > p { margin-top:-.79em; }
+.part > div:nth-child(2) > div.E.nat > p { margin-top:-.08em; }
+.part > div:nth-child(2) > div.D.nat > p { margin-top:-.37em; }
+.part > div:nth-child(2) > div.C.nat > p { margin-top:-.66em; }
 
 /* Label sharp keys */
-.partpiano > div:nth-child(2) > div.shp > p {
+.part > div:nth-child(2) > div.shp > p {
   background-color:black;
   width:2.0ch;
   right:calc(100% + 2.0ch);
@@ -245,33 +245,33 @@ h1 {
 }
 
 /* Label specific sharp key */
-.partpiano > div:nth-child(2) > div.A.shp > p { margin-top: .15em; }
-.partpiano > div:nth-child(2) > div.F.shp > p { margin-top:-.15em; }
-.partpiano > div:nth-child(2) > div.D.shp > p { margin-top: .15em; }
-.partpiano > div:nth-child(2) > div.C.shp > p { margin-top:-.15em; }
+.part > div:nth-child(2) > div.A.shp > p { margin-top: .15em; }
+.part > div:nth-child(2) > div.F.shp > p { margin-top:-.15em; }
+.part > div:nth-child(2) > div.D.shp > p { margin-top: .15em; }
+.part > div:nth-child(2) > div.C.shp > p { margin-top:-.15em; }
 
 /* Container of sharp ticks */
-.partpiano > div:nth-child(2) > div.shp > div { background:#10101066; }
+.part > div:nth-child(2) > div.shp > div { background:#10101066; }
 
 
 /* Drumkit */
 
 /* Row and each descendant [label [ticks]] */
-.partpiano > div:nth-child(2) > div.drumkit > p,
-.partpiano > div:nth-child(2) > div.drumkit > div,
-.partpiano > div:nth-child(2) > div.drumkit > div > p { height:1pc; }
+.part > div:nth-child(2) > div.drumkit > p,
+.part > div:nth-child(2) > div.drumkit > div,
+.part > div:nth-child(2) > div.drumkit > div > p { height:1pc; }
 
 /* Label beat name */
-.partpiano > div:nth-child(2) > div.drumkit > p { color:#770; background-color:#220; position:absolute; right:calc(100%); }
+.part > div:nth-child(2) > div.drumkit > p { color:#770; background-color:#220; position:absolute; right:calc(100%); }
 
 /* Hover Highlights */
 
 /* Label and container of ticks */
-.partpiano > div:nth-child(2) > div:hover > p,
-.partpiano > div:nth-child(2) > div:hover > div { color:yellow; background-color:blue; }
+.part > div:nth-child(2) > div:hover > p,
+.part > div:nth-child(2) > div:hover > div { color:yellow; background-color:blue; }
 
 /* Tick */
-.partpiano > div:nth-child(2) > div > div > p:hover { background:darkcyan; }
+.part > div:nth-child(2) > div > div > p:hover { background:darkcyan; }
 
 
 /* ex ch PC EM -- CSS units/*

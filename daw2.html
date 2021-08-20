@@ -26,14 +26,14 @@
 </div>
 
 <div class="window">
-  <div>PHRASE</div>
+  <div>SHEET</div>
   <div class="knobs">
     <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:6ch" />
     <!--p id="mainVolume">vol</p-->
     <p id="bpm" class="actor" title="BPM" contenteditable="true">60</p>
     <p class="actor reset" title="PLAY" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
     <p id="pause" class="actor pause" title="PAUSE" onmousedown="TickerTimer.pause(this)">||</p>
-    <div id="addphrase">
+    <div id="addpart">
       <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
         <div id="createphrase" style="background:#066; text-align:center">Create</div>
         <input id="addmeasures" value="4" type="number"/>Measures<br/>
@@ -71,7 +71,7 @@
   </div>
 </div>
 
-<p><img id="pauseicon" title="PSYCHEDELIC PAWS"  alt="PSYCHEDELIC PAWS" style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.jpg" onclick="ctx.resume()"/></p>
+<p><img id="pauseicon" title="PSYCHEDELIC PAWS" alt="PSYCHEDELIC PAWS" style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.jpg" onclick="ctx.resume()"/></p>
 
 
 <script type="text/javascript">//<![CDATA[
@@ -130,12 +130,10 @@ var ToggleElementDisplay = function (e1, e2) {
 // Reveal instantly an element in the center of the screen if 'show' == true,
 // otherwise un-reveal it by slowly reducing opacity over time.
 var revealCenter = function (id, show) {
-
   // Show, reset styles
-  let e = document.getElementById(id);
+  let e = ElementById(id);
   let style = e.style;
-  style.display = "";
-  style.opacity = "";
+  style.opacity = style.display = "";
   style.position = "fixed";
   style.top      = (window.innerHeight/2 - e.height/2) + "px";
   style.left     = (window.innerWidth/2 - e.width/2) + "px";
@@ -2206,7 +2204,7 @@ var PhraseReference = function (phrase) {
      if (idx < BeatInitial) BeatInitial = idx;
      else if (BeatFinal < idx) BeatFinal = idx;
      else {
-       if (event.which==3 || event.shiftKey) BeatFinal = idx;
+       if (event.button==2 || event.shiftKey) BeatFinal = idx;
        else BeatInitial = idx;
      }
      Sheet0.updateBeatMarkers();
@@ -3159,7 +3157,7 @@ var TickerTimer = (function (ctx) {
   let start  = 0; // Start tick
   let end    = length-1; // End tick
   // Dynamic state
-  let paused = false;
+  let paused = true;
   let tickCue = 0;
   let tick    = -1;
   let time    = -1;
@@ -3174,7 +3172,7 @@ var TickerTimer = (function (ctx) {
       Destinations.cut();
     }
     blinkify(e, paused&&"#f00");
-    DB.post('TickerTimer._pause', paused);
+    //DB.post('TickerTimer._pause', paused);
   }
 
 
@@ -3259,10 +3257,10 @@ var TickerTimer = (function (ctx) {
 
 
 /******************************************************************************
-  PhraseSheet - Manage parts on a dynamic phrase/sheet.
+  Sheet - Manage parts on a dynamic phrase/sheet.
 
 ******************************************************************************/
-var PhraseSheet = function (id, tickCount, tickertimer) {
+var Sheet = function (id, tickCount, tickertimer) {
   var element = ElementById(id); // phrase
   var knobs = element.previousElementSibling;
   let ticks = []; // The row of ticks [ [header [parts]] ... ]
@@ -3333,7 +3331,7 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
     var pos = Floor(phraseWidth / tickWidth / 2);
 
     // If the current active phrase range is in the viewport, don't scroll it.
-    if (visibleTick < PhraseSheet.getRange()[1]) {
+    if (visibleTick < self.getRange()[1]) {
       element.scrollLeft =
         children[tick].offsetLeft
         - (pos-1) * tickWidth;
@@ -3360,8 +3358,8 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
     }.bind(null, row);
 
     header.onmousedown = function (idx, e) { // Handle updating sheet's start/end playback ticks and repeat marker
-      if (e.which==3) { self.setEnd(idx); }
-      else if (e.which==2 || (e.which==1 && e.metaKey)) {
+      if (e.button==2) { self.setEnd(idx); }
+      else if (e.button==1 || (e.button==0 && e.metaKey)) {
         // Handle marked tick in phrase sheet's header
         if (markedTick != null) { ticks[markedTick].firstChild.style.color = ""; }
         if (markedTick == idx) {
@@ -3387,34 +3385,132 @@ var PhraseSheet = function (id, tickCount, tickertimer) {
     .setEnd(tickCount-1)
 
   // Create new parts when this button is activated
-  var _addphrase = document.getElementById('addphrase');
+  var _addphrase = document.getElementById('addpart');
   _addphrase.children[1].onmouseup = function () { _addphrase.children[0].style.display=""; }
   _addphrase.children[0].onmouseleave = function () { _addphrase.children[0].style.display="none"; }
   document.getElementById('createphrase').onmousedown = function () {
     var measures = document.getElementById('addmeasures').value;
     var beats    = document.getElementById('addbeats').value;
     var ticks    = document.getElementById('addticks').value;
-    PartSynth(PhraseSheet, 2, 2*20, 0, 60, measures*beats*ticks, Synthesizers[0]);
+    Part(self, 2, 2*20, 0, 60, measures*beats*ticks, Synthesizers[0]);
     _addphrase.children[0].style.display="none";
   };
 
   return self;
-}; // PhraseSheet
+}; // Sheet
 
 
 /******************************************************************************
-  PartSynth - Model a part which for now is a drawable synth/piano or drumkit
-              grid.
+  RefPart - References a Part.  Behaves the same as a part to a sheet.
 ******************************************************************************/
-var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, TickCount, playable) {
-  // Consider parent
-  let phrase = phraseSheetObj.element(); // Parent object's element
-  let timer = phraseSheetObj.tickerTimer();
+var RefPart = function (partObj, tickIdx, height) {
+  let sheet = partObj.sheet();
+  let sheetElement = sheet.element();
+  let timer = sheet.tickerTimer();
 
   // Creat part window
-  let part = CreateAppendChild('div', phrase.children[tickIdx]); // The Part element
+  let ref = CreateAppendChild('div', sheetElement.children[tickIdx]);
+  ref.className = "window";
+  ref.style.top = Max(height, sheetElement.firstChild.firstChild.scrollHeight)+"px";
+
+  // Header - left most cells of row
+  let title = CreateAppendChild('div', ref, "Ref");
+  title.className = "actor";
+  title.title = "MOVE,MINIMIZE";
+  title.contentEditable = true;
+
+  let knobs = CreateAppendChild('div', ref);
+  knobs.className = "knobs";
+
+  let body = CreateAppendChild('div', ref);
+  body.className = "part";
+
+  // Grid tick header
+  let headerTicks = CreateAppendChild('div', body);
+
+  for (let t=0; t<partObj.tickCount(); t++) {
+    let header =
+      0 == t%8 ? CreateAppendChild('p', headerTicks, "@") :
+      0 == t%4 ? CreateAppendChild('p', headerTicks, "+") :
+      0 == t%2 ? CreateAppendChild('p', headerTicks, "-") :
+                 CreateAppendChild('p', headerTicks, "-");
+    header.onmouseover = function (tick) {
+      if (brushToPlay()) { self.playTick(tick, 0); }
+    }.bind(null, t);
+  }
+
+  // Behavior
+
+  // brushToPlay knob
+  let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
+    () => (headerTicks.style.color=null, ")("),
+    () => (headerTicks.style.color="inherit", "()"));
+  brushToPlay.element().title="BRUSH PLAY";
+
+  title.onmousedown = function (e) {
+    if (e.button != 0) { return; }
+    MouseIsDown = true; // Set global state
+
+    sheet.partsResetZ(); // Raise this ref/part and reset others
+    ref.style.zIndex = 1;
+
+    // Intial state
+    let tickHeight = sheetElement.firstChild.firstChild.scrollHeight+1;
+    let tickWidth  = sheetElement.lastChild.offsetLeft / (sheetElement.childElementCount-1); // Tick width take average width of all ticks
+    let leftMargin = sheetElement.offsetLeft-sheetElement.scrollLeft; // Account for element's margin and scrolled offset
+    sheetElement.onmousemove = function (offset, e) {
+       if (!MouseIsDown) { sheetElement.onmousemove = null; return; } // Maybe stop handling this event
+       // Adjust ref's vertical position
+       ref.style.top = Max(offset + e.y, tickHeight) + "px";
+       // Adjust ref's horizontal position (Phrase's tick)
+       let newTick = Floor((e.x-leftMargin+1) / tickWidth);
+       if (newTick != tickIdx) {
+         sheetElement.children[newTick].appendChild(ref);
+         tickIdx = newTick;
+       }
+    }.bind(null, ref.offsetTop-e.y);
+  };
+  // Title editing.
+  title.onkeydown = function (v) {
+    event.stopPropagation(); // Don't bubble the event elsewhere (global controls),
+    if (v.code == "Enter") {
+      v.preventDefault(); // Prevent form element from adding a newline
+    }
+  }
+
+  let self = ()=>{};
+
+  self.element = () => ref;
+  self.isOnTick = function (t) {
+    return tickIdx <= t && t < tickIdx + partObj.tickCount();
+  }
+  self.play = (gtick, time) => {
+    self.playTick(gtick - tickIdx, time);
+  }
+  self.playTick = (tick, time) => {
+    //DB.post("RefPart", [tick, time]);
+    partObj.playTick(tick, time);
+  }
+
+  sheet.partAdd(self);
+
+  return self;
+}; // RefPart
+
+
+/******************************************************************************
+  Part - Model a part which for now is a drawable synth/piano or drumkit
+              grid.
+******************************************************************************/
+var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, playable) {
+  // Consider parent
+  let sheet = sheetObj.element(); // Parent object's element
+  let timer = sheetObj.tickerTimer();
+
+  // Creat part window
+  let part = CreateAppendChild('div', sheet.children[tickIdx]); // The Part element
   part.className = "window";
-  part.style.top = Max(height, phrase.firstChild.firstChild.scrollHeight)+"px";
+  part.style.top = Max(height, sheet.firstChild.firstChild.scrollHeight)+"px";
 
   // Header - left most cells of row
   let title = CreateAppendChild('div', part, "Part");
@@ -3425,7 +3521,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   knobs.className = "knobs";
 
   let body = CreateAppendChild('div', part);
-  body.className = "partpiano";
+  body.className = "part";
 
   // Grid tick header
   let headerTicks = CreateAppendChild('div', body);
@@ -3463,7 +3559,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
 
       header.onmousedown = function () {
         // Record a note if a key label is pressed.
-        if (!phraseSheetObj.isPaused() && listenerID ) {
+        if (!sheetObj.isPaused() && listenerID ) {
           let tick = timer.currentTick()-tickIdx;
           row.children[1].children[tick].innerText = "*";
         }
@@ -3509,7 +3605,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
       let header = CreateAppendChild("p", row, playable.name(key));
 
       header.onmousedown = function () {
-        if (!phraseSheetObj.isPaused(event) && listenerID ) {
+        if (!sheetObj.isPaused(event) && listenerID ) {
           let tick = timer.currentTick()-tickIdx;
           row.children[1].children[tick].innerText = "*";
         }
@@ -3567,7 +3663,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   recordKnob.className = "actor";
   recordKnob.title = "RECORD";
   let listenerIBC = function (m) {
-    if (phraseSheetObj.isPaused() || m[0] != "keyboard1") { return; }
+    if (sheetObj.isPaused() || m[0] != "keyboard1") { return; }
     let tick = timer.currentTick( timer.jiffy()/2 )-tickIdx; // Adjust by half a jiffy so performing can be near the beat/tick instead of on or after it as is done by the tick highlighting renderer.
     if (m[2]) {
       if (m[1] < keyBeg || keyBeg+keyCount <= m[1]) { return; }
@@ -3591,32 +3687,32 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
   }
 
 
-  // Clicking title will raise it.  Dragging title will move it around the phrase/sheet
+  // Clicking title will raise it.  Dragging title will move it around the sheet
 
   title.onmousedown = function (e) {
-    if (e.which == 3 && !e.metaKey) {
+    if (e.button == 2 && !e.metaKey) {
       ToggleElementDisplay(grid);
       event.stopPropagation(); // Keep event from elements
       return;
     }
-    if (e.which != 1 || e.ctrlKey) { return; }
+    if (e.button != 0 || e.ctrlKey) { return; }
     MouseIsDown = true; // Set global state
 
-    phraseSheetObj.partsResetZ(); // Raise this phrase and reset others
+    sheetObj.partsResetZ(); // Raise this part and reset others
     part.style.zIndex = 1;
 
     // Intial state
-    let tickHeight = phrase.firstChild.firstChild.scrollHeight;
-    let tickWidth  = phrase.lastChild.offsetLeft / (phrase.childElementCount-1); // Tick width take average width of all ticks
-    let leftMargin = phrase.offsetLeft-phrase.scrollLeft; // Account for element's margin and scrolled offset
-    phrase.onmousemove = function (offset, e) {
-       if (!MouseIsDown) { phrase.onmousemove = null; return; } // Maybe stop handling this event
+    let tickHeight = sheet.firstChild.firstChild.scrollHeight+1;
+    let tickWidth  = sheet.lastChild.offsetLeft / (sheet.childElementCount-1); // Tick width take average width of all ticks
+    let leftMargin = sheet.offsetLeft-sheet.scrollLeft; // Account for element's margin and scrolled offset
+    sheet.onmousemove = function (offset, e) {
+       if (!MouseIsDown) { sheet.onmousemove = null; return; } // Maybe stop handling this event
        // Adjust part's vertical position
        part.style.top = Max(offset + e.y, tickHeight) + "px";
        // Adjust part's horizontal position (Phrase's tick)
        let newTick = Floor((e.x-leftMargin+1) / tickWidth);
        if (newTick != tickIdx) {
-         phrase.children[newTick].appendChild(part);
+         sheet.children[newTick].appendChild(part);
          tickIdx = newTick;
        }
     }.bind(null, part.offsetTop-e.y);
@@ -3626,11 +3722,13 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
 
   let self = function () { };
   self.element = () => part;
+  self.tickCount = () => TickCount;
+  self.sheet = () => sheetObj;
   self.startTick = function () { return tickIdx; }
+
   self.isOnTick = function (t) {
     return tickIdx <= t && t < tickIdx + TickCount;
   }
-
 
   self.play = function (gtick, time) {
     self.playTick(gtick - tickIdx, time);
@@ -3643,6 +3741,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
       DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
       return;
     }
+    //DB.post("Part", [tick, time]);
     RangeForEach(keyCount, (i) => {
       let row = ticks(i).children;
       let note = row[tick];
@@ -3659,10 +3758,10 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
     });
   }
 
-  phraseSheetObj.partAdd(self);
+  sheetObj.partAdd(self);
 
   return self;
-} // PartSynth
+} // Part
 
 
 
@@ -3670,7 +3769,7 @@ var PartSynth = function (phraseSheetObj, tickIdx, height, keyBeg, keyCount, Tic
  Run Time
 ******************************************************************************/
 
-var setupControls = function (keyboard, phrasesheet) {
+var setupControls = function (keyboard, sheet) {
 
   document.getElementById('volume').oninput = function (e) {
     Destinations.input(0).gain.value = e.srcElement.value / 100.0;
@@ -3716,15 +3815,15 @@ var setupControls = function (keyboard, phrasesheet) {
   // Global hot keys
   window.onkeydown = function (v) {
     if (v.code == "Slash") DB.clear(); // Pressing '/' will clear the DB (debug console) element.
-    DB.post("window.onkeydown", v.code);
+    //DB.post("window.onkeydown", v.code);
 
     let pauseElement = ElementById('pause');
-    if (v.code == "KeyP") { phrasesheet.pause(pauseElement); }
-    else if (v.code == "KeyR") { phrasesheet.rewind(pauseElement); } // Rewind the playback.
+    if (v.code == "KeyP") { sheet.pause(pauseElement); }
+    else if (v.code == "KeyR") { sheet.rewind(pauseElement); } // Rewind the playback.
     else if (v.code == "Space") { // Pause or jump to mark
-      phrasesheet.isPaused()
-        ? phrasesheet.jump(pauseElement)
-        : phrasesheet.pause(pauseElement);
+      sheet.isPaused()
+        ? sheet.jump(pauseElement)
+        : sheet.pause(pauseElement);
       v.preventDefault(); // Prevent space from scrolling browser window
     }
   }
@@ -3734,7 +3833,7 @@ var setupControls = function (keyboard, phrasesheet) {
   // bubble out if meta is active.
   window.addEventListener(
     "mousedown",
-    (v) => v.metaKey && v.which==3 && v.stopPropagation(),
+    (v) => v.metaKey && v.button==2 && v.stopPropagation(),
     true);
   window.oncontextmenu = (v) => v.metaKey || v.preventDefault();
 
@@ -3804,7 +3903,6 @@ var DragOverTickState = 1;
 var Volume = 0.5; // A global value shared by all output gain logic
 var MouseIsDown = false; // It's nice to keep track of global mouse button state.  The window element will always catch this event and handle it.
 var midi = null;
-var PhraseSheet = PhraseSheet("phrase", 128, TickerTimer);
 
 function Start () {
   DB.post("Start", DB.status());
@@ -3846,8 +3944,10 @@ function Start () {
       .then(onMIDISuccess, onMIDIFailure);
   }
 
+  let sheet = Sheet("phrase", 128, TickerTimer);
+
   DB.post("Start", "More Buttons");
-  setupControls(Keyboard0, PhraseSheet); // Setup menus and moveable buttons.
+  setupControls(Keyboard0, sheet); // Setup menus and moveable buttons.
 
   DB.post("Start", "Noises");
 
@@ -3901,34 +4001,33 @@ function Start () {
   }
 
   DB.post("Start", "Sequences");
-  PartSynth(PhraseSheet, 8, 1*21, 24, 16, 32, DrumKit0 );
-  PartSynth(PhraseSheet, 8, 16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
-  //PartSynth(PhraseSheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  let p1 = Part(sheet, 8, 1*21, 24, 16, 32, DrumKit0 );
+  //let p2 = Part(sheet, 8, 16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  //RefPart(p1, 40, 1);
+  //Part(sheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
-  PhraseSheet.setStart(8).setEnd(8+32-1);
+  sheet.setStart(8).setEnd(8+32-1);
 
   DB.post("Start", "Handlers");
-  setInterval(processHandler.bind(null, PhraseSheet), 100);
-  setInterval(renderHandler.bind(null, PhraseSheet), 100);
-
-
+  setInterval(processHandler.bind(null, sheet), 100);
+  setInterval(renderHandler.bind(null, sheet), 100);
 
 } // Main
 
 
 // Await for user gesture then restart WebAudio
-(function Main (i) {
+window.onload = function Main () {
  if (ctx.state == "suspended") {
    revealCenter("pauseicon", true)
    ctx.resume()
-   setTimeout(Main.bind(0, ++i), 200);
+   setTimeout(Main, 200);
  } else {
    DB.post("Main", "Starting AudioContext!");
    revealCenter("pauseicon", false)
    setTimeout( ()=>ElementById("pauseicon").style.clipPath="", 1100);
    Start();
  }
-})(0);
+};
 
 
 //IBC.debug();
@@ -3939,6 +4038,6 @@ function Start () {
 * Moving part to another tick broken when moved beyond the
   last phrase grid column.
 * BPMs don't seem to do much beyond 150
-  CreateAppendChild('p', PhraseSheet.element().parentElement.children[1]).id="info";
+  CreateAppendChild('p', Sheet.element().parentElement.children[1]).id="info";
   knobs.appendChild(document.createTextNode(NBSP)); // Add  an empty text node for consistent spacing
 ------------------------------------------------------------------------------/
