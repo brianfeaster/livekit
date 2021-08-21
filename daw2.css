@@ -107,8 +107,9 @@ h1 {
 
 .window > div:nth-child(3) {
   border: solid 1px #444;
-  border-radius:1ch;
+  /*border-radius:1ch;*/
   margin-top:-1px;
+  position:relative;
 }
 
 
@@ -181,16 +182,15 @@ h1 {
   Phrase
 ******************************************************************************/
 
-.phrase { height:50ch; overflow:scroll; width:calc(100vw - 2ch); white-space:nowrap; position:relative; }
-.phrase > div { background-color:#112; height:1000%; display:inline-block; }
-.phrase > div > p { border:solid 1px transparent; background-color:#22F; position:sticky; top:0; z-index:2; }
-.phrase > div > div { position: absolute;; }
+.sheet { height:50ch; overflow:scroll; width:calc(100vw - 2ch); white-space:nowrap; position:relative; }
+.sheet > div { background-color:#112; height:1000%; display:inline-block; }
+.sheet > div > p { border:solid 1px transparent; background-color:#22F; position:sticky; top:0; z-index:2; }
+.sheet > div > div { position: absolute;; }
 
-.phrase > div.phrasehighlight { background-color:blueviolet; }
+.sheet > div.phrasehighlight { background-color:blueviolet; }
 
-.phrase > div:hover     { background-color:blue; }
-.phrase > div:hover > p { background-color:blue; }
-.phrase > div > p:hover { border-color:cyan; }
+.sheet > div:hover     { background-color:blue; }
+.sheet > div > p:hover { border-color:cyan; }
 
 
 /******************************************************************************
@@ -198,18 +198,27 @@ h1 {
 ******************************************************************************/
 
 /* Header of ticks */
-.part > div:nth-child(1) { color:#8ff; }
-.part > div:nth-child(1) > p { border:solid 1px transparent; background-color:#444b; display:inline-block; }
+.part > div:nth-child(1) {
+  color:#8ff;
+  background-color:#5558;
+  height:100%;
+  min-height:1em;
+  position:absolute;
+}
+.part > div:nth-child(1) > p {
+  border:solid 1px transparent;
+  display:inline-block;
+  height:100%;
+}
 .part > div:nth-child(1) > p:nth-child(4n+1) { border-left:solid 1px #555; }
-.part > div:nth-child(1) > p:hover { border-color:cyan; }
+.part > div:nth-child(1) > p:hover { background-color:#0ff; }
+
+.part > div:nth-child(2) { background-color:#0008; margin-top:1em; position:relative; }
 
 /* Row and each descendants [label [ticks]] */
 .part > div:nth-child(2) > div > p,
 .part > div:nth-child(2) > div > div,
 .part > div:nth-child(2) > div > div > p { height:1em; }
-
-/* Container of ticks */
-.part > div:nth-child(2) > div > div { background:#3336; }
 
 /* Tick */
 .part > div:nth-child(2) > div > div > p { border:solid 1px transparent; display:inline-block; }
@@ -250,16 +259,10 @@ h1 {
 .part > div:nth-child(2) > div.D.shp > p { margin-top: .15em; }
 .part > div:nth-child(2) > div.C.shp > p { margin-top:-.15em; }
 
-/* Container of sharp ticks */
-.part > div:nth-child(2) > div.shp > div { background:#10101066; }
-
+/* Container of natural ticks */
+.part > div:nth-child(2) > div.nat > div { background:#3332; }
 
 /* Drumkit */
-
-/* Row and each descendant [label [ticks]] */
-.part > div:nth-child(2) > div.drumkit > p,
-.part > div:nth-child(2) > div.drumkit > div,
-.part > div:nth-child(2) > div.drumkit > div > p { height:1pc; }
 
 /* Label beat name */
 .part > div:nth-child(2) > div.drumkit > p { color:#770; background-color:#220; position:absolute; right:calc(100%); }

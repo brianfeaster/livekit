@@ -44,7 +44,7 @@
     </div>
     <!-- p style="font-weight:bold; color:black; background:yellow; border:dashed thick red" class="actor" title="THE DROP (USE SPARINGLY)">&gt!}=-DrOp-={!&lt;</p -->
   </div>
-  <div id="phrase" class="phrase"></div>
+  <div id="sheet" class="sheet"></div>
 </div>
 
 <div class="window">
@@ -3261,7 +3261,7 @@ var TickerTimer = (function (ctx) {
 
 ******************************************************************************/
 var Sheet = function (id, tickCount, tickertimer) {
-  var element = ElementById(id); // phrase
+  var element = ElementById(id);
   var knobs = element.previousElementSibling;
   let ticks = []; // The row of ticks [ [header [parts]] ... ]
   let parts = []; // List of all Part objects created.  Their elements will be scattered about the tick.
@@ -3944,7 +3944,7 @@ function Start () {
       .then(onMIDISuccess, onMIDIFailure);
   }
 
-  let sheet = Sheet("phrase", 128, TickerTimer);
+  let sheet = Sheet("sheet", 128, TickerTimer);
 
   DB.post("Start", "More Buttons");
   setupControls(Keyboard0, sheet); // Setup menus and moveable buttons.
@@ -4002,8 +4002,9 @@ function Start () {
 
   DB.post("Start", "Sequences");
   let p1 = Part(sheet, 8, 1*21, 24, 16, 32, DrumKit0 );
-  //let p2 = Part(sheet, 8, 16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
-  //RefPart(p1, 40, 1);
+  let p2 = Part(sheet, 8,16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  RefPart(p1, 42, 1*21);
+  RefPart(p2, 42, 3*21);
   //Part(sheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
   sheet.setStart(8).setEnd(8+32-1);
