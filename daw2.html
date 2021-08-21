@@ -28,7 +28,7 @@
 <div class="window">
   <div>SHEET</div>
   <div class="knobs">
-    <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:6ch" />
+    <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:6ch" title="VOLUME"/>
     <!--p id="mainVolume">vol</p-->
     <p id="bpm" class="actor" title="BPM" contenteditable="true">60</p>
     <p class="actor reset" title="PLAY" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
@@ -3414,7 +3414,7 @@ var RefPart = function (partObj, tickIdx, height) {
   ref.style.top = Max(height, sheetElement.firstChild.firstChild.scrollHeight)+"px";
 
   // Header - left most cells of row
-  let title = CreateAppendChild('div', ref, "Ref");
+  let title = CreateAppendChild('div', ref, `*${partObj.titleName()}`);
   title.className = "actor";
   title.title = "MOVE,MINIMIZE";
   title.contentEditable = true;
@@ -3451,10 +3451,10 @@ var RefPart = function (partObj, tickIdx, height) {
     if (e.button != 0) { return; }
     MouseIsDown = true; // Set global state
 
-    sheet.partsResetZ(); // Raise this ref/part and reset others
-    ref.style.zIndex = 1;
+    self.focus();
 
-    // Intial state
+    // Drag/Move part within sheet
+
     let tickHeight = sheetElement.firstChild.firstChild.scrollHeight+1;
     let tickWidth  = sheetElement.lastChild.offsetLeft / (sheetElement.childElementCount-1); // Tick width take average width of all ticks
     let leftMargin = sheetElement.offsetLeft-sheetElement.scrollLeft; // Account for element's margin and scrolled offset
@@ -3470,6 +3470,7 @@ var RefPart = function (partObj, tickIdx, height) {
        }
     }.bind(null, ref.offsetTop-e.y);
   };
+
   // Title editing.
   title.onkeydown = function (v) {
     event.stopPropagation(); // Don't bubble the event elsewhere (global controls),
@@ -3491,8 +3492,13 @@ var RefPart = function (partObj, tickIdx, height) {
     //DB.post("RefPart", [tick, time]);
     partObj.playTick(tick, time);
   }
+  self.focus = () => { // Raise/focus this element in sheet and reset others
+    sheet.partsResetZ();
+    ref.style.zIndex = 1;
+  }
 
   sheet.partAdd(self);
+  self.focus();
 
   return self;
 }; // RefPart
@@ -3515,7 +3521,8 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   // Header - left most cells of row
   let title = CreateAppendChild('div', part, "Part");
   title.className = "actor";
-  title.title="MOVE,MIN";
+  title.title="MOVE,MINIMIZE";
+  title.contentEditable = true;
 
   let knobs = CreateAppendChild('div', part);
   knobs.className = "knobs";
@@ -3636,6 +3643,10 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
     }
   });
 
+  let newRef = CreateAppendChild('p', knobs, "*");
+  newRef.className = "actor";
+  newRef.title = "NEW REF";
+  newRef.onmousedown = () => RefPart(self, tickIdx, height+2*21);
 
   // Toggle brushToPlay knob
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
@@ -3690,18 +3701,19 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   // Clicking title will raise it.  Dragging title will move it around the sheet
 
   title.onmousedown = function (e) {
+    // Right click on title toggle minimization but right button + meta bring up browser menu
     if (e.button == 2 && !e.metaKey) {
       ToggleElementDisplay(grid);
       event.stopPropagation(); // Keep event from elements
       return;
     }
-    if (e.button != 0 || e.ctrlKey) { return; }
+    if (e.button != 0) { return; }
     MouseIsDown = true; // Set global state
 
-    sheetObj.partsResetZ(); // Raise this part and reset others
-    part.style.zIndex = 1;
+    self.focus();
 
-    // Intial state
+    // Drag/Move part within sheet
+
     let tickHeight = sheet.firstChild.firstChild.scrollHeight+1;
     let tickWidth  = sheet.lastChild.offsetLeft / (sheet.childElementCount-1); // Tick width take average width of all ticks
     let leftMargin = sheet.offsetLeft-sheet.scrollLeft; // Account for element's margin and scrolled offset
@@ -3716,12 +3728,19 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
          tickIdx = newTick;
        }
     }.bind(null, part.offsetTop-e.y);
-    event.preventDefault(); // Keep event from browser
   };
 
+  // Title editing.
+  title.onkeydown = function (v) {
+    event.stopPropagation(); // Don't bubble the event elsewhere (global controls),
+    if (v.code == "Enter") {
+      v.preventDefault(); // Prevent form element from adding a newline
+    }
+  }
 
   let self = function () { };
   self.element = () => part;
+  self.titleName = () => title.innerText;
   self.tickCount = () => TickCount;
   self.sheet = () => sheetObj;
   self.startTick = function () { return tickIdx; }
@@ -3758,6 +3777,10 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
     });
   }
 
+  self.focus = () => { // Raise/focus this element in sheet and reset others
+    sheetObj.partsResetZ();
+    part.style.zIndex = 1;
+  }
   sheetObj.partAdd(self);
 
   return self;
@@ -4001,10 +4024,8 @@ function Start () {
   }
 
   DB.post("Start", "Sequences");
-  let p1 = Part(sheet, 8, 1*21, 24, 16, 32, DrumKit0 );
-  let p2 = Part(sheet, 8,16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
-  RefPart(p1, 42, 1*21);
-  RefPart(p2, 42, 3*21);
+  Part(sheet, 8, 1*21, 24, 16, 32, DrumKit0 );
+  Part(sheet, 8,16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
   //Part(sheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
   sheet.setStart(8).setEnd(8+32-1);
