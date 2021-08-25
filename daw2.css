@@ -68,8 +68,8 @@ h1 {
 .volume:hover > p { display: inline-block; }
 
 
-#addpart { display:inline-block; }
-#addpart > div > input { font-size:inherit; width:3ch; }
+.addpart { display:inline-block; }
+.addpart > div > input { font-size:inherit; width:3ch; }
 
 
 /******************************************************************************

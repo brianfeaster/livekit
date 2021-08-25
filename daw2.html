@@ -19,7 +19,7 @@
 <h1>Liveka7 Digital Audio Workstation 2<span style="font-family:monospace">&#x03b1;</span></h1>
 <hr/>
 <div id="headerNav" class="headerNav">
- <a id="info" style="background-color:#22f;width:2em;text-align:left;display:inline-block"></a>
+ <a id="info" style="background-color:#22f;width:8em;text-align:left;display:inline-block"></a>
  <a onmousedown="window.location.href=window.location.pathname+''">Clear</a>
  <a onmousedown="popupToggle('pauseicon')">Kitteh</a>
  <a href="https://www.w3.org/TR/webaudio/">WebAudio</a>
@@ -33,14 +33,23 @@
     <p id="bpm" class="actor" title="BPM" contenteditable="true">60</p>
     <p class="actor reset" title="PLAY" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
     <p id="pause" class="actor pause" title="PAUSE" onmousedown="TickerTimer.pause(this)">||</p>
-    <div id="addpart">
+    <div id="addpartdrum" class="addpart">
       <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
         <div id="createphrase" style="background:#066; text-align:center">Create</div>
         <input id="addmeasures" value="4" type="number"/>Measures<br/>
         <input id="addbeats" value="4" type="number"/>Beats<br/>
         <input id="addticks" value="4" type="number"/>ticks<br/>
       </div>
-      <p class="actor" title="NEW PART">+</p>
+      <p class="actor" title="NEW SYNTH PART">+</p>
+    </div>
+    <div id="addpartsynth" class="addpart">
+      <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
+        <div id="createphrase" style="background:#066; text-align:center">Create</div>
+        <input id="addmeasures" value="4" type="number"/>Measures<br/>
+        <input id="addbeats" value="4" type="number"/>Beats<br/>
+        <input id="addticks" value="4" type="number"/>ticks<br/>
+      </div>
+      <p class="actor" title="NEW DRUM PART">+</p>
     </div>
     <!-- p style="font-weight:bold; color:black; background:yellow; border:dashed thick red" class="actor" title="THE DROP (USE SPARINGLY)">&gt!}=-DrOp-={!&lt;</p -->
   </div>
@@ -88,9 +97,17 @@ var Pow   = Math.pow;
 var Abs   = Math.abs;
 var Rnd   = Math.random;
 var Max   = Math.max;
+var Min   = Math.min;
 var Mod   = function (n,d) { return n - d * Floor(n/d); };
 var Trunc2 = function (f) { return f.toFixed(2); }
 var ElementById = function(id) { return document.getElementById(id); };
+// Simple Array compare
+Array.prototype.cmp = function (that, len) {
+  if ( (len=this.length) == that.length) {
+    while (0<=--len && this[len] === that[len]);
+  }
+  return -1==len;
+}
 
 // Generate ary of ints: []  OR  [0..a-1]  OR  [a..b]
 // This doesn't work for 0,0 var range=(a,b)=>[...Array(Math.abs((b||0)-(a||0)+!!b-0)).keys()].map(n=>n+a*!!b);
@@ -108,14 +125,14 @@ var RangeForEach = function (rng, f) {
   return (rng instanceof Array ? Range(...rng) : Range(rng)).forEach(f);
 }
 
-var CreateAppendChild = function (name, element, text) {
-  var e = element.appendChild(document.createElement(name));
+var CreateAppendChild = function (tag, parent, text) {
+  var e = parent.appendChild(document.createElement(tag));
   if (text != undefined) { e.innerText = text; }
   return e;
 };
 
-var CreateInsertChild = function (name, element, text) {
-  var e = element.insertBefore(document.createElement(name),element.firstChild);
+var CreateInsertChild = function (tag, parent, text) {
+  var e = parent.insertBefore(document.createElement(tag),parent.firstChild);
   if (text != undefined) { e.innerText = text; }
   return e;
 };
@@ -238,7 +255,7 @@ var DB = (function () {
   var status = true;
   var shouldNewline = true; // Want to prepend a newline when the last message was plain text.
   var lastPostType = false, lastPost = false;
-  var repeatCount = 0;
+  var repeatCount = 1;
 
   var setStyles = function (e) {
     return;
@@ -264,7 +281,7 @@ var DB = (function () {
        ++repeatCount;
         s = repeatCount + s;
       } else {
-        repeatCount = 0;
+        repeatCount = 1;
       }
       consoleElement.innerHTML += (shouldNewline ? "" : "\n") + s;
       consoleElement.scrollTop = consoleElement.scrollHeight;
@@ -275,12 +292,12 @@ var DB = (function () {
     self.post = function (t, s) {
       if (t == lastPostType) {
         if (lastPost == s) { ++repeatCount; }
-        consoleElement.lastChild.innerText = (0<repeatCount ? repeatCount : "") + "[" + t + "]" + s;
+        consoleElement.lastChild.innerText = (1<repeatCount ? repeatCount : "") + "[" + t + "]" + s;
       } else {
         consoleElement.appendChild(document.createElement('p')).innerText = "[" + t + "]" + s;
         consoleElement.scrollTop = consoleElement.scrollHeight;
         lastPostType = t;
-        repeatCount = 0;
+        repeatCount = 1;
       }
       lastPost = s;
       shouldNewline = true;
@@ -840,6 +857,80 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
 
 
 /******************************************************************************
+//  CTX Destinations
+//
+//  Manage audio destinations including the main context and any filters.
+//
+//  Usage::
+//    Destinations[0].input()    // Get main CTX input.
+//    Destinations.push(filter)) // Add a new filter object
+//    Destinations.cut())        // Add a new filter object
+//
+******************************************************************************/
+var Destinations = (function (ctx) {
+  var self = [];
+
+  var fuse = ctx.createGain();
+  fuse.name = function () { return "mainFuse"; };
+  fuse.input = function () { return fuse; };
+  fuse.connect(ctx.destination);
+  self.push(fuse);
+
+  self.name = function (i) { return self[i].name(); }
+  self.input = function (i) { return self[i].input(); }
+  self.nextId = function (id) {
+    let ret = (id+1) % self.length;
+    DB(`nextId ${id} -> ${ret}  ${self.length}`);
+    return ret;
+  }
+  self.next = function (d) { // Return destination after d in array.
+    var i = 1 + self.findIndex( function (v,i) { return d== v.input(); } )
+    return self[i % self.length];
+  }
+  self.index = function (d) { // Return index of the destination object
+    var i = self.findIndex( function (v,i) { return d==v || d==v.input(); } )
+    return (0 <= i) ? i : 0;
+  }
+  self.cut = function () {
+    let oldFuse = fuse;
+    // Silence current gainf use
+    fuse.gain.setValueAtTime(0, ctx.currentTime);
+    fuse.disconnect(ctx.destination);
+
+    // Create new fuse gain and connect to CTX
+    fuse = self[0] = ctx.createGain();
+    fuse.name = function () { return "mainFuseNew"; };
+    fuse.input = function () { return fuse; };
+    fuse.connect(ctx.destination);
+
+    // Sweep through for any filters that are connected to a filter
+    // that doesn't match the filter in this array.  Update them.  Repeat.
+    // For a filter like delay which can continue to produce samples, a new
+    // one needs to be created and the exisintg one replaced.  This algorithm
+    // will run again and update any filters depending on it until all filters point
+    // to a filter in this array.
+
+    // get reconnected to new fuse;
+    var updateCount = 0;
+    while (updateCount < self.length) { // Sanity check: Don't expect to update more filters than exists
+      var updated = false;
+      self.slice(1).forEach( (filter, i) => {
+        if (filter.connect()) { // Recreates this filter if it's not connected to something not in this destination object
+          //DB(`Reconnected ${i} ${filter.name()} to ${filter.dest()}`);
+          ++updateCount;
+          updated = true;
+        }
+      });
+      if (!updated) { break; }
+    }
+    DB.check(updateCount < self.length, "Updated more filters than exists");
+
+  }
+
+  return self;
+})(ctx);
+
+/******************************************************************************
   Database of Web Audio audio buffers.  It will download and convert raw audio
   files into ready to use AudioBuffers.
 
@@ -933,6 +1024,7 @@ var AudioBuffers = function (ctx, filenames) {
     .connect(destination, idx) Set destination to destination
     .connected(idx)            Get destination to destination
 ******************************************************************************/
+var Drums = [];
 var Drumkit = function (ctx, color, keyStart, filenames) {
   //// Local
   var audioBuffers = new AudioBuffers(ctx, filenames)
@@ -985,6 +1077,7 @@ var Drumkit = function (ctx, color, keyStart, filenames) {
   }
   this.connect = function (dest, idx) { destinations[idx] = dest; }
   this.connected = function (idx) { return destinations[idx]; }
+  Drums.push(this);
 } // Drumkit
 
 
@@ -1041,7 +1134,6 @@ DB.check( KeyFreq(117)==7040, "KeyFreq frequency mismatch key 117 != 7040Hz");
     .waveform()           Get current waveform string.
     .highlight(key)       Highlight the keyboard object's key with my color.  Used when playing a note.  TODO:  Is this smrt?
     .unhighlight()        Remove my highlight from the keyboard object.
-    .connect(d)           Sets output destination
     .destination()        Return output destination
 
   EVENTS::
@@ -1054,7 +1146,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var self = this;
   var _ibcId = false;
   var _name = label || ("Synth" + ++SynthGlobalCounter);
-  var _att = 0.01; // Attack tiem in seconds.
+  var _att = 0.01; // Attack time in seconds.
   var _sus = 0.01;
   var _rel = 0.50; // Release time in seconds for both the filter and gain.
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
@@ -1265,13 +1357,6 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   this.unhighlight = function () {
     keyboard.unhighlight(_lastKey, color); // Remove last high-light
   };
-  /*
-  this.connect = function(d) {
-    //_destination = d;
-    _filterIdx = Destinations.index(d);
-    _output.innerText = Destinations.name(_filterIdx);
-  };
-  */
   this.destination = function () { return _filterIdx; };
 } // Synthesizer
 
@@ -1281,29 +1366,30 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   Create a single channel delay filter
 
   USAGE::
-    var delay = new Delay(ctx);
+    var delay = Delay();
 
   CONSTRUCTOR PARAMETERS::
     ctx      A web audio context.
 
   METHODS::
+    [n]         Get nth delay object
     .element    This object's element
     .name(key)  This filter's name
     .input()    Get the input port
     .export()   Return byte aray representing this instance.
 ******************************************************************************/
-var Delay = function (ctx) {
+var Delay = (function (ctx, destinations) {
   //// Local
-  var self = this;
-  var _name = "delay";
-  var _del = 0.40; // Attack tiem in seconds.
-  var _gai = 0.50; // Release time in seconds for both the filter and gain.
+  let _name = "delay";
+  let _del = 0.40; // Attack time in seconds.
+  let _gai = 0.50; // Release time in seconds for both the filter and gain.
 
-  var _destId = 0;
-  var _destination;
-  var _delay, _gain;
+  let _destId = 0;
+  let _destination;
+  let _delay;
+  let _gain;
 
-  var make = function () {
+  let make = function () {
     _gain  = ctx.createGain();
     _delay = ctx.createDelay(1);
     _delay.connect(_gain);
@@ -1315,7 +1401,7 @@ var Delay = function (ctx) {
   };
 
   make();
-
+  
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowmini";
   //_element.style.width = "13ch";
@@ -1386,20 +1472,22 @@ var Delay = function (ctx) {
     self.connect(Destinations.nextId(_destId));
   }
 
-  //// Public
-  this.element = _element;
-  this.name = function () { return _name; }
-  this.input = function () { return _gain; }
-  this.getParams = function () { return [_del, _gai]; }
-  this.setParams = function (ps) {
+  // Public
+  let self = [];
+
+  self.element = _element;
+  self.name = function () { return _name; }
+  self.input = function () { return _gain; }
+  self.getParams = function () { return [_del, _gai]; }
+  self.setParams = function (ps) {
     _delay.delayTime.value = _del = ps[0];
     _gain.gain.value = _gai = ps[1];
   }
   // NEW
-  this.dest = function () { return _destId; }
+  self.dest = function () { return _destId; }
   // Update destination to passed in filter index otherwise update destination
   // if it changed in the filter stack.  Return true if a change occurred.
-  this.connect = function (d) {
+  self.connect = function (d) {
     if (d == null) {
       if (_destination != Destinations.input(_destId)) {
         make();
@@ -1414,7 +1502,7 @@ var Delay = function (ctx) {
     }
     return false;
   }
-  this.export = function () {
+  self.export = function () {
     var bytes = [0]; // TYPE
     bytes.push(_name.length); // NAME LEN
     //DB("LK3 Filter " + d.name());
@@ -1426,7 +1514,9 @@ var Delay = function (ctx) {
     bytes.push(parseInt(_gai*255.0));
     return bytes;
   }
-} // Delay
+  Destinations.push(self);
+  return self;
+}).bind(null, ctx, Destinations); // Delay
 
 
 /******************************************************************************
@@ -1443,23 +1533,22 @@ var Delay = function (ctx) {
     .name()     This filter's name
     .input()    Get the input port
 ******************************************************************************/
-var Lowpass = function (ctx) {
+var Lowpass = function (ctx, destinations) {
   //// Local
-  var self = this;
-  var _name = "lowpass";
-  var _f = .9; // Attack tiem in seconds.
-  var _q = 0.0; // Release time in seconds for both the filter and gain.
-  var _destId = 0;
-  var _destination;
-  var _lowpass;
+  let _name = "lowpass";
+  let _f = .9; // Attack tiem in seconds.
+  let _q = 0.0; // Release time in seconds for both the filter and gain.
+  let _destId = 0;
+  let _destination;
+  let _lowpass;
 
-  var make = function () {
+  let make = function () {
     _lowpass = ctx.createBiquadFilter();
     _lowpass.frequency.value = 10000.0*(1.0-_f);
     _lowpass.Q.value = _q * 100.0;
     _destination = Destinations.input(_destId);
     _lowpass.connect(_destination); // New
-  }
+  };
   make();
 
   var _element = document.createElement('div'); // [ ]
@@ -1524,20 +1613,21 @@ var Lowpass = function (ctx) {
   }); }
 
   //// Public
-  this.element = _element;
-  this.name = function () { return _name; }
-  this.input = function () { return _lowpass; }
-  this.getParams = function () { return [_f, _q]; }
-  this.setParams = function (ps) {
+  let self = [];
+  self.element = _element;
+  self.name = function () { return _name; }
+  self.input = function () { return _lowpass; }
+  self.getParams = function () { return [_f, _q]; }
+  self.setParams = function (ps) {
     _f = ps[0];
     _lowpass.frequency.value = 10000.0*(1.0-_f);
     _q = ps[1];
     _lowpass.Q.value = _q * 100.0;
   }
   // NEW
-  this.dest = function () { return _destId; }
+  self.dest = function () { return _destId; }
   // Update destination if it changed in the filter stack.  Return true if a change occurred.
-  this.connect = function () {
+  self.connect = function () {
     if (_destination != Destinations.input(_destId)) {
       _lowpass.disconnect(_destination); // Is this needed?
       make();
@@ -1545,7 +1635,7 @@ var Lowpass = function (ctx) {
     }
     return false;
   }
-  this.export = function () {
+  self.export = function () {
     var bytes = [0]; // TYPE
     bytes.push(_name.length); // NAME LEN
     //DB("LK3 Filter " + d.name());
@@ -1557,74 +1647,11 @@ var Lowpass = function (ctx) {
     bytes.push(parseInt(_q*255.0));
     return bytes;
   }
-} // Lowpass
-
-
-
-// Keeps track of all possible sound destinations. The main context destination
-// is always and more including delay and lowpass filters.
-var Destinations = (function (ctx) {
-  var self = [];
-
-  var fuse = ctx.createGain();
-  fuse.name = function () { return "mainFuse"; };
-  fuse.input = function () { return fuse; };
-  fuse.connect(ctx.destination);
-  self.push(fuse);
-
-  self.name = function (i) { return self[i].name(); }
-  self.input = function (i) { return self[i].input(); }
-  self.nextId = function (id) {
-    let ret = (id+1) % self.length;
-    DB(`nextId ${id} -> ${ret}  ${self.length}`);
-    return ret;
-  }
-  self.next = function (d) { // Return destination after d in array.
-    var i = 1 + self.findIndex( function (v,i) { return d== v.input(); } )
-    return self[i % self.length];
-  }
-  self.index = function (d) { // Return index of the destination object
-    var i = self.findIndex( function (v,i) { return d==v || d==v.input(); } )
-    return (0 <= i) ? i : 0;
-  }
-  self.cut = function () {
-    let oldFuse = fuse;
-    // Silence current gainf use
-    fuse.gain.setValueAtTime(0, ctx.currentTime);
-    fuse.disconnect(ctx.destination);
-
-    // Create new fuse gain and connect to CTX
-    fuse = self[0] = ctx.createGain();
-    fuse.name = function () { return "mainFuseNew"; };
-    fuse.input = function () { return fuse; };
-    fuse.connect(ctx.destination);
-
-    // Sweep through for any filters that are connected to a filter
-    // that doesn't match the filter in this array.  Update them.  Repeat.
-    // For a filter like delay which can continue to produce samples, a new
-    // one needs to be created and the exisintg one replaced.  This algorithm
-    // will run again and update any filters depending on it until all filters point
-    // to a filter in this array.
-
-    // get reconnected to new fuse;
-    var updateCount = 0;
-    while (updateCount < self.length) { // Sanity check: Don't expect to update more filters than exists
-      var updated = false;
-      self.slice(1).forEach( (filter, i) => {
-        if (filter.connect()) {
-          //DB(`Reconnected ${i} ${filter.name()} to ${filter.dest()}`);
-          ++updateCount;
-          updated = true;
-        }
-      });
-      if (!updated) { break; }
-    }
-    DB.check(updateCount < self.length, "Updated more filters than exists");
-
-  }
-
+  Destinations.push(self);
   return self;
-})(ctx);
+}.bind(null, ctx, Destinations); // Lowpass
+
+
 
 
 /******************************************************************************
@@ -2359,6 +2386,7 @@ var TickerTimer = (function (ctx) {
   let start  = 0; // Start tick
   let end    = length-1; // End tick
   // Dynamic state
+  let playCallback = null;
   let paused = true;
   let tickCue = 0;
   let tick    = -1;
@@ -2372,6 +2400,8 @@ var TickerTimer = (function (ctx) {
     if (paused = !paused) { // Did we switch into pause mode?
       tickCue = renderCue = self.currentTick(); // Force next tick and render to current realtime.
       Destinations.cut();
+    } else {
+      playCallback();
     }
     blinkify(e, paused&&"#f00");
     //DB.post('TickerTimer._pause', paused);
@@ -2383,6 +2413,7 @@ var TickerTimer = (function (ctx) {
     //DB.post("next Tick", `${paused} ${tickCue} ${tick} ${time}   ${now}   ${renderCue} ${render} => ${r} ${f?"RRRRRRR":"ttt"} `);
     return r;
   };
+  self.registerPlayCallback = function (f) { playCallback = f; }
 
   // Request the next tick and time to render it.  False implies not ready.
   self.nextTick = function () {
@@ -2394,6 +2425,7 @@ var TickerTimer = (function (ctx) {
       tickCue = -1;
       time = now;
     } else if (now + lead <= time) { // Buffer full, skip rendering
+      ElementById("info").innerText = Trunc2(time-now);
       return false;
     } else { // Normal running, next tick and inc time
       ++tick;
@@ -2408,7 +2440,6 @@ var TickerTimer = (function (ctx) {
 
   // Request the next rendering tick.  False implies tick hasn't moved.
   self.nextRender = function () {
-    now = ctx.currentTime; // Debugging: update 'now' for extra info
     let ret = false;  // Default return value
     if (renderCue != -1) { // Cued (running or paused)...
       if (renderCue != render) { // Update with cue.
@@ -2463,8 +2494,9 @@ var TickerTimer = (function (ctx) {
 
 ******************************************************************************/
 var Sheet = function (id, tickCount, tickertimer) {
-  var element = ElementById(id);
-  var knobs = element.previousElementSibling;
+  let element = ElementById(id);
+  let children = element.children;
+  let knobs = element.previousElementSibling;
   let ticks = []; // The row of ticks [ [header [parts]] ... ]
   let parts = []; // List of all Part objects created.  Their elements will be scattered about the tick.
   let tickLastRender = 0;
@@ -2484,7 +2516,7 @@ var Sheet = function (id, tickCount, tickertimer) {
   }
   self.refreshHeader = function () {
     // Reset Phrase tick header highlights.
-    let [start, end] = tickertimer.getRange();
+    let [start, end] = self.getRange();
     for (var i=0; i < tickCount; i++) {
       ticks[i].firstChild.style.backgroundColor = (i<start || end<i) ? "#444" : "";
     }
@@ -2497,54 +2529,87 @@ var Sheet = function (id, tickCount, tickertimer) {
       part.play(tick, time);
     });
   }
-  self.tickerTimer = () => tickertimer;
-  self.pause = function (e) {
-    tickertimer.pause(e);
-  }
 
+  self.tickerTimer = () => tickertimer;
+  self.pause = function (e) { tickertimer.pause(e); }
+  self.isPaused = () => tickertimer.isPaused();
   self.rewind = function (e) { tickertimer.rewind(e); }
   self.jump   = function (e) { tickertimer.rewind(e, markedTick); }
 
-  self.isPaused = ()=>tickertimer.isPaused();
+  self.tickWidth = () => children[0].getBoundingClientRect().width;
+  self.winTicks = function () {
+    // Zooming in Chrome alters these so they must be dynamically queried
+    let tickWidth = self.tickWidth();
+    let windowWidth = element.getBoundingClientRect().width;
+    let visibleTickCount = Round(windowWidth / tickWidth);
+    let leftVisibleTick = Round((element.scrollLeft) / tickWidth);
+    let rightVisibleTick = Min(leftVisibleTick + visibleTickCount, children.length) - 1;
+    return [leftVisibleTick, rightVisibleTick];
+      
+  };
 
-  let lastVisible = 0; // DEBUGGING mark the rightmost visible tick header in the scrollable viewing phrase element
+  let state = 1; // 0:reset  1:center  2:fixed  3:stick
+  let winTicksLast = [0, 0]; // DEBUGGING mark left/right visible ticks in sheet window
+  let fixedOffset = 0;
+  //let markersLast = [0, 0];
 
+  // Scroll (maybe) the grid so current tick is visible
   self.render = function (tick) {
 
-    let children = element.children;
+    let visible = self.winTicks();
+    let winwidth = visible[1] - visible[0];
 
-    // Scroll the grid so current tick is visible
+    let [tickLeft, tickRight] = self.getRange();
+    let tickwidth = tickRight - tickLeft;
 
-    // Zooming in Chrome alters these so they must be dynamically queried
-    var tickWidth = children[0].getBoundingClientRect().width;
-    var phraseWidth = element.getBoundingClientRect().width;
+    let userScrolledWin = winTicksLast.cmp(visible);
+    //let ticksFitInWin = winwidth < tickwidth;
+    let ticksInWin = visible[0]<=tickLeft && tickRight <=visible[1];
 
-    // Adding the phrase window's scroll amount to the phrase window's width
-    // gives the location of the last visible tick, dividing by tickWidth
-    // for the tick index.
-    var visibleTick = Round((phraseWidth + element.scrollLeft) / tickWidth)-2;
+    if (!ticksInWin) {
+      // Did the user scroll the window? (the visible ticks don't match last render)
+      if (!userScrolledWin) {
+        if (visible[0]<= tick && tick <= visible[1]) {
+          state = 2; // Scrolling while the current tick is visible will reposition the tick's highlight
+          fixedOffset = tick - visible[0];
+        } else {
+          state = 3; // Scrolling the tick outside the visible window will disable automatic scrolling
+        }
+      }
 
-    if (visibleTick < children.length) { // DEBUGGING see comment above
-      children[lastVisible].firstChild.style.textDecoration="";
-      children[visibleTick].firstChild.style.textDecoration="underline";
-      lastVisible = visibleTick;
-    }
+      let newWinLeft = undefined;
+      if (1 == state) {
+        newWinLeft = Max( tick-visibleTickCount/2, self.getRange()[0] );
+        //element.scrollLeft = self.tickWidth() * Max(tick-visibleTickCount/2, self.getRange()[0] );
+      } else if (2 == state) {
+        newWinLeft = Max( tick-fixedOffset, self.getRange()[0] );
+        //element.scrollLeft = self.tickWidth() * Max(tick-fixedOffset, self.getRange()[0] );
+      }
 
-    var pos = Floor(phraseWidth / tickWidth / 2);
+      //adjust newWinLeft so right side of window is at right tick
+      if (tickRight < newWinLeft + winwidth) {
+        newWinLeft = tickRight - winwidth;
+      }
 
-    // If the current active phrase range is in the viewport, don't scroll it.
-    if (visibleTick < self.getRange()[1]) {
-      element.scrollLeft =
-        children[tick].offsetLeft
-        - (pos-1) * tickWidth;
+      element.scrollLeft = newWinLeft * self.tickWidth(); // Update window scroll position.
     }
 
     // Highlight the full vertical tick
-
     children[tickLastRender].className="";
     children[tick].className="phrasehighlight";
 
+    // Remember state
+    winTicksLast = self.winTicks();
     tickLastRender = tick;
+
+    // DEBUGGING mark left/right visible ticks in sheet window
+    //children[markersLast[0]].firstChild.style.textDecoration="";
+    //children[markersLast[1]].firstChild.style.textDecoration="";
+    //children[winTicksLast[0]].firstChild.style.textDecoration="underline";
+    //children[winTicksLast[1]].firstChild.style.textDecoration="underline";
+    //markersLast = winTicksLast;
+    //DB.log("{a:\""+visible+"\", "); DB.log(" b:\""+visible+"\"}");
+    // DEBUGGING
   }
 
   // Create the tick columns and the top row tick marks. Part div's will be inserted/removed later.
@@ -2587,7 +2652,7 @@ var Sheet = function (id, tickCount, tickertimer) {
     .setEnd(tickCount-1)
 
   // Create new parts when this button is activated
-  var _addphrase = document.getElementById('addpart');
+  var _addphrase = document.getElementById('addpartsynth');
   _addphrase.children[1].onmouseup = function () { _addphrase.children[0].style.display=""; }
   _addphrase.children[0].onmouseleave = function () { _addphrase.children[0].style.display="none"; }
   document.getElementById('createphrase').onmousedown = function () {
@@ -2598,6 +2663,17 @@ var Sheet = function (id, tickCount, tickertimer) {
     _addphrase.children[0].style.display="none";
   };
 
+  // Create new parts when this button is activated
+  var _addphrase = document.getElementById('addpartdrum');
+  _addphrase.children[1].onmouseup = function () { _addphrase.children[0].style.display=""; }
+  _addphrase.children[0].onmouseleave = function () { _addphrase.children[0].style.display="none"; }
+  document.getElementById('createphrase').onmousedown = function () {
+    var measures = document.getElementById('addmeasures').value;
+    var beats    = document.getElementById('addbeats').value;
+    var ticks    = document.getElementById('addticks').value;
+    Part(self,  2, 2*20, 24, 16, measures*beats*ticks, Drums[0]);
+    _addphrase.children[0].style.display="none";
+  };
   return self;
 }; // Sheet
 
@@ -3075,24 +3151,30 @@ var setupControls = function (keyboard, sheet) {
 }; //setupControls
 
 
-var renderHandlerLoop = function (phraseObj) {
-  var tick = TickerTimer.nextRender();
-  if (tick !== false ) {
-    //DB.post("render Handler", `${tick}`);
-    phraseObj.render(tick);
-    setTimeout(renderHandlerLoop.bind(null, phraseObj), 1000*TickerTimer.jiffy());
-  } else {
-    setTimeout(renderHandlerLoop.bind(null, phraseObj), 100);
-  }
-}
+var eventLoops = function (sheet) {
+  (function processHandlerLoop () {
+    let ticktime = TickerTimer.nextTick(); // [tick to process, time audio is written/buffered]
+    if (ticktime !== false) {
+      sheet.play.apply(null, ticktime);
+      setTimeout(processHandlerLoop, 1000 * TickerTimer.jiffy()/4); // Fill buffer within 4 jiffies
+      //DB.post("event loop ctx", "!");
+    } else if (!TickerTimer.isPaused()) {
+      setTimeout(processHandlerLoop, 1000 * TickerTimer.jiffy());
+      //DB.post("event loop ctx", "");
+    }
+  })();
 
-var processHandlerLoop = function (phraseObj) {
-  let ticktime = TickerTimer.nextTick(); // returns [tick to process, time audio is written/buffered]
-  if (ticktime !== false) {
-    //DB.post("process Handler", `${ticktime}`);
-    phraseObj.play.apply(null, ticktime);
-  }
-  setTimeout(processHandlerLoop.bind(null, phraseObj), TickerTimer.jiffy());
+  (function renderHandlerLoop () {
+    var tick = TickerTimer.nextRender();
+    if (tick !== false ) {
+      sheet.render(tick);
+      setTimeout(renderHandlerLoop, 1000 * TickerTimer.jiffy()-10); // Next update in a jiffy
+      //DB.post("event loop css", "!");
+    } else if (!TickerTimer.isPaused()) {
+      setTimeout(renderHandlerLoop, 10); // Try again very soon
+      //DB.post("event loop css", "");
+    }
+  })();
 }
 
 
@@ -3132,7 +3214,7 @@ var Volume = 0.5; // A global value shared by all output gain logic
 var MouseIsDown = false; // It's nice to keep track of global mouse button state.  The window element will always catch this event and handle it.
 var midi = null;
 
-function Start () {
+var Start = function () {
   DB.post("Start", DB.status());
 
   DB.post("Start", "Buttons");
@@ -3155,7 +3237,7 @@ function Start () {
 
   // Create a piano object and DOM element.  88 keys, starting at 21/A0.
   DB.post("Start", "Keyboard");
-  Keyboard0 = new PianoKeyboard("piano1", 21, 88);
+  Keyboard0 = new PianoKeyboard("piano1", 21, 88/2);
   //var keyboard2 = new PianoKeyboard("piano2",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
   // MIDI fun
@@ -3172,88 +3254,50 @@ function Start () {
       .then(onMIDISuccess, onMIDIFailure);
   }
 
-  let sheet = Sheet("sheet", 128, TickerTimer);
+  Sheet0 = Sheet("sheet", 128, TickerTimer);
 
   DB.post("Start", "More Buttons");
-  setupControls(Keyboard0, sheet); // Setup menus and moveable buttons.
+  setupControls(Keyboard0, Sheet0); // Setup menus and moveable buttons.
 
   DB.post("Start", "Noises");
 
   // Load the audio asynchronously and create the default drumkit.
   DrumKit0 = new Drumkit(ctx, "orange", 24, ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
 
-  // LiveKa7 v3
-  //restoreSongLK3(Keyboard0, DrumKit0); //, hyphen.song());
-
-  // LiveKa7 v2
-  //restoreSongLK2(Keyboard0, DrumKit0);
-
-  // LiveKa7 v1
-  if (!Synthesizer0) {
-    Synthesizer0 = new Synthesizer(ctx, false, 2, Keyboard0, "#84f");
-    document.getElementById('synths').appendChild(Synthesizer0.element);
-  }
-
-
-  if (!Synthesizer1) {
-    Synthesizer1 = new Synthesizer(ctx, false, 1, Keyboard0, "#4f4");
-    document.getElementById('synths').appendChild(Synthesizer1.element);
-  }
-
-  if (!Synthesizer2) {
-    Synthesizer2 = new Synthesizer(ctx, false, 2, Keyboard0, "#44f");
-    document.getElementById('synths').appendChild(Synthesizer2.element);
-  }
-
-  if (!Synthesizer3) {
-    Synthesizer3 = new Synthesizer(ctx, false, 3, Keyboard0, "#84f");
-    document.getElementById('synths').appendChild(Synthesizer3.element);
-  }
-
-  //restoreSongLK1(Keyboard0, DrumKit0);
-
-  // LiveKa7 v0
-  //restoreSongLK0(Keyboard0, DrumKit0); // Parse get string
+  Synthesizer0 = new Synthesizer(ctx, false, 1, Keyboard0, "#84f");
+  Synthesizer1 = new Synthesizer(ctx, false, 2, Keyboard0, "#4f4");
+  ElementById('synths').appendChild(Synthesizer0.element);
+  ElementById('synths').appendChild(Synthesizer1.element);
 
   // Effects
-  if (!Destinations[1]) {
-    var e = new Delay(ctx);
-    Destinations.push(e);
-    document.getElementById('filters').appendChild(e.element);
-  }
-
-  if (!Destinations[2]) {
-    var e = new Lowpass(ctx);
-    Destinations.push(e);
-    document.getElementById('filters').appendChild(e.element);
-  }
+  ElementById('filters').appendChild(Delay().element);
+  ElementById('filters').appendChild(Lowpass().element);
 
   DB.post("Start", "Sequences");
-  Part(sheet, 8, 1*21, 24, 16, 32, DrumKit0 );
-  Part(sheet, 8,16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
-  //Part(sheet, 5, 1*20, 13, 8, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+  Part(Sheet0, 8, 1*21, 24, 16, 32, DrumKit0 );
+  Part(Sheet0, 8,16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
-  sheet.setStart(8).setEnd(8+32-1);
+  //Sheet0.setStart(8).setEnd(8+32-1);
 
   DB.post("Start", "Handlers");
-  renderHandlerLoop(sheet);
-  processHandlerLoop(sheet);
 
-} // Main
+  TickerTimer.registerPlayCallback(eventLoops.bind(null, Sheet0));
+
+}; // Start
 
 
 // Await for user gesture then restart WebAudio
 window.onload = function Main () {
- if (ctx.state == "suspended") {
-   revealCenter("pauseicon", true)
-   ctx.resume()
-   setTimeout(Main, 200);
- } else {
-   DB.post("Main", "Starting AudioContext!");
-   revealCenter("pauseicon", false)
-   setTimeout( ()=>ElementById("pauseicon").style.clipPath="", 1100);
-   Start();
- }
+  if (ctx.state == "suspended") {
+    revealCenter("pauseicon", true)
+    ctx.resume()
+    setTimeout(Main, 200);
+  } else {
+    DB.post("Main", "Starting AudioContext!");
+    revealCenter("pauseicon", false)
+    setTimeout( ()=>ElementById("pauseicon").style.clipPath="", 1100);
+    Start();
+  }
 };
 
 
