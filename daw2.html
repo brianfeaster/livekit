@@ -28,7 +28,7 @@
 <div class="window">
   <div>SHEET</div>
   <div class="knobs">
-    <input type="range" id="volume" class="actor" max="100" value="50" min="0" style="width:6ch" title="VOLUME"/>
+    <input id="volume" type="range" max="100" value="50" min="0" style="width:6ch" title="VOLUME"/>
     <!--p id="mainVolume">vol</p-->
     <p id="bpm" class="actor" title="BPM" contenteditable="true">60</p>
     <p class="actor reset" title="PLAY" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
@@ -101,6 +101,7 @@ var Min   = Math.min;
 var Mod   = function (n,d) { return n - d * Floor(n/d); };
 var Trunc2 = function (f) { return f.toFixed(2); }
 var ElementById = function(id) { return document.getElementById(id); };
+
 // Simple Array compare
 Array.prototype.cmp = function (that, len) {
   if ( (len=this.length) == that.length) {
@@ -109,20 +110,18 @@ Array.prototype.cmp = function (that, len) {
   return -1==len;
 }
 
-// Generate ary of ints: []  OR  [0..a-1]  OR  [a..b]
-// This doesn't work for 0,0 var range=(a,b)=>[...Array(Math.abs((b||0)-(a||0)+!!b-0)).keys()].map(n=>n+a*!!b);
-var Range = function (a, b) {
-  return (a == undefined) ? [] :
-         (b == undefined) ? [...Array(a).keys()] :
-         [...Array(b+1-a).keys()].map( n => n+a );
+// Gen ary of ints: []  [0..--a]  [a..b]
+var Range = (a, b) =>
+  (f => Array.from(Array(f?b-a+1:a||0).keys(),f))
+  (null==b ? b : n=>n+a);
+
+
+var RangeMap = function (range, f) {
+  return (range instanceof Array ? Range(...range) : Range(range)).map(f);
 }
 
-var RangeMap = function (rng, f) {
-  return (rng instanceof Array ? Range(...rng) : Range(rng)).map(f);
-}
-
-var RangeForEach = function (rng, f) {
-  return (rng instanceof Array ? Range(...rng) : Range(rng)).forEach(f);
+var RangeForEach = function (range, f) {
+  return (range instanceof Array ? Range(...range) : Range(range)).forEach(f);
 }
 
 var CreateAppendChild = function (tag, parent, text) {
@@ -599,10 +598,10 @@ var GetStringBase64 = function (get) {
 /******************************************************************************
   Inter-Broadcast Communication message hyper-loop system.
 
-  USAGE:: var Icb = new IBC();
+  USAGE::
 
   METHODS::
-    default(m)       Send m to all listeners
+    (m)
     .broadcast(m)    Send m to all listeners
     .listeners()     Get current set of listeners
     .addListener(f)  Add a listener callback which receives m.  Returns an id.
@@ -612,36 +611,28 @@ var GetStringBase64 = function (get) {
 ******************************************************************************/
 var IBC = function () {
   // Private
-  var self;
-  var _debug = false;
-  var _id = 0;
-  var _listeners = []; // Array of [id, callback]
-  var _dequeue = [];
-  var _sendToAll = function (m) {
-    // Are any listeners queued for deletion?
-    while (_dequeue.length) {
-      var id = _dequeue.pop();
-      var i = _listeners.findIndex(function(e){ return id == e[0]; });
-      if (0 <= i) { _listeners.splice(i, 1); }
-    }
-    if (_debug) { DB(_listeners.length + "<-" + JSON.stringify(m)); }
-    _listeners.map(function(f){ f[1](m); });
-  }
-  // Public
-  var self = function (m) {
-    _sendToAll(m);
-  }
+  let _debug = false;
+  let _id = 0;
+  let _listeners = []; // Array of [id, callback]
 
-  self.broadcast = _sendToAll;
+  // Public
+
+  self = function (m) { self.broadcast(m); }
+  // Send m to all the listeners
+  self.broadcast = function (m) {
+    if (_debug) { DB(_listeners.length + "<-" + JSON.stringify(m)); }
+    _listeners.forEach( (f)=>f[1](m) );
+  }
   self.listeners = function () { return _listeners; }
   self.addListener = function (f) { _listeners.push([++_id, f]);  return _id; }
   self.delListener = function (id) {
-    _dequeue.push(id);
+    let idx = _listeners.findIndex( (e)=>e[0]==id );
+    if (0 <= idx) { _listeners.splice(idx, 1); }
   }
   self.debug = function () { _debug = !_debug; };
   // Test
   (function(){
-    var l1, l2, a=0, b=0;
+    let l1, l2, a=0, b=0;
     DB.check(self.listeners().length==0, "ERROR:  There should be 0 listeners"); // Verify no listerns
 
     l1 = self.addListener(function (m) { a=m; }); // Register a listener
@@ -758,7 +749,18 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
   //// Private
   var self = this;
   var element = document.getElementById(id);
+  var chanOut = 0;
   DB.check(element, "ERROR: PianoKeyboard: Element id=" + id + " not found in DOM.");
+
+  var knobs = element.parentElement.previousElementSibling;
+  let midi = CreateAppendChild('p', knobs, chanOut);
+
+  midi.onmousedown = (e) => {
+    if (e.button == 0) { 0<chanOut && --chanOut; };
+    if (e.button == 2) { chanOut<15 && ++chanOut; };
+    midi.innerText = chanOut;
+  };
+
   var _keysDOM = []; // Keeps track of the DOM elements which represent the white and black keys in order.
   var _highlights = []; // Array of stacks.  An empty stack implies no high-light.
   var _highlightColor = "#f8f"
@@ -768,12 +770,12 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
 
   var keyPress = function(key) {
     self.highlight(key, _highlightColor); // Set current key high-light
-    IBC(["keyboard1", key, true]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
+    IBC([chanOut, key, 1.0, 0, 0]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
   }
 
   var keyRelease = function(key) {
     self.unhighlight(key, _highlightColor);
-    IBC(["keyboard1", key, false]); // Notify listeners a key was released  ["piano1", 12, stopPlaying]
+    IBC([chanOut, key, 0, 0, 0]); // Notify listeners a key was released  ["piano1", 12, stopPlaying]
   }
 
   RangeForEach(keyCount, (i) => {
@@ -1062,13 +1064,13 @@ var Drumkit = function (ctx, color, keyStart, filenames) {
       lp.frequency.value = 120;
       lp.Q.value = 0.5;
 
-      gain.gain.setValueAtTime(vol*Volume, now);
+      gain.gain.setValueAtTime(vol, now);
       gain.gain.linearRampToValueAtTime(0, now+bassReleaseTime);
 
       source.connect(lp);
       lp.connect(gain);
     } else {
-      gain.gain.value = vol*Volume;
+      gain.gain.value = vol;
       source.connect(gain);
       source.start(when);
     }
@@ -1152,6 +1154,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
   var _waveformIdx = type;
   var _filterIdx = 0;
+  var _volume = 1.0;
+  var chanIn = 0;
   //var _destination = Destinations.input(_filterIdx); // This is dynamic now due to the CTX fuse.
   var _mouseMoved;
 
@@ -1163,14 +1167,22 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   _nameDOM.style.background="";
   _nameDOM.innerText = _name;
 
-  var _buttons = CreateAppendChild('div', _element); // [ Synth1 [ ] ]
+  var knobs = CreateAppendChild('div', _element); // [ Synth1 [ ] ]
 
-  var _delSynth = CreateAppendChild('p', _buttons);  // [ Synth1 [-] ]
+  let midi = CreateAppendChild('p', knobs, chanIn);
+  midi.className="actor";
+  midi.onmousedown = (e) => {
+    if (e.button == 0) { 0<chanIn && --chanIn; };
+    if (e.button == 2) { chanIn<15 && ++chanIn; };
+    midi.innerText = chanIn;
+  };
+
+  /*
+  var _delSynth = CreateAppendChild('p', knobs);  // [ Synth1 [-] ]
   _delSynth.className="actor mustshift";
   _delSynth.innerText = "-";
 
   // Remove synth only if not not used in any of the synth parts in any of the phrses and not one of the original 4 synths.
-  /*
   _delSynth.onmousedown = function () {
     // Never remove the first four synths as they are used when creating a new phrase. TODO: remove this dependency
     var count=0;
@@ -1239,6 +1251,19 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
 
   CreateAppendChild('br', _body);
 
+  // Release button
+  // [ [Synth1] [-] ]
+  // [ [sine]       ]
+  // [ [A][S][R]    ]
+  // [ [VOLUME]     ]
+  var _vol = CreateAppendChild('p', _body);
+  _vol.style.position = "relative"
+  _vol.className = "volume"
+  _vol.innerText = "[vol]"
+  _vol.onmousedown = function(event){ Slider(event, _volume, function(v){ _volume=v; }); }
+
+  //CreateAppendChild('br', _body);
+
   // Output block
   // [ [Synth1] [-] ]
   // [ [sine]       ]
@@ -1254,11 +1279,11 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   }
 
   var _play = function (key, vol, when, sustain) {
+    //DB.post("_play", [key, vol, when, sustain]);
     // Depending on how this is called (when is either 0 or a real time in the
     // future) now will be the current time or when
     var sus = _sus + (sustain ? sustain*TickerTimer.jiffy() : 0);
-    var hold = when==0;
-    var at = hold ? ctx.currentTime : when;
+    var at = !when ? ctx.currentTime : when;
     var osc = ctx.createOscillator(); // Create and add to table if not already
     // Adding a random [0..1] value to the freq in an attempt to get rid of beating.
     // Ended up with a phaser effect when equal notes are played instead.
@@ -1271,9 +1296,9 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     //DB.post("ASR", [_att, sus, _rel]);
     var gain = ctx.createGain();
     gain.gain.setValueAtTime(0, at);
-    gain.gain.linearRampToValueAtTime(vol*0.5*Volume, at + _att);
-    gain.gain.setValueAtTime         (vol*0.5*Volume, at + _att + sus);
-    gain.gain.linearRampToValueAtTime(0,              at + _att + sus + _rel);
+    gain.gain.linearRampToValueAtTime(vol*_volume, at + _att);
+    gain.gain.setValueAtTime         (vol*_volume, at + _att + sus);
+    gain.gain.linearRampToValueAtTime(          0, at + _att + sus + _rel);
 
     osc.connect(gain);
     gain.connect(Destinations.input(_filterIdx));
@@ -1288,39 +1313,44 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     osc.start(at);
     osc.onended = function(osc){ osc.disconnect(); }.bind(null, osc);
 
-    //DB.post("ASR", [_att, _sus, _rel]);
     var gain = ctx.createGain();
     gain.gain.setValueAtTime(0, at);
-    gain.gain.linearRampToValueAtTime(vol*0.5*Volume, at + _att);
+    vol *= _volume;
+    at += _att;
+    gain.gain.linearRampToValueAtTime(vol, at);
 
     osc.connect(gain);
     gain.connect(Destinations.input(_filterIdx));
 
-    playing[key] = [osc, gain, at+_att]; // Keep track of this oscillator and envelope
+    playing[key] = [osc, gain, vol, at]; // Keep track of this oscillator and envelope
   }
 
-  var _playStop = function (key, vol) {
+  var _playStop = function (key) {
     if (playing[key] == undefined) { return; }
 
     var osc = playing[key][0]; // Recover osc and gain
     var gain = playing[key][1];
-    var at = Max(playing[key][2], ctx.currentTime);
+    var vol = playing[key][2];
+    var at = Max(playing[key][3], ctx.currentTime);
     playing[key] = undefined;
 
-    gain.gain.setValueAtTime(vol*0.5*Volume, at);
-    gain.gain.linearRampToValueAtTime(0, at + _rel);
-    osc.stop(at + _rel);
+    gain.gain.setValueAtTime(vol, at);
+    at += _rel;
+    gain.gain.linearRampToValueAtTime(0, at);
+    osc.stop(at);
   }
 
-  var listenerIBC = function (m) {
-    //DB.post("Synthesizer.listenerIBC",  m);
-    if (m[0] != "keyboard1") { return; }
-    if (m[2] == undefined) {
-      _play(m[1], 0.5, 0);
-    } if (m[2]) {
-      _playStart(m[1], 0.5);
+  // Synth message handler:  play/stop a note
+  let listenerIBC = function (m) {
+    let [chan, note, vol, time, sus] = m;
+    if (chan != chanIn) { return; }
+    DB.post("Synthesizer.listenerIBC",  m);
+    if (sus != null) {
+      _play(note, vol, time, sus);
+    } else if (0===vol) {
+      _playStop(note, vol);
     } else {
-      _playStop(m[1], 0.5);
+      _playStart(note, vol);
     }
   }
 
@@ -1332,7 +1362,6 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
       _nameDOM.style.background="";
       _ibcId = IBC.delListener(_ibcId);
     }
-    IBC(["tickclick", 0, 0]); // This tells any active part to stop listening to keyboard events.
   }
 
   Synthesizers.push(this);
@@ -1410,9 +1439,9 @@ var Delay = (function (ctx, destinations) {
   _nameDOM.style.background="";
   _nameDOM.innerText = _name;
 
-  var _buttons = CreateAppendChild('div', _element); // [ Delay1 [ ] ]
+  var knobs = CreateAppendChild('div', _element); // [ Delay1 [ ] ]
 
-  var _delSynth = CreateAppendChild('p', _buttons);  // [ Delay1 [-] ]
+  var _delSynth = CreateAppendChild('p', knobs);  // [ Delay1 [-] ]
   _delSynth.className="actor mustshift";
   _delSynth.innerText = "-";
 
@@ -1559,9 +1588,9 @@ var Lowpass = function (ctx, destinations) {
   _nameDOM.style.background="";
   _nameDOM.innerText = _name;
 
-  var _buttons = CreateAppendChild('div', _element); // [ lowpass [ ] ]
+  var knobs = CreateAppendChild('div', _element); // [ lowpass [ ] ]
 
-  var _delSynth = CreateAppendChild('p', _buttons);  // [ lowpass [-] ]
+  var _delSynth = CreateAppendChild('p', knobs);  // [ lowpass [-] ]
   _delSynth.className="actor mustshift";
   _delSynth.innerText = "-";
 
@@ -2783,9 +2812,14 @@ var RefPart = function (partObj, tickIdx, height) {
 
 
 /******************************************************************************
-  Part - Model a part which for now is a drawable synth/piano or drumkit grid.
+  Part
+
+  Model a musical part which currently is a drawable grid of notes sent to a
+  synth/piano or drumkit.
 ******************************************************************************/
 var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, playable) {
+  let chanIn  = 1;
+  let chanOut = 0;
   // Consider parent
   let sheet = sheetObj.element(); // Parent object's element
   let timer = sheetObj.tickerTimer();
@@ -2808,6 +2842,7 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   body.className = "part";
 
   // Grid tick header
+  // @---+---@---+---@---+---@---+---
   let headerTicks = CreateAppendChild('div', body);
 
   for (let t=0; t<TickCount; t++) {
@@ -2822,8 +2857,10 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   }
 
   // Container of rows of label and ticks
+  // |*   |*   |    |   *|
+  // |  * |  * |    |  **|
+  // |    |    |****| *  |
   let grid = CreateAppendChild('div', body);
-  //grid.className="grid";
 
   RangeForEach(keyCount, (ii) => {
     let key = keyBeg + ii;
@@ -2850,17 +2887,17 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
         // Play the key's sound if recording or live audio is enabled
         if (brushToPlay() || listenerID) {
           MouseIsDown = true;
-          IBC(["keyboard1", key, true]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
+          IBC([chanOut, key, 1.0]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
         }
       };
 
-      header.onmouseover = function () { if (MouseIsDown) { IBC(["keyboard1", key, true]); } };
+      header.onmouseover = function () { if (MouseIsDown) { IBC([chanOut, key, 1.0]); } };
       header.onmouseup = function () {
         if (brushToPlay() || listenerID) {
-          IBC(["keyboard1", key, false]); // Notify listeners a key was released  ["piano1", 12, startPlaying]
+          IBC([chanOut, key, 0]); // Notify listeners a key was released  ["piano1", 12, startPlaying]
         }
       };
-      header.onmouseleave = function () { if (MouseIsDown) {IBC(["keyboard1", key, false]); } }
+      header.onmouseleave = function () { if (MouseIsDown) {IBC([chanOut, key, 0]); } }
 
       let notes = CreateAppendChild("div", row); // Row of ticks
 
@@ -2878,7 +2915,8 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
           if (MouseIsDown) {
             e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) // Continue painting
           } else if (e.target.innerText == "*") {
-            playable.play(key, .5, 0); // Play it
+            //playable.play(key, .5, 0); // Play it
+            IBC([chanOut, key, 1.0, 0, 0]);
           }
         };
       }
@@ -2913,12 +2951,20 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
           if (MouseIsDown) {
             e.target.innerText = (DragOverTickState == 1 ? "*" : NBSP); // Continue painting
           } else if (e.target.innerText != NBSP && brushToPlay()) {
-            playable.play(key, .5, 0); // Play it
+            playable.play(key, 1.0, 0); // Play it
           }
         };
       }
     }
   });
+
+  // Midi channel in number button
+  let midiIn = CreateAppendChild('p', knobs, chanIn);
+  midiIn.onmousedown = (e) => {
+    if (e.button == 0) { 0<chanIn && --chanIn; };
+    if (e.button == 2) { chanIn<15 && ++chanIn; };
+    midiIn.innerText = chanIn;
+  };
 
   let newRef = CreateAppendChild('p', knobs, "*");
   newRef.className = "actor";
@@ -2950,15 +2996,19 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   let recordKnob = CreateAppendChild('p', knobs, "#");
   recordKnob.className = "actor";
   recordKnob.title = "RECORD";
+
+  // Part listener handler: set a note and ???play it
   let listenerIBC = function (m) {
-    if (sheetObj.isPaused() || m[0] != "keyboard1") { return; }
+    let [chan, note, vol, when, sus] = m;
+    if (sheetObj.isPaused() || chan != chanIn) { return; }
     let tick = timer.currentTick( timer.jiffy()/2 )-tickIdx; // Adjust by half a jiffy so performing can be near the beat/tick instead of on or after it as is done by the tick highlighting renderer.
-    if (m[2]) {
-      if (m[1] < keyBeg || keyBeg+keyCount <= m[1]) { return; }
+    if (vol) {
+      if (note < keyBeg || keyBeg+keyCount <= note) { return; }
       // Rows are in reverse order, also compensate for the first supported MIDI note
-      let row = keyCount - (m[1] - keyBeg) - 1;
+      let row = keyCount - (note - keyBeg) - 1;
       grid.children[row].children[1].children[tick].innerText = "*";
-      playable.play(m[1], .5, 0, 0);
+      // Play the note (?or just let whatever else is listening handle it)
+      playable.play(note, vol, 0, 0);
     }
   }
 
@@ -2971,8 +3021,16 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
       IBC.delListener(listenerID);
       listenerID = null;
     }
-    IBC(["tickclick", 0, 0]); // This tells any active part to stop listening to keyboard events.
   }
+
+
+  // Midi channel out number button
+  let midiOut = CreateAppendChild('p', knobs, chanOut);
+  midiOut.onmousedown = (e) => {
+    if (e.button == 0) { 0<chanOut && --chanOut; };
+    if (e.button == 2) { chanOut<15 && ++chanOut; };
+    midiOut.innerText = chanOut;
+  };
 
 
   // Clicking title will raise it.  Dragging title will move it around the sheet
@@ -3037,7 +3095,6 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
       DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
       return;
     }
-    //DB.post("Part", [tick, time]);
     RangeForEach(keyCount, (i) => {
       let row = ticks(i).children;
       let note = row[tick];
@@ -3049,7 +3106,12 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
           ++sustain;
           ++next;
         }
-        playable.play(keyBeg + keyCount-i-1, .5, time, sustain);
+        // Send to IBC for those listening to chanOut a function to evlauate
+        if (playable instanceof Synthesizer) {
+          IBC([chanOut, keyBeg + keyCount-i-1, 1.0, time, sustain])
+        } else {
+          playable.play(keyBeg + keyCount-i-1, 1.0, time);
+        }
       }
     });
   }
@@ -3210,7 +3272,6 @@ var Synthesizer1;
 var Synthesizer2;
 var Synthesizer3;
 var DragOverTickState = 1;
-var Volume = 0.5; // A global value shared by all output gain logic
 var MouseIsDown = false; // It's nice to keep track of global mouse button state.  The window element will always catch this event and handle it.
 var midi = null;
 
@@ -3238,7 +3299,7 @@ var Start = function () {
   // Create a piano object and DOM element.  88 keys, starting at 21/A0.
   DB.post("Start", "Keyboard");
   Keyboard0 = new PianoKeyboard("piano1", 21, 88/2);
-  //var keyboard2 = new PianoKeyboard("piano2",  88, 9, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
+  //var keyboard2 = new PianoKeyboard("piano2",  21, 16, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
   // MIDI fun
   DB.post("Start", "MIDI");
@@ -3277,7 +3338,7 @@ var Start = function () {
   Part(Sheet0, 8, 1*21, 24, 16, 32, DrumKit0 );
   Part(Sheet0, 8,16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
-  //Sheet0.setStart(8).setEnd(8+32-1);
+  Sheet0.setStart(8).setEnd(8+32-1);
 
   DB.post("Start", "Handlers");
 
@@ -3301,7 +3362,7 @@ window.onload = function Main () {
 };
 
 
-//IBC.debug();
+IBC.debug();
 
 //]]></script></body></html><!--
 * Synth listener that crashes (key out of bounds) denies
@@ -3309,4 +3370,10 @@ window.onload = function Main () {
 * Moving part to another tick broken when moved beyond the
   last phrase grid column.
 * BPMs don't seem to do much beyond 150.  Need to optimize output process pipeline.
+* Auto extend sheet ticks
+* Synth select part button
+* copy/paste
+* resume plays note paused on even if restarted
+* volume
+* delete parts
 ------------------------------------------------------------------------------/
