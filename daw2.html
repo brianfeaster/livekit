@@ -57,8 +57,14 @@
 </div>
 
 <div class="window">
+  <div>DRUMS</div>
+  <div class="knobs"><p id="adddrum" class="actor">+</p></div>
+  <div id="drums"></div>
+</div>
+
+<div class="window">
   <div>SYNTHS</div>
-  <div class="knobs"> <p id="freq" class="actor" contenteditable="true">27.5</p> <p id="addsynth" class="actor">+</p> </div>
+  <div class="knobs"><p id="addsynth" class="actor">+</p></div>
   <div id="synths"></div>
 </div>
 
@@ -118,6 +124,10 @@ var Range = (a, b) =>
 
 var RangeMap = function (range, f) {
   return (range instanceof Array ? Range(...range) : Range(range)).map(f);
+}
+
+var RangeFilter = function (range, f) {
+  return (range instanceof Array ? Range(...range) : Range(range)).filter(f);
 }
 
 var RangeForEach = function (range, f) {
@@ -754,7 +764,7 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
 
   var knobs = element.parentElement.previousElementSibling;
   let midi = CreateAppendChild('p', knobs, chanOut);
-
+  midi.title = "CHANNEL OUT";
   midi.onmousedown = (e) => {
     if (e.button == 0) { 0<chanOut && --chanOut; };
     if (e.button == 2) { chanOut<15 && ++chanOut; };
@@ -770,12 +780,12 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
 
   var keyPress = function(key) {
     self.highlight(key, _highlightColor); // Set current key high-light
-    IBC([chanOut, key, 1.0, 0, 0]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
+    IBC([chanOut, key, 1.0]); // Notify listeners a note/key was pressed
   }
 
   var keyRelease = function(key) {
     self.unhighlight(key, _highlightColor);
-    IBC([chanOut, key, 0, 0, 0]); // Notify listeners a key was released  ["piano1", 12, stopPlaying]
+    IBC([chanOut, key, 0]); // Notify listeners a note/key was released
   }
 
   RangeForEach(keyCount, (i) => {
@@ -870,7 +880,8 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
 //
 ******************************************************************************/
 var Destinations = (function (ctx) {
-  var self = [];
+  let self = [];
+  let vol = 0.5;
 
   var fuse = ctx.createGain();
   fuse.name = function () { return "mainFuse"; };
@@ -882,7 +893,6 @@ var Destinations = (function (ctx) {
   self.input = function (i) { return self[i].input(); }
   self.nextId = function (id) {
     let ret = (id+1) % self.length;
-    DB(`nextId ${id} -> ${ret}  ${self.length}`);
     return ret;
   }
   self.next = function (d) { // Return destination after d in array.
@@ -894,13 +904,14 @@ var Destinations = (function (ctx) {
     return (0 <= i) ? i : 0;
   }
   self.cut = function () {
-    let oldFuse = fuse;
+    let oldVol = fuse.gain.value;
     // Silence current gainf use
     fuse.gain.setValueAtTime(0, ctx.currentTime);
     fuse.disconnect(ctx.destination);
 
     // Create new fuse gain and connect to CTX
     fuse = self[0] = ctx.createGain();
+    fuse.gain.value = oldVol;
     fuse.name = function () { return "mainFuseNew"; };
     fuse.input = function () { return fuse; };
     fuse.connect(ctx.destination);
@@ -1026,17 +1037,64 @@ var AudioBuffers = function (ctx, filenames) {
     .connect(destination, idx) Set destination to destination
     .connected(idx)            Get destination to destination
 ******************************************************************************/
-var Drums = [];
-var Drumkit = function (ctx, color, keyStart, filenames) {
+var Drums = []; // Array of instantiated drumkits.
+var Drumkit = function (ctx, label, color, keyStart, filenames) {
   //// Local
-  var audioBuffers = new AudioBuffers(ctx, filenames)
-  var bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
+  let self = this;
+  let _name = label || ("Drumkit" + ++SynthGlobalCounter);
+  let audioBuffers = new AudioBuffers(ctx, filenames)
+  let bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
   var destinations = Array(audioBuffers.length).fill(0); // Default destination of each sound to default
-  //// Public
+  var _ibcId = false;
+  var chanIn = 0;
+
+  // Element
+
+  var _element = document.createElement('div'); // [ ]
+  ElementById('drums').appendChild(_element);
+
+  _element.className = "windowmini";
+
+  var _nameDOM = CreateAppendChild('div', _element); // [ Synth1 ]
+  _nameDOM.style.background="";
+  _nameDOM.innerText = _name;
+
+  var knobs = CreateAppendChild('div', _element); // [ Synth1 [ ] ]
+
+  let midi = CreateAppendChild('p', knobs, chanIn);
+  midi.title = "CHANNEL IN";
+  midi.className="actor";
+  midi.onmousedown = (e) => {
+    if (e.button == 0) { 0<chanIn && --chanIn; };
+    if (e.button == 2) { chanIn<15 && ++chanIn; };
+    midi.innerText = chanIn;
+  };
+
+  // Behavior
+
+  // Drumkit message handler:  play/stop a note
+  let listenerIBC = function (m) {
+    let [chan, note, vol, time, sus] = m;
+    if (chan != chanIn) { return; }
+    self.play(note, vol, time);
+  };
+
+  (_nameDOM.onmousedown = function () {
+    if (_nameDOM.style.background == "") {
+      _nameDOM.style.background="#880";
+      _ibcId = IBC.addListener(listenerIBC);
+    } else {
+      _nameDOM.style.background="";
+      _ibcId = IBC.delListener(_ibcId);
+    }
+  })(); // Toggle the synths on and listening to MIDI
+
+  // Object
+
   this.length = audioBuffers.length;
-  this.name = function (key) {
-    return (undefined == key) ? "TR-808" : audioBuffers.fileNameCompact(key-keyStart);
-   }
+  this.name = (key) => (undefined == key) ? "TR-808" : audioBuffers.fileNameCompact(key-keyStart);
+  this.rowClass = (_key) => "drumkit";
+  this.title = (key) => `${key} ${this.name(key)}`;
   this.color = color
   this.play = function (pad, vol, when) {
     let key = pad - keyStart;
@@ -1079,27 +1137,31 @@ var Drumkit = function (ctx, color, keyStart, filenames) {
   }
   this.connect = function (dest, idx) { destinations[idx] = dest; }
   this.connected = function (idx) { return destinations[idx]; }
+
   Drums.push(this);
+
 } // Drumkit
 
 
 /* MIDI key and frequency manager
 
+   Octaves begin at note C.  MIDI begins (key 0) on octave -1, note C
+   88 key piano start at octave 0, note A (just 3 notes in octave 0: A A# B).
    Key 21 (A-natural sub-contra-octave) is set to the base frequency
 
-  Key Note Freq      Key Note Freq
-    0 C-1  8.1758       69 A4   440/Middle A
-    9 A-1 13.75         81 A5   880
-   21 A0  27.5 88Piano  93 A6  1760
-   33 A1  55           105 A7  3520
-   45 A2 110           108 C8  4186.0090 88Piano
-   57 A3 220           117 A8  7040
-   60 C4 261.6256/MidC 127 G9 12543.8540
+  Key Note Freq            Key Note Freq
+    0 C-1  8.1758             69 A4   440/Middle A
+    9 A-1 13.75               81 A5   880
+   21 A0  27.5 88PianoStart   93 A6  1760
+   33 A1  55                 105 A7  3520
+   45 A2 110                 108 C8  4186.0090 88PianoEnd
+   57 A3 220                 117 A8  7040
+   60 C4 261.6256/MidC       127 G9 12543.8540
 */
 var KeyFreq = function (freqa0) {
   // Generate able of base frequency multipliers
   let keymult = RangeMap(128, (k) => Pow(2, (k-21)/12.0));
-  let self = (k) => keymult[k] * freqa0;// + Rnd()*0.5 - 0.25;
+  let self = (k, f) => keymult[k] * (f || freqa0);// + Rnd()*0.5 - 0.25;
   self.setFreqA0 = (f) => freqa0=f;
   self.freq = () => freqa0;
   return self;
@@ -1154,14 +1216,13 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _waveforms = ["sine", "square", "sawtooth", "triangle"];
   var _waveformIdx = type;
   var _filterIdx = 0;
-  var _volume = 1.0;
+  var _volume = 0.5;
   var chanIn = 0;
-  //var _destination = Destinations.input(_filterIdx); // This is dynamic now due to the CTX fuse.
   var _mouseMoved;
+  var _freq=27.5;
 
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowmini";
-  //_element.style.width = "13ch";
 
   var _nameDOM = CreateAppendChild('div', _element); // [ Synth1 ]
   _nameDOM.style.background="";
@@ -1170,6 +1231,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var knobs = CreateAppendChild('div', _element); // [ Synth1 [ ] ]
 
   let midi = CreateAppendChild('p', knobs, chanIn);
+  midi.title = "CHANNEL IN";
   midi.className="actor";
   midi.onmousedown = (e) => {
     if (e.button == 0) { 0<chanIn && --chanIn; };
@@ -1199,11 +1261,26 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _body = CreateAppendChild('div', _element);//  [ Synth1 [-] ]
   _body.className = "knobs";                     //  [            ]
 
+  var _frequency = CreateAppendChild('p', _body)
+  _frequency.className = "actor";
+  _frequency.title = "BASE FREQ";
+  _frequency.contentEditable = true;
+  _frequency.innerText = _freq;
+  // Hitting enter will evaluate the box contents and set the synth base freq
+  _frequency.onkeydown = function (v) {
+    if (v.code == "Enter") {
+      _freq = parseFloat(v.target.innerText) || KeyFreq.freq();
+      v.preventDefault(); // Prevent form element from adding a newline
+    }
+    v.stopPropagation();
+  }
+
   // Waveform button
   // [ [Synth1] [-] ]
   // [ [sine]       ]
   var _waveformDOM = CreateAppendChild('p', _body)
   _waveformDOM.className = "actor";
+  _waveformDOM.title = "OSCILLATOR";
   _waveformDOM.innerText = _waveforms[_waveformIdx];
   _waveformDOM.onmousedown = function () {
     if (_waveforms.length == ++_waveformIdx) _waveformIdx=0;
@@ -1280,14 +1357,14 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
 
   var _play = function (key, vol, when, sustain) {
     //DB.post("_play", [key, vol, when, sustain]);
-    // Depending on how this is called (when is either 0 or a real time in the
+    // Depending on how this is called (when is either 0 or a time in the
     // future) now will be the current time or when
     var sus = _sus + (sustain ? sustain*TickerTimer.jiffy() : 0);
     var at = !when ? ctx.currentTime : when;
     var osc = ctx.createOscillator(); // Create and add to table if not already
     // Adding a random [0..1] value to the freq in an attempt to get rid of beating.
     // Ended up with a phaser effect when equal notes are played instead.
-    osc.frequency.value = KeyFreq(key);
+    osc.frequency.value = KeyFreq(key, _freq);
     osc.type = _waveforms[_waveformIdx];
     osc.onended = function(osc){ osc.disconnect(); }.bind(null, osc);
     osc.start(at);
@@ -1308,7 +1385,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _playStart = function (key, vol) {
     var at = ctx.currentTime; // Start now
     var osc = ctx.createOscillator();
-    osc.frequency.value = KeyFreq(key);
+    osc.frequency.value = KeyFreq(key, _freq);
     osc.type = _waveforms[_waveformIdx];
     osc.start(at);
     osc.onended = function(osc){ osc.disconnect(); }.bind(null, osc);
@@ -1340,21 +1417,20 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     osc.stop(at);
   }
 
-  // Synth message handler:  play/stop a note
+  // Synthesizer message handler:  play/stop a note
   let listenerIBC = function (m) {
     let [chan, note, vol, time, sus] = m;
     if (chan != chanIn) { return; }
-    DB.post("Synthesizer.listenerIBC",  m);
     if (sus != null) {
-      _play(note, vol, time, sus);
+      _play(note, vol, time, sus); // One shot probably from sequencer to render entire ADSRd sound
     } else if (0===vol) {
       _playStop(note, vol);
     } else {
       _playStart(note, vol);
     }
-  }
+  };
 
-  _nameDOM.onmousedown = function () {
+  (_nameDOM.onmousedown = function () {
     if (_nameDOM.style.background == "") {
       _nameDOM.style.background="#880";
       _ibcId = IBC.addListener(listenerIBC);
@@ -1362,14 +1438,14 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
       _nameDOM.style.background="";
       _ibcId = IBC.delListener(_ibcId);
     }
-  }
+  })(); // Toggle the synths on and listening to MIDI
 
   Synthesizers.push(this);
 
   //// Public
   this.element = _element;
   this.color = color
-  this.name = function () { return _name; }
+  //this.name = function () { return _name; }
   this.adsr = function () { return [parseInt(_att*255), 0, parseInt(_sus*255), parseInt(_rel*255)]; }
   this.attSet = function (att) { _att = att/255.0; }
   this.susSet = function (sus) { _sus = sus/255.0; }
@@ -1387,6 +1463,27 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     keyboard.unhighlight(_lastKey, color); // Remove last high-light
   };
   this.destination = function () { return _filterIdx; };
+
+  this.name = function (key) {
+    let note = key%12;
+    let octave = Floor((key-12)/12); // MIDI octaves start at C-1 up to G9
+    let noteLabel = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][note];
+    let nat = 1 == noteLabel.length; // Natural notes are 1 char long
+    return nat ? noteLabel + (0==note?octave:"") : NBSP;
+  }
+  this.rowClass = function (key) {
+    let note = key%12;
+    let noteLabel = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][note];
+    let nat = 1 == noteLabel.length; // Natural notes are 1 char long
+    return noteLabel.charAt(0) + (nat ? " nat" : " shp");
+  }
+  this.title = function (key) {
+    let note = key%12;
+    let octave = Floor((key-12)/12); // MIDI octaves start at C-1 up to G9
+    let noteLabel = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][note];
+    return `${Trunc2(KeyFreq(key))}Hz  ${key}  ${noteLabel}${octave}`;
+  }
+
 } // Synthesizer
 
 
@@ -1681,691 +1778,6 @@ var Lowpass = function (ctx, destinations) {
 }.bind(null, ctx, Destinations); // Lowpass
 
 
-
-
-/******************************************************************************
-
- Song serialization
-
-******************************************************************************/
-/*
- Encode song objects into Base-64 encoding of the following:
-
-  -HEADER-
-  "LK"      project
-  03        version
-  00        main volume
-  00 00     beat duration
-
-  -FILTERS...-
-  00                Type = Filter
-   06"filter"        label
-   00                Filter type 00=delay 01=lowpass
-   02                parameter count
-    00...             parameters
-
-  -SYNTH...-
-  01                Type = Synthesizer
-   09"synthname"     label
-   00                Waveform [square sawtooth triangle sine]
-   00                Volume
-   00 00 00          Attack sustain release
-   00                output destination/filter
-
-  -PHRASE...-
-  02                Type = Phrase
-   0a"phrasename"    label
-   04 04 04          measures, beatspermeasure, ticksperbeat
-   10                part count
-    -PART...-
-    08"partname" 00   label
-    00                volume
-    00                destinatin/filter
-    00...             4*4*4 bits representing on/off tick
-    -NOTE OR NOTES-
-      80              If 8th bit set then this&7f is the note to use for each tick.
-      00...           Otherwise {number of ticks} bytes represent the notes for each tick.
-
-  -PHRASE REFERENCE-
-  03                Type PhraseReference
-   0a"phrasename"    Label referring to actual phrase
-*/
-var saveSongLK3 = function () {
-
-  var writtenPhrases = []; // Keep track of written phrases
-  var bytes = [76,75,3]; // "LK" 03  LiveKa7 DAW Version 3 Header
-
-  bytes.push(parseInt(Volume*255.0));
-  // BMP saved as fixed point to two decimal places in little endian.  So convert the duration in seconds to microseconds then split.
-  bytes.push(parseInt((6000/BeatDuration) & 255));
-  bytes.push(parseInt((6000/BeatDuration) >> 8));
-
-  Destinations.map(function(d,i) {
-    if (0 < i) {
-      d.export().map(b=>bytes.push(b));
-    }
-  });
-
-  Synthesizers.map(function(s) {
-    bytes.push(1); // TYPE
-    // LENGTH "SYNTH LABEL"
-    bytes.push(s.name().length);
-    s.name().split('').map(function(b){bytes.push(b.charCodeAt(0))});
-    bytes.push(s.wave()); // Waveform index
-    bytes.push(255); // Volume not used for now
-    var adsr = s.adsr();
-    bytes.push(adsr[0]); // Attack
-    bytes.push(adsr[2]); // Sustain
-    bytes.push(adsr[3]); // Release
-    bytes.push(s.destination());
-  });
-
-  for (var i=0; i<Sheet0.length(); ++i) {
-
-    var ref = Sheet0.index(i);
-    var phrase = ref.phrase;
-
-    if (0 <= writtenPhrases.indexOf(phrase)) { // Write phrase if first reference to it
-      // TYPE LENGTH "REFERENCED PHRASE LABEL"
-      bytes.push(3);
-      bytes.push(phrase.id.length);
-      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-    } else {
-      writtenPhrases.push(phrase); // Keep track of phrases written
-      // TYPE LENGTH "PHRASE LABEL"
-      bytes.push(2);
-      bytes.push(phrase.id.length);
-      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-      // MEASURES BEATS TICKS PARTCOUNT
-      bytes.push(phrase.measureCount);
-      bytes.push(phrase.beatCount/phrase.measureCount);
-      bytes.push(phrase.tickCount/phrase.beatCount);
-      bytes.push(phrase.partCount());
-
-      phrase.parts.map(function(part, i){
-        // LENGTH "PART LABEL" VOLUME
-        bytes.push(part.elementName.innerText.length);
-        part.elementName.innerText.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-        bytes.push(Floor(255.0*part.vol()));
-        bytes.push(Destinations.index(DrumKit0.connected(part.key(0)))); // DESTINATION/FILTER
-
-        // TICK BITS
-        var bit = 1
-        var byte=0;
-        part.elementTicks.map(function (te, i) {
-          if ("." != te.innerText) byte = byte | bit;
-          if (128 == bit) {
-            bytes.push(byte);
-            bit = 1;
-            byte = 0;
-          } else {
-            bit = bit<<1
-          }
-        });
-        if (bit != 1) { bytes.push(byte); }
-
-        // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
-        if (part.playable instanceof Synthesizer) {
-          for (var i=0; i<part.tickLength; ++i) {
-            if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
-          }
-        } else {
-          bytes.push(128 + part.key(0));
-        }
-
-      });
-    }
-  }
-  mybytes = bytes;
-  //console.log(bytes);
-  window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
-} // saveSongLK3
-var mybytes;
-
-var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
-  var gs = new GetStringBase64(encodedSong);
-  var next, b, label, d;
-  if (!gs.assertString("LK") || !gs.assertBytes([3])) {
-    DB("Not LK3")
-    return false;
-  }
-
-  DB("Decoding LK3...")
-
-  b = gs.nextByte();
-  Volume = b / 255.0;
-
-  b = gs.nextByte() + (gs.nextByte()<<8);
-  BeatDuration = 6000.0/b;
-  document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
-
-  while (null != (next = gs.nextByte()))
-  if (0 == next) { // FILTER / DESTINATION
-    label = gs.nextString(gs.nextByte()); // NAME LENGTH, NAME
-    var t = gs.nextByte(); // TYPE
-    b = gs.nextByte(); // PARAM COUNT
-    //DB("params count = " + b);
-    var ps=[]
-    for (var i=0; i<b; ++i) { // PARAMS
-      ps.push(gs.nextByte() / 255.0);
-    }
-    //DB("params = " + ps);
-    if (t==0) {
-      d = new Delay(ctx);
-      //DB("LK3 delay create");
-    } else if (t==1) {
-      //DB("LK3 lowpass create");
-      d = new Lowpass(ctx);
-    } else { t==-1; }
-
-    if (-1 != t) {
-      Destinations.push(d);
-      document.getElementById('filters').appendChild(d.element);
-      d.setParams(ps);
-    }
-  } else if (1 == next) { // Synthesizer
-    DB("LK3 Synth...");
-    label = gs.nextString(gs.nextByte());
-    var synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#84f");
-    if (!Synthesizer0) Synthesizer0 = synth;
-    else if (!Synthesizer1) Synthesizer1 = synth;
-    else if (!Synthesizer2) Synthesizer2 = synth;
-    else if (!Synthesizer3) Synthesizer3 = synth;
-    document.getElementById('synths').appendChild(synth.element);
-    gs.nextByte(); // Ignore volume for now
-    synth.attSet(gs.nextByte());
-    synth.susSet(gs.nextByte());
-    synth.relSet(gs.nextByte());
-    var i = gs.nextByte();
-    synth.connect(Destinations[i].input());
-  } else if (2 == next) { // Phrase
-    label = gs.nextString(gs.nextByte());
-    var measures = gs.nextByte();
-    var beatsper = gs.nextByte();
-    var ticksper = gs.nextByte();
-    var partCount = gs.nextByte();
-    var phrase = new Phrase(label, measures, beatsper, ticksper, keyboard);
-    Sheet0.add(new PhraseReference(phrase));
-    for (var i=0; i<partCount; ++i) {
-      var part;
-      label = gs.nextString(gs.nextByte());
-      var vol = gs.nextByte();
-      var dst = gs.nextByte(); // Destination (set below if drumkit track)
-
-      var bools = gs.nextBools(phrase.tickCount);
-      if (gs.peekByte() & 128) {
-        var fixedNote = gs.nextByte() & 127;
-        part = phrase.createPartFixed(drumKit, fixedNote)
-        drumKit.connect(Destinations.input(dst), fixedNote); // DESTINATION/FILTER
-        part.elementFilter.innerText = Destinations.name(dst);
-      } else {
-        Synthesizers.map(function(s) { // Lookup synth
-          if (s.name() == label) {
-            part = phrase.createPart(s);
-          }
-        });
-        bools.map(function(n,i){if (n) { part.setKey(i, gs.nextByte());}});
-      }
-      part.setVol(vol/255.0); // Volume
-      bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
-    }
-  } else if (3 == next) { // Phrase reference
-    label = gs.nextString(gs.nextByte()); // Look-up existing phrase id and create a new ref using it.
-    for (var i=0; i<Sheet0.length(); ++i) {
-      var phrase = Sheet0.phrase(i)
-      if (phrase.id == label) { // Found it
-        var refPhrase = new PhraseReference(phrase);
-        Sheet0.add(refPhrase);
-        DB(label + " reference");
-        break;
-      }
-    }
-  }
-
-  return true;
-} // restoreSongLK3
-
-
-/*
- Encode song objects into Base-64 encoding of the following:
-
-  -HEADER-
-  "LK" 02  version
-  00        main volume
-  00 00     beat duration
-
-  -SYNTH...-
-  00                Type Synthesizer
-  0a"synthname"     label
-  00                Waveform [square sawtooth triangle sine]
-  00                Volume
-  00 00             Attack release
-
-  -PHRASE...-
-  01                Type Phrase
-  0a"phrasename"    label
-  04 04 04          measures, beatspermeasure, ticksperbeat
-  10                partcount
-  -PART...-
-  08"partname" 00   label, part volume
-  00...             4*4*4 bits representing on/off tick
-  -NOTE OR NOTES-
-    80              If 8th bit set then this&7f is the note to use for each tick.
-    00...           Otherwise {number of ticks} bytes represent the notes for each tick.
-
-  -PHRASE REFERENCE-
-  02                Type PhraseReference
-  0a"phrasename"    Label referring to actual phrase
-*/
-var saveSongLK2 = function () {
-
-  var writtenPhrases = []; // Keep track of written phrases
-  var bytes = [76,75,2]; // "LK" 02  LiveKa7 DAW Version 2 Header
-
-  bytes.push((Volume*255.0).toFixed(0));
-  // BMP saved as fixed point to two decimal places in little endian.  So convert the duration in seconds to microseconds then split.
-  bytes.push(parseInt((6000/BeatDuration) & 255));
-  bytes.push(parseInt((6000/BeatDuration) >> 8));
-
-  Synthesizers.map(function(s) {
-   // TYPE LENGTH "SYNTH LABEL"
-    bytes.push(0);
-    bytes.push(s.name().length);
-    s.name().split('').map(function(b){bytes.push(b.charCodeAt(0))});
-    bytes.push(s.wave()); // Waveform index
-    bytes.push(255); // Volume
-    var adsr = s.adsr();
-    bytes.push(adsr[0]); // Attack
-    bytes.push(adsr[3]); // Release
-  });
-
-  for (var i=0; i<Sheet0.length(); ++i) {
-
-    var ref = Sheet0.index(i);
-    var phrase = ref.phrase;
-
-    if (0 <= writtenPhrases.indexOf(phrase)) { // Write phrase if first reference to it
-      // TYPE LENGTH "REFERENCED PHRASE LABEL"
-      bytes.push(2);
-      bytes.push(phrase.id.length);
-      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-    } else {
-      writtenPhrases.push(phrase); // Keep track of phrases written
-      // TYPE LENGTH "PHRASE LABEL"
-      bytes.push(1);
-      bytes.push(phrase.id.length);
-      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-      // MEASURES BEATS TICKS PARTCOUNT
-      bytes.push(phrase.measureCount);
-      bytes.push(phrase.beatCount/phrase.measureCount);
-      bytes.push(phrase.tickCount/phrase.beatCount);
-      bytes.push(phrase.partCount());
-
-      phrase.parts.map(function(part, i){
-        // LENGTH "PART LABEL" VOLUME
-        bytes.push(part.elementName.innerText.length);
-        part.elementName.innerText.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-        bytes.push(Floor(255.0*part.vol()));
-
-        // TICK BITS
-        var bit = 1
-        var byte=0;
-        part.elementTicks.map(function (te, i) {
-          if ("." != te.innerText) byte = byte | bit;
-          if (128 == bit) {
-            bytes.push(byte);
-            bit = 1;
-            byte = 0;
-          } else {
-            bit = bit<<1
-          }
-        });
-        if (bit != 1) { bytes.push(byte); }
-
-        // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
-        if (part.playable instanceof Synthesizer) {
-          for (var i=0; i<part.tickLength; ++i) {
-            if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
-          }
-        } else {
-          bytes.push(128 + part.key(0));
-        }
-
-      });
-    }
-  }
-
-  window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
-}
-
-var restoreSongLK2 = function (keyboard, drumKit, encodedSong) {
-  var gs = new GetStringBase64(encodedSong);
-  var next, b, label;
-  var waveforms = ["sine", "square", "sawtooth", "triangle"];
-  var color = ["#f00", "#0f0", "#00f"];
-  if (!gs.assertString("LK") || !gs.assertBytes([2])) {
-    DB("Not LK2")
-    return false;
-  }
-
-  DB("Decoding LK2...")
-
-  b = gs.nextByte();
-  Volume = b / 255.0;
-
-  b = gs.nextByte() + (gs.nextByte()<<8);
-  BeatDuration = 6000.0/b;
-  document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
-
-  while (null != (next = gs.nextByte()))
-  if (0 == next) { // Synthesizer
-    label = gs.nextString(gs.nextByte());
-    var synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#84f");
-    if (!Synthesizer0) Synthesizer0 = synth;
-    else if (!Synthesizer1) Synthesizer1 = synth;
-    else if (!Synthesizer2) Synthesizer2 = synth;
-    else if (!Synthesizer3) Synthesizer3 = synth;
-    document.getElementById('synths').appendChild(synth.element);
-    gs.nextByte(); // Ignore volume for now
-    synth.attSet(gs.nextByte());
-    synth.relSet(gs.nextByte());
-  } else if (1 == next) { // Phrase
-    label = gs.nextString(gs.nextByte());
-    var measures = gs.nextByte();
-    var beatsper = gs.nextByte();
-    var ticksper = gs.nextByte();
-    var partCount = gs.nextByte();
-    var phrase = new Phrase(label, measures, beatsper, ticksper, keyboard);
-    Sheet0.add(new PhraseReference(phrase));
-    for (var i=0; i<partCount; ++i) {
-      var part;
-      label = gs.nextString(gs.nextByte());
-      var vol = gs.nextByte();
-      var bools = gs.nextBools(phrase.tickCount);
-      if (gs.peekByte() & 128) {
-        part = phrase.createPartFixed(drumKit, gs.nextByte()&127);
-      } else {
-        Synthesizers.map(function(s) { // Lookup synth
-          if (s.name() == label) {
-            part = phrase.createPart(s);
-          }
-        });
-        bools.map(function(n,i){if (n) { part.setKey(i, gs.nextByte());}});
-      }
-      part.setVol(vol/255.0); // Volume
-      bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
-    }
-  } else if (2 == next) { // Phrase reference
-    label = gs.nextString(gs.nextByte()); // Look-up existing phrase id and create a new ref using it.
-    for (var i=0; i<Sheet0.length(); ++i) {
-      var phrase = Sheet0.phrase(i)
-      if (phrase.id == label) { // Found it
-        var refPhrase = new PhraseReference(phrase);
-        Sheet0.add(refPhrase);
-        DB(label + " reference");
-        break;
-      }
-    }
-  }
-
-  return true;
-}
-
-/*
- Encode song objects into Base-64 encoding of the following:
-
-  -HEADER-
-  "LK" 01  version
-  00        main volume
-  00 00     beat duration
-
-  -PHRASE OR PHRASE_REFERENCE...-
-    -PHRASE-
-    00                Type Phrase
-    0a"phrasename"    label
-    04 04 04 10       measures, beatspermeasure, ticksperbeat, partcount
-    -PART...-
-    08"partname" 00   label, part volume
-    00...             4*4*4 bits representing on/off tick
-    -NOTE OR NOTES-
-      80              If 8th bit set then this&7f is the note to use for each tick.
-      00...           Otherwise {number of ticks} bytes represent the notes for each tick.
-
-    -PHRASE REFERENCE-
-    01                Type PhraseReference
-    0a"phrasename"    Label referring to actual phrase
-
-*/
-var saveSongLK1 = function () {
-
-  var writtenPhrases = []; // Keep track of written phrases
-  var bytes = [76,75,1]; // "LK" 01  LiveKa7 DAW Version 1 Header
-
-  bytes.push((Volume*255.0).toFixed(0));
-  // BMP saved as fixed point to two decimal places in little endian.  So convert the duration in seconds to microseconds then split.
-  bytes.push(parseInt((6000/BeatDuration) & 255));
-  bytes.push(parseInt((6000/BeatDuration) >> 8));
-
-  for (var i=0; i<Sheet0.length(); ++i) {
-
-    var ref = Sheet0.index(i);
-    var phrase = ref.phrase;
-
-    if (0 <= writtenPhrases.indexOf(phrase)) { // Write phrase if first reference to it
-      // TYPE LENGTH "REFERENCED PHRASE LABEL"
-      bytes.push(1);
-      bytes.push(phrase.id.length);
-      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-    } else {
-      writtenPhrases.push(phrase); // Keep track of phrases written
-      // TYPE LENGTH "PHRASE LABEL"
-      bytes.push(0);
-      bytes.push(phrase.id.length);
-      phrase.id.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-      // MEASURES BEATS TICKS PARTCOUNT
-      bytes.push(phrase.measureCount);
-      bytes.push(phrase.beatCount/phrase.measureCount);
-      bytes.push(phrase.tickCount/phrase.beatCount);
-      bytes.push(phrase.partCount());
-
-      phrase.parts.map(function(part, i){
-        // LENGTH "PART LABEL" VOLUME
-        bytes.push(part.elementName.innerText.length);
-        part.elementName.innerText.split('').map(function(b){bytes.push(b.charCodeAt(0))});
-        bytes.push(Floor(255.0*part.vol()));
-
-        // TICK BITS
-        var bit = 1
-        var byte=0;
-        part.elementTicks.map(function (te, i) {
-          if ("." != te.innerText) byte = byte | bit;
-          if (128 == bit) {
-            bytes.push(byte);
-            bit = 1;
-            byte = 0;
-          } else {
-            bit = bit<<1
-          }
-        });
-        if (bit != 1) { bytes.push(byte); }
-
-        // SINGLE BYTE (drumkit) or MULTIPLE NOTE BYTES
-        if (part.playable instanceof Synthesizer) {
-          for (var i=0; i<part.tickLength; ++i) {
-            if (part.elementTick(i).innerText != ".") { bytes.push(part.key(i)); } // Only emit notes for on ticks.
-          }
-        } else {
-          bytes.push(128 + part.key(0));
-        }
-
-      });
-    }
-  }
-
-  window.history.replaceState("ohhai", "The LiveKa7 DAW", document.location.href.split('?')[0] + '?'  + Base64(bytes));
-}
-
-var restoreSongLK1 = function (keyboard, drumKit, encodedSong) {
-  var gs = new GetStringBase64(encodedSong);
-  var b, label;
-  var waveforms = ["sine", "square", "sawtooth", "triangle"];
-  //var color = ["#f00", "#0f0", "#00f"];
-  if (!gs.assertString("LK") || !gs.assertBytes([1])) {
-    DB("Not LK1")
-    return false;
-  }
-
-  b = gs.nextByte();
-  DB("LK1 volume " + b);
-  Volume = b / 255.0;
-
-  b = gs.nextByte() + (gs.nextByte()<<8);
-  DB("LK1 beatduration " + b);
-  BeatDuration = 6000.0/b;
-  document.getElementById('speed').innerText = (60/BeatDuration).toFixed(0);
-
-  while (null != gs.peekByte()) if (0 == gs.nextByte()) { // Phrase
-    label = gs.nextString(gs.nextByte());
-    var measures = gs.nextByte();
-    var beatsper = gs.nextByte();
-    var ticksper = gs.nextByte();
-    var partCount = gs.nextByte();
-    var phrase = new Phrase(label, measures, beatsper, ticksper, keyboard);
-    Sheet0.add(new PhraseReference(phrase));
-    for (var i=0; i<partCount; ++i) {
-      var part;
-      label = gs.nextString(gs.nextByte());
-DB(label);
-      var vol = gs.nextByte();
-      var bools = gs.nextBools(phrase.tickCount);
-      if (gs.peekByte() & 128) {
-        part = phrase.createPartFixed(drumKit, gs.nextByte()&127);
-      } else {
-        //if (0 == i) {
-        //  part = phrase.createPart(Synthesizer0);
-        //} else {
-        //  part = phrase.createPart(new Synthesizer(ctx, false, waveforms.indexOf(label), keyboard, color[i%3]));
-        //}
-        if (waveforms.indexOf(label) == -1)
-          part = phrase.createPart(Synthesizer1);
-        else
-          part = phrase.createPart([Synthesizer0, Synthesizer1, Synthesizer2, Synthesizer3][waveforms.indexOf(label)]);
-        bools.map(function(n,i){if (n) { part.setKey(i, gs.nextByte());}});
-      }
-      part.setVol(vol/255.0); // Volume
-      bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
-    }
-  } else { // Phrase reference
-    label = gs.nextString(gs.nextByte()); // Look-up existing phrase id and create a new ref using it.
-    for (var i=0; i<Sheet0.length(); ++i) {
-      var phrase = Sheet0.phrase(i)
-      if (phrase.id == label) { // Found it
-        var refPhrase = new PhraseReference(phrase);
-        Sheet0.add(refPhrase);
-        DB(label + " reference");
-        break;
-      }
-    }
-  }
-
-  return true;
-}
-
-
-/* Old encoding:
--- 427 character base-64 encoding
-0G410K44GGGH4H4H4H4H4KLHH1H5H5HP00000000000000000000000000000000CpCpCpCpCpC000000000000000000000pCpCpCpCpCp1KL0KGH34LG000000000000000000000100400G014H4H4H4H4H4H00000000000400002m4B0GG2408E0mC310G411852mK41X064mS71m8820W92H892WeE2WmB2mi030mC3GqG3GuE30uF3myF700001S10G4S0W827WC30ny410GN1GK57mO61YC71mSX20W85ma92I4A2WeZ2miB7mmC31SD3GqV3WuE7WyF3pG0Bm0h0IW18m8U0Xm35mCX12O41GKe1IC69WOX1mS79WWX22e9A0aZ2YyAAWig2oeCA0mq3JSDEmusDZSsDWy
--- Of 320 bytes
-010101014104410411111111111111114551441445445459000000000000000000000000000000000000000000000000333333333333333300000000000000000000000000000000ccccccccccccccccc15150144110c45500000000000000000000000000000000010001000100011111111111111111110000000000000000040000000b010b01040210020e0303030404040412050b05040610061307070702080808090912090a0a0e0a0c0b0b0b000c0c0c0d0d100d0e0e0c0e0f0f0f0f1c000000170101011c0202021e0303031f040404170505051f060606230707072108080817090909210a0a0a230b0b0b1f0c0c0c170d0d0d1f0e0e0e1e0f0f0f34002f002b01280123021e021c03170321042604050528052306260621070707260821082a092809230a2f0a2a0b2a0b2a0c280c340d370d3b0e36363736360f
--- 16 parts of 64 binary ticks --
-0101010141044104 1111111111111111 4551441445445459 0000000000000000
-0000000000000000 0000000000000000 3333333333333333 0000000000000000
-0000000000000000 cccccccccccccccc c15150144110c455 0000000000000000
-0000000000000000 0100010001000111 1111111111111111 0000000000000000
--- First three parts are synths which require a note for every tick encoded as bytes ----
-040000000b010b01040210020e0303030404040412050b05040610061307070702080808090912090a0a0e0a0c0b0b0b000c0c0c0d0d100d0e0e0c0e0f0f0f0f
-1c000000170101011c0202021e0303031f040404170505051f060606230707072108080817090909210a0a0a230b0b0b1f0c0c0c170d0d0d1f0e0e0e1e0f0f0f
-34002f002b01280123021e021c03170321042604050528052306260621070707260821082a092809230a2f0a2a0b2a0b2a0c280c340d370d3b0e36363736360f
-
-Base64('base64digits...').forEach(function(x){s+=("0"+x.toString(16)).slice(-2);}) // Append decoded hex digits to s
-
-*/
-
-/* Only saves a single phrase with three synth tracks and 13 beat tracks.
-*/
-var saveSongLK0 = function () {
-  var pattern=[];
-  var synthParts=[];
-
-  // Over each part...
-  Sheet0.phrase(0).parts.map(function (part) {
-    var byte=0;
-    if (part.playable instanceof Synthesizer) synthParts.push(part); // Keep track of synth parts.
-    part.elementTicks.map(function (te, i) {
-      byte = (byte >> 1) + ("." == te.innerText ? 0 : 128);
-      if (7==i%8) {
-        pattern.push(byte);
-        byte=0;
-      }
-    });
-  });
-
-  // The synth part's tick keys
-  synthParts.map(function (part) {
-    for (var i=0; i<part.tickLength; ++i) {
-      pattern.push(part.key(i))
-    }
-  });
-
-  window.history.replaceState("ohhai", "Digital Audio Workstation", document.location.href.split('?')[0] + '?'  + Base64(pattern));
-}
-
-/* Only restores a single phrase with three synth tracks and 13 beat tracks.
-*/
-var restoreSongLK0 = function (keyboard, drumKit) {
-  var gs = new GetStringBase64();
-
-  if (320 != gs.length()) {
-    DB("Not LK0");
-    return false;
-  }
-
-  DB("LK0 Creating default phrase...");
-
-  // Create a phrase with 4 measures, 4 beats per measure, and 4 ticks per beat.
-  var phrase = new Phrase("Phrase", 4, 4, 4, keyboard);
-  var phraseRef = new PhraseReference(phrase);
-  Sheet0.add(phraseRef);
-
-  // Add synth parts to the phrase
-  phrase.createPart(Synthesizer1);
-  phrase.createPart(Synthesizer2);
-  phrase.createPart(Synthesizer3);
-
-  for (var n=0; n<drumKit.length; ++n) { phrase.createPartFixed(drumKit, n) }
-
-  DB("Scanning phrase via GET string...");
-
-  var synthParts=[];
-  var bits = gs.nextBools(1024);
-
-  phrase.parts.map(function (part) {
-    if (part.playable instanceof Synthesizer) synthParts.push(part); // Keep part of synth parts.
-    part.elementTicks.map(function (te, i) {
-      te.innerText = bits.shift() ? "X" : "."; // Bits encoded big endian.
-    });
-  });
-
-  synthParts.map(function (part) {
-    for (var i=0; i<part.tickLength; ++i) {
-      part.setKey(i, gs.nextByte());
-    }
-  });
-}
-
-
-
-
 /******************************************************************************
   TickerTimer - Manage ticks and time
 
@@ -2454,7 +1866,7 @@ var TickerTimer = (function (ctx) {
       tickCue = -1;
       time = now;
     } else if (now + lead <= time) { // Buffer full, skip rendering
-      ElementById("info").innerText = Trunc2(time-now);
+      //ElementById("info").innerText = Trunc2(time-now);
       return false;
     } else { // Normal running, next tick and inc time
       ++tick;
@@ -2463,7 +1875,7 @@ var TickerTimer = (function (ctx) {
       if (time < now) { time = now; } // Reset time if we fell behind now
     }
     // Return processing details/instructions: "Generate sound at 'time' from notes at 'tick'"
-    ElementById("info").innerText = Trunc2(time-now);
+    //ElementById("info").innerText = Trunc2(time-now);
     return [tick, time];
   };
 
@@ -2526,14 +1938,13 @@ var Sheet = function (id, tickCount, tickertimer) {
   let element = ElementById(id);
   let children = element.children;
   let knobs = element.previousElementSibling;
-  let ticks = []; // The row of ticks [ [header [parts]] ... ]
+  let columns = []; // Array of columns [ [header part ... ] ... ]
   let parts = []; // List of all Part objects created.  Their elements will be scattered about the tick.
   let tickLastRender = 0;
   let markedTick = null;
 
   var self = function () { };
   self.element = function () { return element; }
-  self.tick = function (i) { return ticks[i]; }
   self.partAdd = function (p) { parts.push(p); return self; }
 
   // Get list of Parts that lay on this tick.
@@ -2547,7 +1958,7 @@ var Sheet = function (id, tickCount, tickertimer) {
     // Reset Phrase tick header highlights.
     let [start, end] = self.getRange();
     for (var i=0; i < tickCount; i++) {
-      ticks[i].firstChild.style.backgroundColor = (i<start || end<i) ? "#444" : "";
+      columns[i].firstChild.style.backgroundColor = (i<start || end<i) ? "#444" : "";
     }
   }
   self.getRange = function () { return tickertimer.getRange(); }
@@ -2592,7 +2003,6 @@ var Sheet = function (id, tickCount, tickertimer) {
     let tickwidth = tickRight - tickLeft;
 
     let userScrolledWin = winTicksLast.cmp(visible);
-    //let ticksFitInWin = winwidth < tickwidth;
     let ticksInWin = visible[0]<=tickLeft && tickRight <=visible[1];
 
     if (!ticksInWin) {
@@ -2609,10 +2019,8 @@ var Sheet = function (id, tickCount, tickertimer) {
       let newWinLeft = undefined;
       if (1 == state) {
         newWinLeft = Max( tick-visibleTickCount/2, self.getRange()[0] );
-        //element.scrollLeft = self.tickWidth() * Max(tick-visibleTickCount/2, self.getRange()[0] );
       } else if (2 == state) {
         newWinLeft = Max( tick-fixedOffset, self.getRange()[0] );
-        //element.scrollLeft = self.tickWidth() * Max(tick-fixedOffset, self.getRange()[0] );
       }
 
       //adjust newWinLeft so right side of window is at right tick
@@ -2643,36 +2051,46 @@ var Sheet = function (id, tickCount, tickertimer) {
 
   // Create the tick columns and the top row tick marks. Part div's will be inserted/removed later.
   // [ [[0]] [[1]] ... ]
-  for (var row=0; row < tickCount; row++) {
-    let tick = CreateAppendChild('div', element); // Create the tick column
-    ticks.push(tick); // Keep track of the tick columns
-    let header = CreateAppendChild('p', tick, (Floor(row/8) % 10)); // Add the tick header
+  var lastHoverTick = 0;
+  var hoverState = 0;
+  RangeForEach(tickCount, (tick) => {
+    let column = CreateAppendChild('div', element); // Create the tick column
+    columns.push(column); // Keep track of the column
+    let label = Floor(tick/8) % 10;
+    let header = CreateAppendChild('p', column, label); // Add the tick header
 
     // Hovering will play all ticks in each part.
-    header.onmouseover = function (tick) {
+    header.onmouseover = function () {
+      if (tick == lastHoverTick) { hoverState=0; header.innerText = "*"; }
+      else if (tick < lastHoverTick) { hoverState=-1; header.innerText = "<"; }
+      else { hoverState=1; header.innerText = ">"; }
+      lastHoverTick = tick;
       if (brushToPlay()) { self.play(tick, 0); }
-    }.bind(null, row);
+    };
+    header.onmouseleave = function () {
+      header.innerText = label;
+    }
 
-    header.onmousedown = function (idx, e) { // Handle updating sheet's start/end playback ticks and repeat marker
-      if (e.button==2) { self.setEnd(idx); }
-      else if (e.button==1 || (e.button==0 && e.metaKey)) {
+    header.onmousedown = function (e) { // Handle updating sheet's start/end playback ticks and repeat marker
+      if (hoverState==1) { self.setEnd(tick); }
+      else if (hoverState==0) {
         // Handle marked tick in phrase sheet's header
-        if (markedTick != null) { ticks[markedTick].firstChild.style.color = ""; }
-        if (markedTick == idx) {
+        if (markedTick != null) { columns[markedTick].firstChild.style.color = ""; }
+        if (markedTick == tick) {
           markedTick = null;
         } else {
-          ticks[markedTick=idx].firstChild.style.color = "black";
+          columns[markedTick=tick].firstChild.style.color = "black";
         }
       } else {
-        self.setStart(idx);
+        self.setStart(tick);
       }
-    }.bind(null, row);
-  }
+    };
+  });
 
   // Add a brushToPlay toggle button
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
-    ()=>(ticks.forEach(t=>t.firstChild.style.color=null), ")("),
-    ()=>(ticks.forEach(t=>t.firstChild.style.color="inherit"), "()"));
+    ()=>(columns.forEach(t=>t.firstChild.style.color=null), ")("),
+    ()=>(columns.forEach(t=>t.firstChild.style.color="inherit"), "()"));
   brushToPlay.element().title="BRUSH PLAY";
 
   // Reset the TickerTimer state object
@@ -2735,16 +2153,10 @@ var RefPart = function (partObj, tickIdx, height) {
   // Grid tick header
   let headerTicks = CreateAppendChild('div', body);
 
-  for (let t=0; t<partObj.tickCount(); t++) {
-    let header =
-      0 == t%8 ? CreateAppendChild('p', headerTicks, "@") :
-      0 == t%4 ? CreateAppendChild('p', headerTicks, "+") :
-      0 == t%2 ? CreateAppendChild('p', headerTicks, "-") :
-                 CreateAppendChild('p', headerTicks, "-");
-    header.onmouseover = function (tick) {
-      if (brushToPlay()) { self.playTick(tick, 0); }
-    }.bind(null, t);
-  }
+ // Copy parent part's header
+  RangeForEach( partObj.tickCount(), (tick) =>
+    CreateAppendChild('p', headerTicks, partObj.headerTick(tick))
+      .onmouseover = () => brushToPlay() && self.playTick(tick, 0) );
 
   // Behavior
 
@@ -2796,7 +2208,6 @@ var RefPart = function (partObj, tickIdx, height) {
     self.playTick(gtick - tickIdx, time);
   }
   self.playTick = (tick, time) => {
-    //DB.post("RefPart", [tick, time]);
     partObj.playTick(tick, time);
   }
   self.focus = () => { // Raise/focus this element in sheet and reset others
@@ -2864,102 +2275,59 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
 
   RangeForEach(keyCount, (ii) => {
     let key = keyBeg + ii;
-    if (playable instanceof Synthesizer) {
+    // [ ]
+    let row = CreateInsertChild("div", grid); // A row: Container of label and ticks
+    let label = playable.name(key);
+    row.className = playable.rowClass(key);
+    row.title = playable.title(key);
+    // [ header ]
+    let header = CreateAppendChild("p", row, label);
+    // [ label [] ]
+    let notes = CreateAppendChild("div", row); // Row of ticks
 
-      let note = key%12;
-      let octave = Floor((key-12)/12); // MIDI octaves start at C-1 up to G9
-      let noteLabel = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][note];
-      let nat = 1 == noteLabel.length; // Natural notes are 1 char long
-      let label = nat ? noteLabel + (0==note?octave:"") : NBSP;
-
-      let row = CreateInsertChild("div", grid); // A row: Container of label and ticks
-      row.className = noteLabel.charAt(0) + (nat ? " nat" : " shp");
-      row.title = `${Trunc2(KeyFreq(key))}Hz  ${key}  ${noteLabel}${octave}`;
-
-      let header = CreateAppendChild("p", row, label); // White keys show note
-
-      header.onmousedown = function () {
-        // Record a note if a key label is pressed.
-        if (!sheetObj.isPaused() && listenerID ) {
-          let tick = timer.currentTick()-tickIdx;
-          row.children[1].children[tick].innerText = "*";
-        }
-        // Play the key's sound if recording or live audio is enabled
-        if (brushToPlay() || listenerID) {
-          MouseIsDown = true;
-          IBC([chanOut, key, 1.0]); // Notify listeners a key was pressed  ["piano1", 12, startPlaying]
-        }
-      };
-
-      header.onmouseover = function () { if (MouseIsDown) { IBC([chanOut, key, 1.0]); } };
-      header.onmouseup = function () {
-        if (brushToPlay() || listenerID) {
-          IBC([chanOut, key, 0]); // Notify listeners a key was released  ["piano1", 12, startPlaying]
-        }
-      };
-      header.onmouseleave = function () { if (MouseIsDown) {IBC([chanOut, key, 0]); } }
-
-      let notes = CreateAppendChild("div", row); // Row of ticks
-
-      for (let x=0; x<TickCount; x++) {
-        let tick = CreateAppendChild('p', notes, NBSP); // A tick
-        // Action Clicking
-        tick.onmousedown = function (e) {
-          let txt = e.target.innerText;
-          DragOverTickState = txt == NBSP ? 1 : 2;
-          MouseIsDown = true; // Set global state
-          e.target.innerText = txt == NBSP ? "*" : NBSP;
-        }
-        // Action Hovering/dragging
-        tick.onmouseover = function (e) {
-          if (MouseIsDown) {
-            e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) // Continue painting
-          } else if (e.target.innerText == "*") {
-            //playable.play(key, .5, 0); // Play it
-            IBC([chanOut, key, 1.0, 0, 0]);
-          }
-        };
+    header.onmousedown = function () {
+      MouseIsDown = true;
+      // Record a note if a key label is pressed.
+      if (!sheetObj.isPaused() && listenerID ) {
+        let tick = timer.currentTick()-tickIdx;
+        row.children[1].children[tick].innerText = "*";
       }
+      IBC([chanOut, key, 1.0]); // Send the note down to be plaed
+    };
+    header.onmouseup = function () {
+      IBC([chanOut, key, 0]); // Send the note up to stop playing
+    };
+    header.onmouseover = function () { if (MouseIsDown) { IBC([chanOut, key, 1.0]); } };
+    header.onmouseleave = function () { if (MouseIsDown) {IBC([chanOut, key, 0]); } }
 
-    } else {
-      let row = CreateInsertChild("div", grid); // A row: Container of label and ticks
-      row.className = "drumkit";
-      let header = CreateAppendChild("p", row, playable.name(key));
-
-      header.onmousedown = function () {
-        if (!sheetObj.isPaused(event) && listenerID ) {
-          let tick = timer.currentTick()-tickIdx;
-          row.children[1].children[tick].innerText = "*";
-        }
-        // Play the sound if recording or live audio is enabled
-        if (brushToPlay() || listenerID) { playable.play(key, 1, 0, 0); }
-
-      };
-
-      let notes = CreateAppendChild("div", row);
-      for (let x=0; x<TickCount; x++) {
-        let tick = CreateAppendChild('p', notes, NBSP);
-        // Action Clicking
-        tick.onmousedown = function (e) {
-          let txt = e.target.innerText;
-          DragOverTickState = txt == NBSP ? 1 : 2;
-          MouseIsDown = true; // Set global state
-          e.target.innerText = txt == NBSP ? "*" : NBSP;
-        }
-        // Action Hovering/dragging
-        tick.onmouseover = function (e) {
-          if (MouseIsDown) {
-            e.target.innerText = (DragOverTickState == 1 ? "*" : NBSP); // Continue painting
-          } else if (e.target.innerText != NBSP && brushToPlay()) {
-            playable.play(key, 1.0, 0); // Play it
-          }
-        };
+    // [ label [ tick ... ] ]
+    RangeForEach(TickCount, (x) => {
+      let tick = CreateAppendChild('p', notes, NBSP); // A tick
+      // Action Clicking
+      tick.onmousedown = function (e) {
+        MouseIsDown = true; // Set global state
+        let unsetp = e.target.innerText == NBSP;
+        DragOverTickState = unsetp ? 1 : 2;
+        e.target.innerText = unsetp ? "*" : NBSP;
+        // When drawing a new note, play full tick (all notes)
+        if (unsetp) { self.playTick(x, 0); }
       }
-    }
+      // Action Hovering/dragging
+      tick.onmouseover = function (e) {
+        if (MouseIsDown) {
+          e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) // Continue painting
+        } else if (e.target.innerText == "*" && brushToPlay()) {
+          IBC([chanOut, key, 1.0, 0, 0]);
+        }
+      };
+    });
+
   });
 
   // Midi channel in number button
   let midiIn = CreateAppendChild('p', knobs, chanIn);
+  midiIn.className = "actor";
+  midiIn.title = "CHANNEL IN";
   midiIn.onmousedown = (e) => {
     if (e.button == 0) { 0<chanIn && --chanIn; };
     if (e.button == 2) { chanIn<15 && ++chanIn; };
@@ -2977,8 +2345,7 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
     () => (headerTicks.style.color="inherit", "()"));
   brushToPlay.element().title="BRUSH PLAY";
 
-
-  // Clear all ticks knobs
+  // "Clear all ticks" button
   let clearKnob = CreateAppendChild('p', knobs, "X");
   clearKnob.className = "actor mustshift";
   clearKnob.title = "DELETE NOTES";
@@ -2997,20 +2364,20 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   recordKnob.className = "actor";
   recordKnob.title = "RECORD";
 
-  // Part listener handler: set a note and ???play it
+  // Part listener handler: set a note and play
   let listenerIBC = function (m) {
     let [chan, note, vol, when, sus] = m;
-    if (sheetObj.isPaused() || chan != chanIn) { return; }
-    let tick = timer.currentTick( timer.jiffy()/2 )-tickIdx; // Adjust by half a jiffy so performing can be near the beat/tick instead of on or after it as is done by the tick highlighting renderer.
-    if (vol) {
-      if (note < keyBeg || keyBeg+keyCount <= note) { return; }
+    if (chan != chanIn || note < keyBeg || keyBeg+keyCount <= note) { return; }
+    // Record note if sequence running
+    if (vol && !sheetObj.isPaused()) {
       // Rows are in reverse order, also compensate for the first supported MIDI note
       let row = keyCount - (note - keyBeg) - 1;
+      let tick = timer.currentTick( timer.jiffy()/2 )-tickIdx; // Adjust by half a jiffy so performing can be near the beat/tick instead of on or after it as is done by the tick highlighting renderer.
       grid.children[row].children[1].children[tick].innerText = "*";
-      // Play the note (?or just let whatever else is listening handle it)
-      playable.play(note, vol, 0, 0);
     }
-  }
+    // Broadcast the note
+    IBC([chanOut, note, vol, when, sus]);
+  };
 
   recordKnob.onmousedown = function () {
     if (recordKnob.style.background == "") {
@@ -3021,17 +2388,17 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
       IBC.delListener(listenerID);
       listenerID = null;
     }
-  }
-
+  };
 
   // Midi channel out number button
   let midiOut = CreateAppendChild('p', knobs, chanOut);
+  midiOut.className = "actor";
+  midiOut.title = "CHANNEL OUT";
   midiOut.onmousedown = (e) => {
     if (e.button == 0) { 0<chanOut && --chanOut; };
     if (e.button == 2) { chanOut<15 && ++chanOut; };
     midiOut.innerText = chanOut;
   };
-
 
   // Clicking title will raise it.  Dragging title will move it around the sheet
 
@@ -3044,11 +2411,8 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
     }
     if (e.button != 0) { return; }
     MouseIsDown = true; // Set global state
-
     self.focus();
-
     // Drag/Move part within sheet
-
     let tickHeight = sheet.firstChild.firstChild.scrollHeight+1;
     let tickWidth  = sheet.lastChild.offsetLeft / (sheet.childElementCount-1); // Tick width take average width of all ticks
     let leftMargin = sheet.offsetLeft-sheet.scrollLeft; // Account for element's margin and scrolled offset
@@ -3073,10 +2437,17 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
     }
   }
 
+  // The Object
+
   let self = function () { };
+  sheetObj.partAdd(self); // Add to parent sheet
+
   self.element = () => part;
   self.titleName = () => title.innerText;
   self.tickCount = () => TickCount;
+  self.headerTick = function (tick) {
+    return headerTicks.children[tick].innerText;
+  };
   self.sheet = () => sheetObj;
   self.startTick = function () { return tickIdx; }
 
@@ -3088,30 +2459,19 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
     self.playTick(gtick - tickIdx, time);
   }
 
-  let ticks = function (y) { return grid.children[y].children[1]; };
-
   self.playTick = function (tick, time) {
     if (tick < 0 || TickCount <= tick) {
       DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
       return;
     }
-    RangeForEach(keyCount, (i) => {
-      let row = ticks(i).children;
+    RangeForEach(keyCount, (y) => {
+      let row = grid.children[y].children[1].children;
       let note = row[tick];
       if (note.innerText == "*") {
-        let sustain = 0;
-        let next = tick + 1;
-        while (next < TickCount
-               && row[next].innerText == "-") {
-          ++sustain;
-          ++next;
-        }
-        // Send to IBC for those listening to chanOut a function to evlauate
-        if (playable instanceof Synthesizer) {
-          IBC([chanOut, keyBeg + keyCount-i-1, 1.0, time, sustain])
-        } else {
-          playable.play(keyBeg + keyCount-i-1, 1.0, time);
-        }
+        // Count subsequent "-" in grid for sustain
+        let sustain = RangeFilter( [tick+1, TickCount-1], (t)=>"-"==row[t].innerText ).length;
+        // Send note message to those listening on chanOut
+        IBC([chanOut, keyBeg + keyCount-y-1, 1.0, time, sustain])
       }
     });
   }
@@ -3120,7 +2480,6 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
     sheetObj.partsResetZ();
     part.style.zIndex = 1;
   }
-  sheetObj.partAdd(self);
 
   return self;
 } // Part
@@ -3159,17 +2518,6 @@ var setupControls = function (keyboard, sheet) {
       event.target.innerText = newBpm;
       TickerTimer.setBpm(newBpm);
     }
-  }
-
-  // TODO generalize input boxes
-  // Hitting enter will evaluate the box contents the pass to the callback
-  document.getElementById('freq').onkeydown = function (v) {
-    if (v.code == "Enter") {
-      let freq = parseFloat(v.target.innerText) || KeyFreq.freq();
-      KeyFreq.setFreqA0(v.target.innerText = freq);
-      v.preventDefault(); // Prevent form element from adding a newline
-    }
-    v.stopPropagation();
   }
 
   window.onmouseup = function () { MouseIsDown = false; }
@@ -3273,7 +2621,6 @@ var Synthesizer2;
 var Synthesizer3;
 var DragOverTickState = 1;
 var MouseIsDown = false; // It's nice to keep track of global mouse button state.  The window element will always catch this event and handle it.
-var midi = null;
 
 var Start = function () {
   DB.post("Start", DB.status());
@@ -3323,7 +2670,7 @@ var Start = function () {
   DB.post("Start", "Noises");
 
   // Load the audio asynchronously and create the default drumkit.
-  DrumKit0 = new Drumkit(ctx, "orange", 24, ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
+  DrumKit0 = new Drumkit(ctx, false, "orange", 24, ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
 
   Synthesizer0 = new Synthesizer(ctx, false, 1, Keyboard0, "#84f");
   Synthesizer1 = new Synthesizer(ctx, false, 2, Keyboard0, "#4f4");
@@ -3347,7 +2694,7 @@ var Start = function () {
 }; // Start
 
 
-// Await for user gesture then restart WebAudio
+// Wait for a user gesture which will unblock the audio backend.
 window.onload = function Main () {
   if (ctx.state == "suspended") {
     revealCenter("pauseicon", true)
@@ -3355,6 +2702,8 @@ window.onload = function Main () {
     setTimeout(Main, 200);
   } else {
     DB.post("Main", "Starting AudioContext!");
+    // Slowly disappear the pause icon then remove the clip region so it no
+    // longer looks like a play button.
     revealCenter("pauseicon", false)
     setTimeout( ()=>ElementById("pauseicon").style.clipPath="", 1100);
     Start();
@@ -3362,18 +2711,19 @@ window.onload = function Main () {
 };
 
 
-IBC.debug();
+//IBC.debug();
 
 //]]></script></body></html><!--
-* Synth listener that crashes (key out of bounds) denies
-  other synths from receiving.
-* Moving part to another tick broken when moved beyond the
-  last phrase grid column.
-* BPMs don't seem to do much beyond 150.  Need to optimize output process pipeline.
+* Synth listener that crashes (key out of bounds) denies other synths from receiving.
+* Moving part to another tick broken when moved beyond the last phrase grid column.
 * Auto extend sheet ticks
-* Synth select part button
 * copy/paste
 * resume plays note paused on even if restarted
-* volume
-* delete parts
-------------------------------------------------------------------------------/
+* volumes aren't consistent when playing, recording, processing
+* delete objects
+* separate synth freqs
+* song save
+* play tick when drawing (faster chord creation)
+* play range mark (left or righ) to depend on previous tick hovered from.  Initial hover sets replay marker.
+* sheet toggle view sub quarter ticks
+-->
