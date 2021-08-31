@@ -58,6 +58,9 @@ h1 {
   margin: 1px;
 }
 
+.hit { border:solid 1px black; background-color:blue; }
+.hit:hover { background-color:blue; }
+
 .actor:hover { border:solid 1px #0ff }
 .window > .actor:hover { border:solid 1px #0ff }
 

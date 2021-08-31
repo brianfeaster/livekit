@@ -623,16 +623,26 @@ var IBC = function () {
   // Private
   let _debug = false;
   let _id = 0;
-  let _listeners = []; // Array of [id, callback]
+  let _listeners = []; // Array of [id, callback, messaged?]
 
   // Public
 
   self = function (m) { self.broadcast(m); }
+
   // Send m to all the listeners
   self.broadcast = function (m) {
-    if (_debug) { DB(_listeners.length + "<-" + JSON.stringify(m)); }
-    _listeners.forEach( (f)=>f[1](m) );
+    let ls = _listeners.filter( (l)=>!l[2] ); // Listeners we haven't messaged yet
+
+    // Debug dump the message and the handler ID's who'll get it
+    if (_debug) { DB( ` ${ls.reduce( ((r,l) => r+=" "+l[0]), JSON.stringify(m)+" ->")}`); }
+
+    ls.forEach((f)=>{
+      f[2] = true; // Set handler messaged bool to prevent message cycles
+      f[1](m);
+      f[2] = false;
+    });
   }
+
   self.listeners = function () { return _listeners; }
   self.addListener = function (f) { _listeners.push([++_id, f]);  return _id; }
   self.delListener = function (id) {
@@ -884,7 +894,7 @@ var Destinations = (function (ctx) {
   let vol = 0.5;
 
   var fuse = ctx.createGain();
-  fuse.name = function () { return "mainFuse"; };
+  fuse.name = function () { return "ctx"; };
   fuse.input = function () { return fuse; };
   fuse.connect(ctx.destination);
   self.push(fuse);
@@ -912,7 +922,7 @@ var Destinations = (function (ctx) {
     // Create new fuse gain and connect to CTX
     fuse = self[0] = ctx.createGain();
     fuse.gain.value = oldVol;
-    fuse.name = function () { return "mainFuseNew"; };
+    fuse.name = function () { return "ctx"; };
     fuse.input = function () { return fuse; };
     fuse.connect(ctx.destination);
 
@@ -1045,22 +1055,24 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   let audioBuffers = new AudioBuffers(ctx, filenames)
   let bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
   var destinations = Array(audioBuffers.length).fill(0); // Default destination of each sound to default
+  var volumes = Array(audioBuffers.length).fill(1.0); // Default volumes
   var _ibcId = false;
-  var chanIn = 0;
+  var chanIn = 3;
 
-  // Element
-
+  // Element []
   var _element = document.createElement('div'); // [ ]
+  _element.className = "windowmini";
   ElementById('drums').appendChild(_element);
 
-  _element.className = "windowmini";
-
+  // [Drumkit1]
   var _nameDOM = CreateAppendChild('div', _element); // [ Synth1 ]
   _nameDOM.style.background="";
   _nameDOM.innerText = _name;
 
+  // [Drumkit1 []]
   var knobs = CreateAppendChild('div', _element); // [ Synth1 [ ] ]
 
+  // [Drumkit1 [3]]
   let midi = CreateAppendChild('p', knobs, chanIn);
   midi.title = "CHANNEL IN";
   midi.className="actor";
@@ -1070,14 +1082,39 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
     midi.innerText = chanIn;
   };
 
+  // [Drumkit1 [3]]
+  // [            ]
+  let buttons = CreateAppendChild('div', _element);
+  buttons.className = "knobs";
+
+  // [Drumkit1 [3]  ]
+  // [ctx [vol] drum]
+  // ...
+  RangeForEach(audioBuffers.length, (k)=> {
+    k = audioBuffers.length - k - 1;
+    let _output = CreateAppendChild('p', buttons, Destinations.name(destinations[k]));
+    _output.className = "volume"; // "actor"
+    _output.innerText = Destinations.name(destinations[k]);
+    _output.onmousedown = function (event) {
+      if (++destinations[k] == Destinations.length) { destinations[k] = 0; }
+      _output.innerText = Destinations.name(destinations[k]);
+    };
+
+    let _vol = CreateAppendChild('p', buttons, "[vol]");
+    _vol.className = "volume"
+    _vol.onmousedown = (event)=>Slider(event, volumes[k], (newVol)=>volumes[k]=newVol);
+
+    let drum = CreateAppendChild('p', buttons, audioBuffers.fileNameCompact(k));
+    drum.className = "hit";
+    drum.onmousedown = ()=> self.play(k+keyStart, 1.0, 0);
+
+    CreateAppendChild('br', buttons);
+  });
+
   // Behavior
 
-  // Drumkit message handler:  play/stop a note
-  let listenerIBC = function (m) {
-    let [chan, note, vol, time, sus] = m;
-    if (chan != chanIn) { return; }
-    self.play(note, vol, time);
-  };
+  // Drumkit message handler:  play/stop a note [chan note vol time sus]
+  let listenerIBC = (m) => m[0]==chanIn && self.play(m[1], m[2], m[3]);
 
   (_nameDOM.onmousedown = function () {
     if (_nameDOM.style.background == "") {
@@ -1098,6 +1135,7 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   this.color = color
   this.play = function (pad, vol, when) {
     let key = pad - keyStart;
+    vol *= volumes[key];
     var audioBuffer = audioBuffers.audioBuffer(key);
     if (!audioBuffer) {
       DB.error(`Drumkit.play offset ${pad} expect ${keyStart}..${keyStart+this.length-1}`);
@@ -1217,7 +1255,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _waveformIdx = type;
   var _filterIdx = 0;
   var _volume = 0.5;
-  var chanIn = 0;
+  var chanIn = 4;
   var _mouseMoved;
   var _freq=27.5;
 
@@ -1345,14 +1383,14 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   // [ [Synth1] [-] ]
   // [ [sine]       ]
   // [ [A][S][R]    ]
-  // [ [main]       ]
+  // [ [VOL][ctx]   ]
   var _output = CreateAppendChild('p', _body);
   _output.style.position = "relative"
   _output.className = "volume"
-  _output.innerText = "[main]"
+  _output.innerText = Destinations.name(_filterIdx);
   _output.onmousedown = function (event) {
     if (++_filterIdx == Destinations.length) { _filterIdx = 0; }
-    _output.innerText = Destinations.name(_filterIdx); // ["main", "delay","lowpass"][_filterIdx];
+    _output.innerText = Destinations.name(_filterIdx);
   }
 
   var _play = function (key, vol, when, sustain) {
@@ -1661,7 +1699,7 @@ var Delay = (function (ctx, destinations) {
 ******************************************************************************/
 var Lowpass = function (ctx, destinations) {
   //// Local
-  let _name = "lowpass";
+  let _name = "lp";
   let _f = .9; // Attack tiem in seconds.
   let _q = 0.0; // Release time in seconds for both the filter and gain.
   let _destId = 0;
@@ -1933,6 +1971,10 @@ var TickerTimer = (function (ctx) {
 /******************************************************************************
   Sheet - Manage parts on a dynamic phrase/sheet.
 
+  METHODS
+
+    .playAllTicks(tick, time)  Play all notes in each part on this tick.
+
 ******************************************************************************/
 var Sheet = function (id, tickCount, tickertimer) {
   let element = ElementById(id);
@@ -1943,19 +1985,16 @@ var Sheet = function (id, tickCount, tickertimer) {
   let tickLastRender = 0;
   let markedTick = null;
 
+  // Object
+
   var self = function () { };
   self.element = function () { return element; }
   self.partAdd = function (p) { parts.push(p); return self; }
 
-  // Get list of Parts that lay on this tick.
-  self.partsOnTick = function (tick) {
-    return parts.filter( p => p.isOnTick(tick) );
-  }
   self.partsResetZ = function () {
     parts.forEach( p => p.element().style.zIndex="" );
   }
   self.refreshHeader = function () {
-    // Reset Phrase tick header highlights.
     let [start, end] = self.getRange();
     for (var i=0; i < tickCount; i++) {
       columns[i].firstChild.style.backgroundColor = (i<start || end<i) ? "#444" : "";
@@ -1964,10 +2003,10 @@ var Sheet = function (id, tickCount, tickertimer) {
   self.getRange = function () { return tickertimer.getRange(); }
   self.setStart = function (i) { tickertimer.setStart(i); self.refreshHeader(); return self; }
   self.setEnd = function (i) { tickertimer.setEnd(i); self.refreshHeader(); return self; }
-  self.play = function (tick, time) {
-    self.partsOnTick(tick).forEach( (part) => {
-      part.play(tick, time);
-    });
+  self.playAllTicks = function (tick, time) {
+    parts
+      .filter( (p) => p.isOnTick(tick) ) // Get list of Parts that lay on this tick.
+      .forEach( (p) => p.play(tick, time) ); // Play its notes along its tick
   }
 
   self.tickerTimer = () => tickertimer;
@@ -1988,12 +2027,11 @@ var Sheet = function (id, tickCount, tickertimer) {
       
   };
 
+  // Scroll (maybe) the grid so current tick is visible
   let state = 1; // 0:reset  1:center  2:fixed  3:stick
   let winTicksLast = [0, 0]; // DEBUGGING mark left/right visible ticks in sheet window
   let fixedOffset = 0;
   //let markersLast = [0, 0];
-
-  // Scroll (maybe) the grid so current tick is visible
   self.render = function (tick) {
 
     let visible = self.winTicks();
@@ -2065,7 +2103,7 @@ var Sheet = function (id, tickCount, tickertimer) {
       else if (tick < lastHoverTick) { hoverState=-1; header.innerText = "<"; }
       else { hoverState=1; header.innerText = ">"; }
       lastHoverTick = tick;
-      if (brushToPlay()) { self.play(tick, 0); }
+      if (brushToPlay()) { self.playAllTicks(tick, 0); }
     };
     header.onmouseleave = function () {
       header.innerText = label;
@@ -2156,7 +2194,7 @@ var RefPart = function (partObj, tickIdx, height) {
  // Copy parent part's header
   RangeForEach( partObj.tickCount(), (tick) =>
     CreateAppendChild('p', headerTicks, partObj.headerTick(tick))
-      .onmouseover = () => brushToPlay() && self.playTick(tick, 0) );
+      .onmouseover = () => brushToPlay() && partObj.playTick(tick, 0) );
 
   // Behavior
 
@@ -2205,10 +2243,7 @@ var RefPart = function (partObj, tickIdx, height) {
     return tickIdx <= t && t < tickIdx + partObj.tickCount();
   }
   self.play = (gtick, time) => {
-    self.playTick(gtick - tickIdx, time);
-  }
-  self.playTick = (tick, time) => {
-    partObj.playTick(tick, time);
+    partObj.playTick(gtick - tickIdx, time);
   }
   self.focus = () => { // Raise/focus this element in sheet and reset others
     sheet.partsResetZ();
@@ -2225,12 +2260,14 @@ var RefPart = function (partObj, tickIdx, height) {
 /******************************************************************************
   Part
 
-  Model a musical part which currently is a drawable grid of notes sent to a
-  synth/piano or drumkit.
+  Model a musical part which currently is a drawable grid of notes that are
+  broadcast to anything listening on it's output channel.  It's basically a
+  MIDI device.  It also has an input listener for similar note messages.
+
 ******************************************************************************/
 var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, playable) {
-  let chanIn  = 1;
-  let chanOut = 0;
+  let chanIn  = 0;
+  let chanOut = playable instanceof Synthesizer ? 4 : 3;
   // Consider parent
   let sheet = sheetObj.element(); // Parent object's element
   let timer = sheetObj.tickerTimer();
@@ -2272,6 +2309,8 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   // |  * |  * |    |  **|
   // |    |    |****| *  |
   let grid = CreateAppendChild('div', body);
+  let listenerID = null;
+  let recording = false;
 
   RangeForEach(keyCount, (ii) => {
     let key = keyBeg + ii;
@@ -2287,18 +2326,16 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
 
     header.onmousedown = function () {
       MouseIsDown = true;
-      // Record a note if a key label is pressed.
-      if (!sheetObj.isPaused() && listenerID ) {
-        let tick = timer.currentTick()-tickIdx;
-        row.children[1].children[tick].innerText = "*";
+      if (!sheetObj.isPaused() && recording ) { // Save note if label clicked and recording enabled
+        row.children[1]
+          .children[timer.currentTick() - tickIdx]
+          .innerText = "*";
       }
-      IBC([chanOut, key, 1.0]); // Send the note down to be plaed
+      IBC([chanOut, key, 1.0]); // Broadcast note-down
     };
-    header.onmouseup = function () {
-      IBC([chanOut, key, 0]); // Send the note up to stop playing
-    };
-    header.onmouseover = function () { if (MouseIsDown) { IBC([chanOut, key, 1.0]); } };
-    header.onmouseleave = function () { if (MouseIsDown) {IBC([chanOut, key, 0]); } }
+    header.onmouseup = ()=> IBC([chanOut, key, 0]); // Broadcast note-up
+    header.onmouseover = ()=> MouseIsDown && IBC([chanOut, key, 1.0]);
+    header.onmouseleave = ()=> MouseIsDown && IBC([chanOut, key, 0]);
 
     // [ label [ tick ... ] ]
     RangeForEach(TickCount, (x) => {
@@ -2321,7 +2358,21 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
         }
       };
     });
+  });
 
+  // Part channel in listener handler: Like clicking a row label
+  IBC.addListener( (m) => {
+    let [chan, note, vol, when, sus] = m;
+    if (chan != chanIn || note < keyBeg || keyBeg+keyCount <= note) { return; }
+    // Record note if key-down, not paused, and recording enabled
+    if (recording && vol && !sheetObj.isPaused()) {
+      // Rows are in reverse order, also compensate for the first supported MIDI note
+      let row = keyCount - (note - keyBeg) - 1;
+      let tick = timer.currentTick( timer.jiffy()/2 )-tickIdx; // Adjust by half a jiffy so performing can be near the beat/tick instead of on or after it as is done by the tick highlighting renderer.
+      grid.children[row].children[1].children[tick].innerText = "*";
+    }
+    // Broadcast the note
+    IBC([chanOut, note, vol, when, sus]);
   });
 
   // Midi channel in number button
@@ -2359,34 +2410,17 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   }
 
   // Toggle Recording
-  let listenerID = null;
   let recordKnob = CreateAppendChild('p', knobs, "#");
   recordKnob.className = "actor";
   recordKnob.title = "RECORD";
 
-  // Part listener handler: set a note and play
-  let listenerIBC = function (m) {
-    let [chan, note, vol, when, sus] = m;
-    if (chan != chanIn || note < keyBeg || keyBeg+keyCount <= note) { return; }
-    // Record note if sequence running
-    if (vol && !sheetObj.isPaused()) {
-      // Rows are in reverse order, also compensate for the first supported MIDI note
-      let row = keyCount - (note - keyBeg) - 1;
-      let tick = timer.currentTick( timer.jiffy()/2 )-tickIdx; // Adjust by half a jiffy so performing can be near the beat/tick instead of on or after it as is done by the tick highlighting renderer.
-      grid.children[row].children[1].children[tick].innerText = "*";
-    }
-    // Broadcast the note
-    IBC([chanOut, note, vol, when, sus]);
-  };
-
   recordKnob.onmousedown = function () {
     if (recordKnob.style.background == "") {
       recordKnob.style.background="#800";
-      listenerID = IBC.addListener(listenerIBC);
+      recording = true;
     } else {
       recordKnob.style.background = "";
-      IBC.delListener(listenerID);
-      listenerID = null;
+      recording = false;
     }
   };
 
@@ -2455,9 +2489,7 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
     return tickIdx <= t && t < tickIdx + TickCount;
   }
 
-  self.play = function (gtick, time) {
-    self.playTick(gtick - tickIdx, time);
-  }
+  self.play = function (gtick, time) { self.playTick(gtick - tickIdx, time); }
 
   self.playTick = function (tick, time) {
     if (tick < 0 || TickCount <= tick) {
@@ -2565,7 +2597,7 @@ var eventLoops = function (sheet) {
   (function processHandlerLoop () {
     let ticktime = TickerTimer.nextTick(); // [tick to process, time audio is written/buffered]
     if (ticktime !== false) {
-      sheet.play.apply(null, ticktime);
+      sheet.playAllTicks.apply(null, ticktime);
       setTimeout(processHandlerLoop, 1000 * TickerTimer.jiffy()/4); // Fill buffer within 4 jiffies
       //DB.post("event loop ctx", "!");
     } else if (!TickerTimer.isPaused()) {
@@ -2719,11 +2751,7 @@ window.onload = function Main () {
 * Auto extend sheet ticks
 * copy/paste
 * resume plays note paused on even if restarted
-* volumes aren't consistent when playing, recording, processing
 * delete objects
-* separate synth freqs
 * song save
-* play tick when drawing (faster chord creation)
-* play range mark (left or righ) to depend on previous tick hovered from.  Initial hover sets replay marker.
 * sheet toggle view sub quarter ticks
 -->
