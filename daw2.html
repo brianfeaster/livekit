@@ -19,7 +19,7 @@
 <h1>Liveka7 Digital Audio Workstation 2<span style="font-family:monospace">&#x03b1;</span></h1>
 <hr/>
 <div id="headerNav" class="headerNav">
- <a id="info" style="background-color:#22f;width:8em;text-align:left;display:inline-block"></a>
+ <!--a id="info" style="background-color:#22f;width:10em;text-align:left;display:inline-block">info</a-->
  <a onmousedown="window.location.href=window.location.pathname+''">Clear</a>
  <a onmousedown="popupToggle('pauseicon')">Kitteh</a>
  <a href="https://www.w3.org/TR/webaudio/">WebAudio</a>
@@ -28,9 +28,9 @@
 <div class="window">
   <div>SHEET</div>
   <div class="knobs">
-    <input id="volume" type="range" max="100" value="50" min="0" style="width:6ch" title="VOLUME"/>
-    <!--p id="mainVolume">vol</p-->
-    <p id="bpm" class="actor" title="BPM" contenteditable="true">60</p>
+    <!--input id="volume" type="range" max="100" value="50" min="0" style="width:6ch" title="VOLUME"/-->
+    <p id="mainVolume" title="MAIN VOLUME">VOL</p>
+    <p id="bpm" title="BEATS PER MINUTE">&nbsp;BPM&nbsp;</p>
     <p class="actor reset" title="PLAY" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
     <p id="pause" class="actor pause" title="PAUSE" onmousedown="TickerTimer.pause(this)">||</p>
     <div id="addpartdrum" class="addpart">
@@ -51,12 +51,12 @@
       </div>
       <p class="actor" title="NEW DRUM PART">+</p>
     </div>
-    <!-- p style="font-weight:bold; color:black; background:yellow; border:dashed thick red" class="actor" title="THE DROP (USE SPARINGLY)">&gt!}=-DrOp-={!&lt;</p -->
+    <!--p style="border-radius:40%; font-weight:bold; color:black; background:yellow; border:dashed thick red" class="actor" title="THE DROP (USE SPARINGLY)">&gt!}=-<b style="background-color:red"> DrOp </b>-={!&lt;</p-->
   </div>
   <div id="sheet" class="sheet"></div>
 </div>
 
-<div class="window">
+<div class="window" style="float:left;margin:1pc;">
   <div>DRUMS</div>
   <div class="knobs"><p id="adddrum" class="actor">+</p></div>
   <div id="drums"></div>
@@ -80,9 +80,8 @@
 <div class="window">
   <div>KEYBOARD</div>
   <div class="knobs"></div>
-  <div>
+  <div style="max-width:calc(100vw - 2ch); overflow:scroll">
     <div id="piano1" class="piano"></div>
-    <div id="piano2" class="piano"></div>
   </div>
 </div>
 
@@ -93,8 +92,100 @@
 "use strict"
 
 /******************************************************************************
+  Debug message console and error checking
+
+  DOM requirements::
+    <p id="DB"></p>        -- If nonexistent, the DB object will revert to using the browser's console.
+
+  Usage::
+    DB("string")           -- Send string to info window.  Behaves like a pre element.
+    DB.log("string")       -- Send string to console.log.
+    DB.error("string")     -- Send string to console.log.
+    DB.post(type, string)  -- Send string to info window band keeps track of type.  Subsequent typed messages replace the last.
+    DB.post(type, string)  -- Send string to info window band keeps track of type.  Subsequent typed messages replace the last.
+    DB.clear()             -- Empty the entire DB element.
+    DB.check(expr, string) -- If expr is false, send string to console.  status() will then always return false.
+    DB.status()            -- Returns false if check ever failed.
+******************************************************************************/
+var DB = (function () {
+  var consoleElement = document.getElementById('DB');
+  var self;
+  var status = true;
+  var shouldNewline = true; // Want to prepend a newline when the last message was plain text.
+  var lastPostType = false, lastPost = false;
+  var repeatCount = 1;
+
+  var setStyles = function (e) {
+    return;
+    e.style.border = "solid 1px green";
+    e.style.whiteSpace = "pre";
+    e.style.overflow = "auto";
+    e.style.maxHeight = "20em";
+  }
+
+  // Create the instance which is a function.  Also create the clear function.
+  if (!consoleElement) {
+    self = function (s) { console.log(s); return s; }
+    self.log = self;
+    self.error = function (s) { console.error(s);}
+    self.post  = function (t, s) { // For the console, only the first post type is displayed.
+      console.log("[" + t + "]" + s);
+    }
+    self.clear = function () { lastPostType = false; }
+  } else {
+    setStyles(consoleElement);
+    self = function (s) {
+      if (lastPost == s) {
+       ++repeatCount;
+        s = repeatCount + s;
+      } else {
+        repeatCount = 1;
+      }
+      consoleElement.innerHTML += (shouldNewline ? "" : "\n") + s;
+      consoleElement.scrollTop = consoleElement.scrollHeight;
+      shouldNewline = lastPostType = false;
+    }
+    self.log = function (s) { console.log(s); }
+    self.error = function (s) { console.error(s); }
+    self.post = function (t, s) {
+      if (t == lastPostType) {
+        if (lastPost == s) { ++repeatCount; }
+        consoleElement.lastChild.innerText = (1<repeatCount ? repeatCount : "") + "[" + t + "]" + s;
+      } else {
+        consoleElement.appendChild(document.createElement('p')).innerText = "[" + t + "]" + s;
+        consoleElement.scrollTop = consoleElement.scrollHeight;
+        lastPostType = t;
+        repeatCount = 1;
+      }
+      lastPost = s;
+      shouldNewline = true;
+      return s;
+    }
+    self.clear = function () {
+       consoleElement.innerHTML = "";
+      shouldNewline = lastPostType = true;
+    }
+  }
+
+  self.check = function (expr, msg) {
+    status = status && expr;
+    return expr || self.error(msg) && false;
+  }
+
+  self.status = function () { return status; }
+
+  return self;
+})(); // DB
+
+
+
+/******************************************************************************
   Useful aliases and objects
 ******************************************************************************/
+var ctx = (window.AudioContext && new window.AudioContext()) ||
+          (window.webkitAudioContext && new window.webkitAudioContext());
+DB.check(ctx, "Missing window.AudioContext.  Use another browser.");
+
 var NBSP = "\u00a0";
 var Floor = Math.floor;
 var Round = Math.round;
@@ -105,6 +196,7 @@ var Rnd   = Math.random;
 var Max   = Math.max;
 var Min   = Math.min;
 var Mod   = function (n,d) { return n - d * Floor(n/d); };
+var Trunc1 = function (f) { return f.toFixed(1); }
 var Trunc2 = function (f) { return f.toFixed(2); }
 var ElementById = function(id) { return document.getElementById(id); };
 
@@ -243,99 +335,131 @@ var AppendNewToggleActor = function (parent, state, className, callbackTrue, cal
 
 
 /******************************************************************************
-  Debug message console and error checking
+  Create a slider object in the DOM.
 
-  DOM requirements::
-    <p id="DB"></p>        -- If nonexistent, the DB object will revert to using the browser's console.
+  There will be one slider object that when activated will adjust wherever the
+  mouse moves over it be set to the passed in value.  A call back will be
+  provided that will be set to the final value.
 
-  Usage::
-    DB("string")           -- Send string to info window.  Behaves like a pre element.
-    DB.log("string")       -- Send string to console.log.
-    DB.error("string")     -- Send string to console.log.
-    DB.post(type, string)  -- Send string to info window band keeps track of type.  Subsequent typed messages replace the last.
-    DB.post(type, string)  -- Send string to info window band keeps track of type.  Subsequent typed messages replace the last.
-    DB.clear()             -- Empty the entire DB element.
-    DB.check(expr, string) -- If expr is false, send string to console.  status() will then always return false.
-    DB.status()            -- Returns false if check ever failed.
+  USAGE::
+    var slider = new DOMSlider();
+
+  CONSTRUCTOR PARAMETERS::
+    na             N/A
+
+  METHODS::
+    default(e, i, c)  Activate slider in the DOM at the mouse position
+                      using event e, initial value i, and setter
+                      callback c.
 ******************************************************************************/
-var DB = (function () {
-  var consoleElement = document.getElementById('DB');
-  var self;
-  var status = true;
-  var shouldNewline = true; // Want to prepend a newline when the last message was plain text.
-  var lastPostType = false, lastPost = false;
-  var repeatCount = 1;
-
-  var setStyles = function (e) {
-    return;
-    e.style.border = "solid 1px green";
-    e.style.whiteSpace = "pre";
-    e.style.overflow = "auto";
-    e.style.maxHeight = "20em";
+var Slider = function () {
+  var callback;
+  var mouseMoved = false,  mouseUp = false;
+  var e = CreateAppendChild('p', document.body);
+  e.style.position = "absolute"
+  e.className = "knobs"
+  e.style.width="13ch";
+  e.style.border="solid 1px #066";
+  e.innerHTML = "<p>|-----|-----|\n|-----|-----|</p><div>0</div>";
+  e.style.display="none";
+  e.style.background="black";
+  e.style.zIndex=2;
+  e.children[0].onmousemove = function (event) {
+    mouseMoved = true;
+    var box = event.target.getBoundingClientRect();
+    var val = 1.0-((event.clientX - box.left) / box.width + .005)
+    if (val < 0.0) val = 0.0;
+    if (1.0 < val) val = 1.0;
+    event.target.parentElement.children[1].innerText = val.toFixed(2);
+    callback(val);
   }
-
-  // Create the instance which is a function.  Also create the clear function.
-  if (!consoleElement) {
-    self = function (s) { console.log(s); return s; }
-    self.log = self;
-    self.error = function (s) { console.error(s);}
-    self.post  = function (t, s) { // For the console, only the first post type is displayed.
-      console.log("[" + t + "]" + s);
-    }
-    self.clear = function () { lastPostType = false; }
-  } else {
-    setStyles(consoleElement);
-    self = function (s) {
-      if (lastPost == s) {
-       ++repeatCount;
-        s = repeatCount + s;
-      } else {
-        repeatCount = 1;
-      }
-      consoleElement.innerHTML += (shouldNewline ? "" : "\n") + s;
-      consoleElement.scrollTop = consoleElement.scrollHeight;
-      shouldNewline = lastPostType = false;
-    }
-    self.log = function (s) { console.log(s); }
-    self.error = function (s) { console.error(s); }
-    self.post = function (t, s) {
-      if (t == lastPostType) {
-        if (lastPost == s) { ++repeatCount; }
-        consoleElement.lastChild.innerText = (1<repeatCount ? repeatCount : "") + "[" + t + "]" + s;
-      } else {
-        consoleElement.appendChild(document.createElement('p')).innerText = "[" + t + "]" + s;
-        consoleElement.scrollTop = consoleElement.scrollHeight;
-        lastPostType = t;
-        repeatCount = 1;
-      }
-      lastPost = s;
-      shouldNewline = true;
-      return s;
-    }
-    self.clear = function () {
-       consoleElement.innerHTML = "";
-      shouldNewline = lastPostType = true;
-    }
+  e.children[0].onmouseleave = function () {
+    if (mouseMoved) { e.style.display = "none"; }
   }
-
-  self.check = function (expr, msg) {
-    status = status && expr;
-    return expr || self.error(msg) && false;
+  e.onmousedown = function (event) { event.stopPropagation(); }
+  e.onmouseup = function (event) { // Handle clicking, releasing, then moving
+    if (mouseMoved || mouseUp) { e.style.display="none"; }
+    event.stopPropagation();
+    mouseUp = true
   }
-
-  self.status = function () { return status; }
-
-  return self;
-})(); // DB
-
+  return function(event, val, cb) {
+    callback = cb;
+    e.children[1].innerText = val.toFixed(2);
+    mouseMoved = false;
+    mouseUp = false;
+    e.style.display="block";
+    e.style.top = Floor(event.pageY - e.clientHeight/3.0) +"px" ;
+    e.style.left = Floor(event.pageX - e.clientWidth*(0.995-val)) +"px" ;
+  }
+}() // DOMSlider
 
 
 /******************************************************************************
-  Useful DAW objects
+  Knobify - Give an element a "knob" behavior
+
+  A knob reveal its value by hovering and adjust its value with the wheel.
+
+  USAGE::
+    <p id="myknob">volume</p>
+    Knobify("myknob", v=>{DB(v); return Round(v);}, 10, 0, 100)
+
+    elementId      - Element's id to knobify.
+    callback       - Function that receives updated values and returns value
+                     to display (handles rounding, truncating)
+    val            - Initial value (default max)
+    min            - min adjustable value (default 0)
+    max            - max adjustable value (default 100)
 ******************************************************************************/
-var ctx = (window.AudioContext && new window.AudioContext()) ||
-          (window.webkitAudioContext && new window.webkitAudioContext());
-DB.check(ctx, "Missing window.AudioContext.  Use Chrome browser.");
+var Knobify = function (elementId, callback, val, min, max) {
+  let element = ElementById(elementId);
+  element.className += " actor"; // Make sure actor style
+  element.contentEditable = true;
+
+  let label = element.innerText || "KNOB";
+  min ||= 0.0;
+  max ||= 100.0;
+  val ||= max; // Make sure value exists.
+  let factor = 10; // Extra precision internally
+
+  element.onmouseover = () => { // Mousing over reveals value
+    element.focus();
+    element.style.minWidth = element.clientWidth + "px";
+    element.innerText = callback(val);
+  };
+
+  element.onmouseleave = ()=>{
+    element.blur();
+    element.innerText=label; // Revert to label
+  };
+
+  element.onwheel = (e) => { // Scrolling mouse adjusts value
+    let v = val - e.deltaY / factor;
+    if (v < min) { v=min; } else if (max < v) { v=max; }
+    if (v != val) { element.innerText = callback(val=v); }
+    e.preventDefault(); // So scrolling doesn't affect the browser
+  };
+
+  element.onkeydown = function (event) {
+    let v;
+    if (event.code == "ArrowUp") {
+      v = val + 1;
+    } else if (event.code == "ArrowDown") {
+      v = val - 1;
+    } else if (event.code == "Enter") {
+      v = parseFloat(event.target.innerText);
+      if (isNaN(v)) { v = val; } else { v *= factor; }
+    } else {
+      event.stopPropagation(); // Stop any other key from propagating
+      return;
+    }
+    if (v < min) { v=min; } else if (max < v) { v=max; }
+    element.innerText = callback(val=v);
+    event.preventDefault(); // Prevent element's text receiving a newline
+  };
+
+  callback(val); // Make sure callback is synchronized
+}; // Knobify
+
 
 
 /******************************************************************************
@@ -676,67 +800,7 @@ var IBC = function () {
     DB.check(self.listeners().length==0, "ERROR:  There should be 0 listeners"); // Verify no listerns
   })();
   return self;
-}();
-
-
-/******************************************************************************
-  Create a slider object in the DOM.
-
-  There will be one slider object that when activated will adjust wherever the
-  mouse moves over it be set to the passed in value.  A call back will be
-  provided that will be set to the final value.
-
-  USAGE::
-    var slider = new DOMSlider();
-
-  CONSTRUCTOR PARAMETERS::
-    na             N/A
-
-  METHODS::
-    default(e, i, c)  Activate slider in the DOM at the mouse position
-                      using event e, initial value i, and setter
-                      callback c.
-******************************************************************************/
-var Slider = function () {
-  var callback;
-  var mouseMoved = false,  mouseUp = false;
-  var e = CreateAppendChild('p', document.body);
-  e.style.position = "absolute"
-  e.className = "knobs"
-  e.style.width="13ch";
-  e.style.border="solid 1px #066";
-  e.innerHTML = "<p>|-----|-----|\n|-----|-----|</p><div>0</div>";
-  e.style.display="none";
-  e.style.background="black";
-  e.style.zIndex=2;
-  e.children[0].onmousemove = function (event) {
-    mouseMoved = true;
-    var box = event.target.getBoundingClientRect();
-    var val = 1.0-((event.clientX - box.left) / box.width + .005)
-    if (val < 0.0) val = 0.0;
-    if (1.0 < val) val = 1.0;
-    event.target.parentElement.children[1].innerText = val.toFixed(2);
-    callback(val);
-  }
-  e.children[0].onmouseleave = function () {
-    if (mouseMoved) { e.style.display = "none"; }
-  }
-  e.onmousedown = function (event) { event.stopPropagation(); }
-  e.onmouseup = function (event) { // Handle clicking, releasing, then moving
-    if (mouseMoved || mouseUp) { e.style.display="none"; }
-    event.stopPropagation();
-    mouseUp = true
-  }
-  return function(event, val, cb) {
-    callback = cb;
-    e.children[1].innerText = val.toFixed(2);
-    mouseMoved = false;
-    mouseUp = false;
-    e.style.display="block";
-    e.style.top = Floor(event.pageY - e.clientHeight/3.0) +"px" ;
-    e.style.left = Floor(event.pageX - e.clientWidth*(0.995-val)) +"px" ;
-  }
-}() // DOMSlider
+}(); // IBC
 
 
 /******************************************************************************
@@ -1053,7 +1117,7 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   let self = this;
   let _name = label || ("Drumkit" + ++SynthGlobalCounter);
   let audioBuffers = new AudioBuffers(ctx, filenames)
-  let bassReleaseTime = 0.8; // Release time in seconds for both the filter and gain.
+  let bassRel = 1.0; // Release time in seconds for both the filter and gain.
   var destinations = Array(audioBuffers.length).fill(0); // Default destination of each sound to default
   var volumes = Array(audioBuffers.length).fill(1.0); // Default volumes
   var _ibcId = false;
@@ -1104,6 +1168,12 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
     _vol.className = "volume"
     _vol.onmousedown = (event)=>Slider(event, volumes[k], (newVol)=>volumes[k]=newVol);
 
+    if (0==k) {
+      let rel = CreateAppendChild('p', buttons, "[rel]");
+      rel.className = "volume"
+      rel.onmousedown = (event)=>Slider(event, bassRel, (newVol)=>bassRel=newVol);
+    }
+
     let drum = CreateAppendChild('p', buttons, audioBuffers.fileNameCompact(k));
     drum.className = "hit";
     drum.onmousedown = ()=> self.play(k+keyStart, 1.0, 0);
@@ -1127,7 +1197,7 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   })(); // Toggle the synths on and listening to MIDI
 
   // Object
-
+  Drums.push(this);
   this.length = audioBuffers.length;
   this.name = (key) => (undefined == key) ? "TR-808" : audioBuffers.fileNameCompact(key-keyStart);
   this.rowClass = (_key) => "drumkit";
@@ -1135,33 +1205,32 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   this.color = color
   this.play = function (pad, vol, when) {
     let key = pad - keyStart;
-    vol *= volumes[key];
-    var audioBuffer = audioBuffers.audioBuffer(key);
+    let audioBuffer = audioBuffers.audioBuffer(key);
     if (!audioBuffer) {
       DB.error(`Drumkit.play offset ${pad} expect ${keyStart}..${keyStart+this.length-1}`);
       return; // Do nothing if no audio buffer.
     }
-    var now = (when || ctx.currentTime); // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
     var source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.onended = function() { source.disconnect(); } // When the audio stops, remove it from the graph.
     var gain = ctx.createGain(); // Ramp
-
+    vol *= volumes[key]; // Combine incoming message note vol with drumkit's volume.
     if (key == 0) { // HACK: need to generalize a sound pipeline
+      var now = (when || ctx.currentTime); // Depending on how this is called (when is either 0 or a real time in the future) now will be the current time or when
       // Loop the bass noise for one second with a LPF and gain ramp.
       source.playbackRate.setValueAtTime(0.39, now);
-      source.playbackRate.linearRampToValueAtTime(0.37, now+bassReleaseTime);
+      source.playbackRate.linearRampToValueAtTime(0.38, now+bassRel);
       source.loop = true;
       source.start(when);
-      source.stop(now + bassReleaseTime);
+      source.stop(now + bassRel);
 
       var lp = ctx.createBiquadFilter(); // LPF
       lp.type = "lowpass";
-      lp.frequency.value = 120;
+      lp.frequency.value = 100;
       lp.Q.value = 0.5;
 
       gain.gain.setValueAtTime(vol, now);
-      gain.gain.linearRampToValueAtTime(0, now+bassReleaseTime);
+      gain.gain.linearRampToValueAtTime(0, now+bassRel);
 
       source.connect(lp);
       lp.connect(gain);
@@ -1175,8 +1244,6 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   }
   this.connect = function (dest, idx) { destinations[idx] = dest; }
   this.connected = function (idx) { return destinations[idx]; }
-
-  Drums.push(this);
 
 } // Drumkit
 
@@ -1565,7 +1632,7 @@ var Delay = (function (ctx, destinations) {
   };
 
   make();
-  
+
   var _element = document.createElement('div'); // [ ]
   _element.className = "windowmini";
   //_element.style.width = "13ch";
@@ -1937,7 +2004,7 @@ var TickerTimer = (function (ctx) {
 
   self.tick = self;
   self.pause     = function (e)  { _pause(e); }
-  self.setBpm    = function (b) { bpm=b; jiffy = 15/bpm; };
+  self.setBpm    = function (b) { bpm=b; jiffy=15/bpm; return bpm;};
   self.setStart  = function (i) { if (i<=end) { start = i; length=end-start+1; if (paused) { tickCue = renderCue = start; } } return self; };
   self.setEnd    = function (i) { if (start<=i) { end = i; length=end-start+1; } return self; };
   self.rewind = function (e, newTick) { // Reset state so next tick is 0 and next time will be nowish.
@@ -2024,7 +2091,6 @@ var Sheet = function (id, tickCount, tickertimer) {
     let leftVisibleTick = Round((element.scrollLeft) / tickWidth);
     let rightVisibleTick = Min(leftVisibleTick + visibleTickCount, children.length) - 1;
     return [leftVisibleTick, rightVisibleTick];
-      
   };
 
   // Scroll (maybe) the grid so current tick is visible
@@ -2524,33 +2590,18 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
 
 var setupControls = function (keyboard, sheet) {
 
-  document.getElementById('volume').oninput = function (e) {
-    Destinations.input(0).gain.value = e.srcElement.value / 100.0;
-  }
 
-  // tODO Rethink mousehover == editable focus.  Fails when text box is empty and width very thin.
-  //document.getElementById('bpm').onmouseenter = function (event) { event.target.focus(); }
-  //document.getElementById('bpm').onmouseleave = function (event) { event.target.blur(); }
-  document.getElementById('bpm').onkeydown = function (event) {
-    var newBpm;
-    if (event.code == "ArrowUp") {
-      newBpm = parseInt(event.target.innerText)+1;
-    } else if (event.code == "ArrowDown") {
-      newBpm = parseInt(event.target.innerText)-1;
-    } else if (event.code == "Enter") {
-      newBpm = parseInt(event.target.innerText);
-      event.preventDefault(); // Prevent element's text receiving a newline
-    } else {
-      event.stopPropagation(); // Stop global hot keys from receiving event
-      return;
-    }
-    if (isNaN(newBpm) || newBpm < 1 || 666 < newBpm){
-      event.target.innerText = TickerTimer.bpm();
-    } else {
-      event.target.innerText = newBpm;
-      TickerTimer.setBpm(newBpm);
-    }
-  }
+  Knobify("mainVolume",
+    (v)=>{ 
+      Destinations.input(0).gain.value = v / 100; // Unit-normalize the gain
+      return Round(v);
+    });
+
+  Knobify("bpm",
+    (v)=>TickerTimer.setBpm(Trunc1(v / 10)),
+    600, 10, 6666);
+
+  //document.getElementById('volume').oninput = (e) => Destinations.input(0).gain.value = e.srcElement.value / 100.0;
 
   window.onmouseup = function () { MouseIsDown = false; }
 
@@ -2677,7 +2728,7 @@ var Start = function () {
 
   // Create a piano object and DOM element.  88 keys, starting at 21/A0.
   DB.post("Start", "Keyboard");
-  Keyboard0 = new PianoKeyboard("piano1", 21, 88/2);
+  Keyboard0 = new PianoKeyboard("piano1", 21, 88);
   //var keyboard2 = new PianoKeyboard("piano2",  21, 16, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
   // MIDI fun
