@@ -178,14 +178,16 @@ var DB = (function () {
 })(); // DB
 
 
-
 /******************************************************************************
-  Useful aliases and objects
+  Useful objects
 ******************************************************************************/
 var ctx = (window.AudioContext && new window.AudioContext()) ||
           (window.webkitAudioContext && new window.webkitAudioContext());
 DB.check(ctx, "Missing window.AudioContext.  Use another browser.");
 
+/******************************************************************************
+  Useful aliases and funtions
+******************************************************************************/
 var NBSP = "\u00a0";
 var Floor = Math.floor;
 var Round = Math.round;
@@ -269,6 +271,7 @@ var revealCenter = function (id, show) {
     }
   })(1.0);
 }
+
 
 /*  Slowly reveal or hide a DOM element.
 */
@@ -469,8 +472,7 @@ var Knobify = function (elementId, callback, val, min, max) {
     hyphen(msg)      Send message to Hyphen
 ******************************************************************************/
 //hyphen.song = function () { return ""; }
-var hyphen =
-(function () {
+var hyphen = function () {
    DB ("Connecting to Hyphen!");
    var server = new WebSocket( window.location.protocol=="https:" ? "wss://shroom.dv8.org:7179" : "ws://shroom.dv8.org:7180");
    var song = false;
@@ -512,7 +514,7 @@ var hyphen =
 
    return self
 
-});
+};
 
 
 /******************************************************************************
@@ -877,16 +879,14 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
     }
 
     // Register mouse event handlers for every keyboard DOM element representing a key.
-    newKey.onmouseover  = function () { if (MouseIsDown) { keyPress(key); } };
-    newKey.onmousedown  = function () { MouseIsDown=true; keyPress(key); };
-    newKey.onmouseleave = function () { if (MouseIsDown) { keyRelease(key); } };
-    newKey.onmouseup    = function () { keyRelease(key); }
+    newKey.onmouseover  = ()=>MouseIsDown && keyPress(key);
+    newKey.onmousedown  = ()=>(MouseIsDown=true, keyPress(key));
+    newKey.onmouseleave = ()=>MouseIsDown && keyRelease(key);
+    newKey.onmouseup    = ()=>keyRelease(key);
 
     _keysDOM.push(newKey); // Keep track of each created key.
     _highlights.push([]);
   });
-
-  DB.check(keyCount == _keysDOM.length, "ERROR: PianoKeyboard: Created incorrect number of keys.");
 
   self.highlight = function (key, color)  {
     //DB.post("PianoKeyboard", ["highlight", key, color])
@@ -2043,10 +2043,11 @@ var TickerTimer = (function (ctx) {
     .playAllTicks(tick, time)  Play all notes in each part on this tick.
 
 ******************************************************************************/
-var Sheet = function (id, tickCount, tickertimer) {
+var Sheet = function (id, tickertimer) {
   let element = ElementById(id);
   let children = element.children;
   let knobs = element.previousElementSibling;
+  let tickCount = 0;
   let columns = []; // Array of columns [ [header part ... ] ... ]
   let parts = []; // List of all Part objects created.  Their elements will be scattered about the tick.
   let tickLastRender = 0;
@@ -2072,8 +2073,8 @@ var Sheet = function (id, tickCount, tickertimer) {
   self.setEnd = function (i) { tickertimer.setEnd(i); self.refreshHeader(); return self; }
   self.playAllTicks = function (tick, time) {
     parts
-      .filter( (p) => p.isOnTick(tick) ) // Get list of Parts that lay on this tick.
-      .forEach( (p) => p.play(tick, time) ); // Play its notes along its tick
+      .filter((p)=>p.isOnTick(tick)) // Get list of Parts that lay on this tick.
+      .forEach((p)=>p.play(tick, time)); // Play its notes along its tick
   }
 
   self.tickerTimer = () => tickertimer;
@@ -2153,15 +2154,17 @@ var Sheet = function (id, tickCount, tickertimer) {
     // DEBUGGING
   }
 
-  // Create the tick columns and the top row tick marks. Part div's will be inserted/removed later.
-  // [ [[0]] [[1]] ... ]
+  // Create a tick column and its the top row tick mark. This is a dynamic placeholder for Parts.
   var lastHoverTick = 0;
   var hoverState = 0;
-  RangeForEach(tickCount, (tick) => {
+  self.addTick = function () {
     let column = CreateAppendChild('div', element); // Create the tick column
     columns.push(column); // Keep track of the column
+
+    let tick = tickCount++;
     let label = Floor(tick/8) % 10;
     let header = CreateAppendChild('p', column, label); // Add the tick header
+    header.style.backgroundColor = "#444";
 
     // Hovering will play all ticks in each part.
     header.onmouseover = function () {
@@ -2189,18 +2192,18 @@ var Sheet = function (id, tickCount, tickertimer) {
         self.setStart(tick);
       }
     };
-  });
+  };
+
+  self.moveElement = (tick, element) => {
+    while (!children[tick]) { self.addTick(); }
+    children[tick].appendChild(element);
+  };
 
   // Add a brushToPlay toggle button
   let brushToPlay = AppendNewToggleActor(knobs, false, "actor",
     ()=>(columns.forEach(t=>t.firstChild.style.color=null), ")("),
     ()=>(columns.forEach(t=>t.firstChild.style.color="inherit"), "()"));
   brushToPlay.element().title="BRUSH PLAY";
-
-  // Reset the TickerTimer state object
-  tickertimer
-    .setStart(0)
-    .setEnd(tickCount-1)
 
   // Create new parts when this button is activated
   var _addphrase = document.getElementById('addpartsynth');
@@ -2225,6 +2228,16 @@ var Sheet = function (id, tickCount, tickertimer) {
     Part(self,  2, 2*20, 24, 16, measures*beats*ticks, Drums[0]);
     _addphrase.children[0].style.display="none";
   };
+
+  // Create a preliminary set of columns,
+  // [ [[0]] [[1]] ... ]
+  RangeForEach(40, self.addTick);
+
+  // Reset the TickerTimer state object
+  tickertimer
+    .setStart(0)
+    .setEnd(tickCount-1);
+
   return self;
 }; // Sheet
 
@@ -2257,7 +2270,7 @@ var RefPart = function (partObj, tickIdx, height) {
   // Grid tick header
   let headerTicks = CreateAppendChild('div', body);
 
- // Copy parent part's header
+  // Copy parent part's header
   RangeForEach( partObj.tickCount(), (tick) =>
     CreateAppendChild('p', headerTicks, partObj.headerTick(tick))
       .onmouseover = () => brushToPlay() && partObj.playTick(tick, 0) );
@@ -2377,9 +2390,11 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
   let grid = CreateAppendChild('div', body);
   let listenerID = null;
   let recording = false;
+  let drawCh = undefined;
+  let drawHold = undefined;
 
-  RangeForEach(keyCount, (ii) => {
-    let key = keyBeg + ii;
+  RangeForEach(keyCount, (y) => {
+    let key = keyBeg + y;
     // [ ]
     let row = CreateInsertChild("div", grid); // A row: Container of label and ticks
     let label = playable.name(key);
@@ -2409,18 +2424,29 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
       // Action Clicking
       tick.onmousedown = function (e) {
         MouseIsDown = true; // Set global state
-        let unsetp = e.target.innerText == NBSP;
-        DragOverTickState = unsetp ? 1 : 2;
-        e.target.innerText = unsetp ? "*" : NBSP;
+        let ch = e.target.innerText;
+        if (NBSP == ch) {
+          e.target.innerText = drawCh = '*';
+          // After 200ms draw dash if nothing drawn yet.
+          drawHold = true;
+          setTimeout( ()=>(drawHold && (drawCh='-')), 250); 
+          self.playTick(x, 0);
+        } else {
+          drawCh= NBSP;
+          e.target.innerText = NBSP;
+        }
         // When drawing a new note, play full tick (all notes)
-        if (unsetp) { self.playTick(x, 0); }
       }
       // Action Hovering/dragging
       tick.onmouseover = function (e) {
         if (MouseIsDown) {
-          e.target.innerText = (DragOverTickState == 1 ? "-" : NBSP) // Continue painting
-        } else if (e.target.innerText == "*" && brushToPlay()) {
-          IBC([chanOut, key, 1.0, 0, 0]);
+          drawHold = false;
+          e.target.innerText = drawCh; // Continue painting
+        } else {
+          if (e.target.innerText == "*" && brushToPlay()) {
+            self.playNote(keyCount-y-1, x, 0);
+            //IBC([chanOut, key, 1.0, 0, 0]);
+          }
         }
       };
     });
@@ -2523,8 +2549,7 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
        // Adjust part's horizontal position (Phrase's tick)
        let newTick = Floor((e.x-leftMargin+1) / tickWidth);
        if (newTick != tickIdx) {
-         sheet.children[newTick].appendChild(part);
-         tickIdx = newTick;
+         sheetObj.moveElement(tickIdx=newTick, part);
        }
     }.bind(null, part.offsetTop-e.y);
   };
@@ -2557,21 +2582,32 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
 
   self.play = function (gtick, time) { self.playTick(gtick - tickIdx, time); }
 
+  self.playNote = function (row, tick, time) {
+    if (tick < 0 || TickCount <= tick) {
+      DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
+      return;
+    }
+    if (row < 0 || keyCount <= row) {
+      DB.error(`row ${row} out of range 0..${keyCount-1}`);
+      return;
+    }
+    let notes = grid.children[row].children[1].children;
+    let note = notes[tick];
+    if (note.innerText == "*") {
+      // Count subsequent "-" in grid for sustain
+      let tickLast = tick+1;
+      while (tickLast<TickCount && "-"==notes[tickLast].innerText) { ++tickLast; }
+      // Send note message to those listening on chanOut
+      IBC([chanOut, keyBeg + keyCount-row-1, 1.0, time, tickLast-tick-1])
+    }
+  };
+
   self.playTick = function (tick, time) {
     if (tick < 0 || TickCount <= tick) {
       DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
       return;
     }
-    RangeForEach(keyCount, (y) => {
-      let row = grid.children[y].children[1].children;
-      let note = row[tick];
-      if (note.innerText == "*") {
-        // Count subsequent "-" in grid for sustain
-        let sustain = RangeFilter( [tick+1, TickCount-1], (t)=>"-"==row[t].innerText ).length;
-        // Send note message to those listening on chanOut
-        IBC([chanOut, keyBeg + keyCount-y-1, 1.0, time, sustain])
-      }
-    });
+    RangeForEach(keyCount, (y)=>self.playNote(y, tick, time));
   }
 
   self.focus = () => { // Raise/focus this element in sheet and reset others
@@ -2673,26 +2709,16 @@ var eventLoops = function (sheet) {
 
 
 /******************************************************************************
-
  MAIN
 
  CONCEPTS Musical Definitions
 
- Pressing a physical key/pad creates a MIDI message/event.
-
- Sheet      >Arrangement of phrases
-  Phrase    >Contains multiple parts
-   Part     >A voice (could be a drum sound or entire piano)
-    Measure  >Logical division of parts
-     Beat    >Physical division of Parts
-      Tick   >Physical division of Beats which contain notes to play
-
-  Official      Me
-  ------------- --------
-  Measure/Bar
-  Part/Voice
-  Quarter note  Beat
-  Shortest note Tick
+ Sheet........Arrangement of phrases
+ Phrase.......Group of synchronized parts
+ Part/Voice...A drum (drumkit?), voice, entire piano
+ Measure/Bar..Logical division of parts
+ Beat/1/4Note.Physical division of Parts
+ Tick.........Physical division of Beats, denotes a note
 
 ******************************************************************************/
 var Sheet0;
@@ -2745,7 +2771,7 @@ var Start = function () {
       .then(onMIDISuccess, onMIDIFailure);
   }
 
-  Sheet0 = Sheet("sheet", 128, TickerTimer);
+  Sheet0 = Sheet("sheet", TickerTimer);
 
   DB.post("Start", "More Buttons");
   setupControls(Keyboard0, Sheet0); // Setup menus and moveable buttons.
@@ -2768,7 +2794,7 @@ var Start = function () {
   Part(Sheet0, 8, 1*21, 24, 16, 32, DrumKit0 );
   Part(Sheet0, 8,16*21, 21, 88, 32, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
-  Sheet0.setStart(8).setEnd(8+32-1);
+  Sheet0.setStart(8);//.setEnd(8+32-1);
 
   DB.post("Start", "Handlers");
 
@@ -2799,10 +2825,9 @@ window.onload = function Main () {
 //]]></script></body></html><!--
 * Synth listener that crashes (key out of bounds) denies other synths from receiving.
 * Moving part to another tick broken when moved beyond the last phrase grid column.
-* Auto extend sheet ticks
 * copy/paste
 * resume plays note paused on even if restarted
 * delete objects
 * song save
-* sheet toggle view sub quarter ticks
+* toggle sub quarter-note ticks
 -->
