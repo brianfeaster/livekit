@@ -35,12 +35,12 @@
     <p id="pause" class="actor pause" title="PAUSE" onmousedown="TickerTimer.pause(this)">||</p>
     <div id="addpartdrum" class="addpart">
       <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
-        <div id="createphrase" style="background:#066; text-align:center">Create</div>
+        <div id="createphrasedrum" style="background:#066; text-align:center">Create</div>
         <input id="addmeasures" value="4" type="number"/>Measures<br/>
         <input id="addbeats" value="4" type="number"/>Beats<br/>
         <input id="addticks" value="4" type="number"/>ticks<br/>
       </div>
-      <p class="actor" title="NEW SYNTH PART">+</p>
+      <p class="actor" title="NEW DRUM PART">+</p>
     </div>
     <div id="addpartsynth" class="addpart">
       <div style="display:none; border:solid 1px #066; background:#000; white-space:nowrap; position:absolute; z-index:3">
@@ -49,7 +49,7 @@
         <input id="addbeats" value="4" type="number"/>Beats<br/>
         <input id="addticks" value="4" type="number"/>ticks<br/>
       </div>
-      <p class="actor" title="NEW DRUM PART">+</p>
+      <p class="actor" title="NEW SYNTH PART">+</p>
     </div>
     <!--p style="border-radius:40%; font-weight:bold; color:black; background:yellow; border:dashed thick red" class="actor" title="THE DROP (USE SPARINGLY)">&gt!}=-<b style="background-color:red"> DrOp </b>-={!&lt;</p-->
   </div>
@@ -406,22 +406,22 @@ var Slider = function () {
     <p id="myknob">volume</p>
     Knobify("myknob", v=>{DB(v); return Round(v);}, 10, 0, 100)
 
-    elementId      - Element's id to knobify.
-    callback       - Function that receives updated values and returns value
-                     to display (handles rounding, truncating)
-    val            - Initial value (default max)
-    min            - min adjustable value (default 0)
-    max            - max adjustable value (default 100)
+    element  - Element (or element's id) to knobify.
+    callback - Function that receives updated values and returns value
+               to display (handles rounding, truncating)
+    val      - Initial value (default max)
+    min      - min adjustable value (default 0)
+    max      - max adjustable value (default 100)
 ******************************************************************************/
-var Knobify = function (elementId, callback, val, min, max) {
-  let element = ElementById(elementId);
+var Knobify = function (element, callback, val, min, max) {
+  element = element instanceof Element ? element : ElementById(element);
   element.className += " actor"; // Make sure actor style
   element.contentEditable = true;
 
   let label = element.innerText || "KNOB";
   min ||= 0.0;
   max ||= 100.0;
-  val ||= max; // Make sure value exists.
+  val = val===undefined?max:val; // Make sure value exists.
   let factor = 10; // Extra precision internally
 
   element.onmouseover = () => { // Mousing over reveals value
@@ -461,6 +461,7 @@ var Knobify = function (elementId, callback, val, min, max) {
   };
 
   callback(val); // Make sure callback is synchronized
+  return element;
 }; // Knobify
 
 
@@ -1164,14 +1165,10 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
       _output.innerText = Destinations.name(destinations[k]);
     };
 
-    let _vol = CreateAppendChild('p', buttons, "[vol]");
-    _vol.className = "volume"
-    _vol.onmousedown = (event)=>Slider(event, volumes[k], (newVol)=>volumes[k]=newVol);
+    Knobify(CreateAppendChild('p', buttons, "VOL"), (v)=>(volumes[k]=v/100, Round(v)), volumes[k]*100).title="DRUM VOLUME";
 
     if (0==k) {
-      let rel = CreateAppendChild('p', buttons, "[rel]");
-      rel.className = "volume"
-      rel.onmousedown = (event)=>Slider(event, bassRel, (newVol)=>bassRel=newVol);
+      Knobify(CreateAppendChild('p', buttons, "REL"), (v)=>(bassRel=v/100, Round(v)), volumes[k]*100).title="BASS DRUM RELEASE";
     }
 
     let drum = CreateAppendChild('p', buttons, audioBuffers.fileNameCompact(k));
@@ -1366,23 +1363,14 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   var _body = CreateAppendChild('div', _element);//  [ Synth1 [-] ]
   _body.className = "knobs";                     //  [            ]
 
-  var _frequency = CreateAppendChild('p', _body)
-  _frequency.className = "actor";
-  _frequency.title = "BASE FREQ";
-  _frequency.contentEditable = true;
-  _frequency.innerText = _freq;
-  // Hitting enter will evaluate the box contents and set the synth base freq
-  _frequency.onkeydown = function (v) {
-    if (v.code == "Enter") {
-      _freq = parseFloat(v.target.innerText) || KeyFreq.freq();
-      v.preventDefault(); // Prevent form element from adding a newline
-    }
-    v.stopPropagation();
-  }
 
   // Waveform button
-  // [ [Synth1] [-] ]
-  // [ [sine]       ]
+  // [ FREQ [sine] ]
+  Knobify(
+    CreateAppendChild('p', _body, "FREQ"),
+    (v)=>(_freq=v/10, Trunc1(v/10)),
+    _freq*10, 1, 1000
+  ).title = "BASE FREQ";
   var _waveformDOM = CreateAppendChild('p', _body)
   _waveformDOM.className = "actor";
   _waveformDOM.title = "OSCILLATOR";
@@ -1392,65 +1380,22 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     _waveformDOM.innerText = _waveforms[_waveformIdx];
   }
 
+
+  // Knobs
+  // [ [27.5][sine][-]]
+  // [ ATT SUS REL    ]
+  // [ VOL [ctx]      ]
   CreateAppendChild('br', _body);
-
-  // Attack button
-  // [ [Synth1] [-] ]
-  // [ [sine]       ]
-  // [ [A]          ]
-  var _attack = CreateAppendChild('p', _body);
-  _attack.style.position = "relative"
-  _attack.className = "volume"
-  _attack.innerText = "[A]"
-  var _attackVal = CreateAppendChild('p', _attack);
-  _attack.onmousedown = function(event){ Slider(event, _att, function(v){ _att=v; _attackVal.innerText = v; }); }
-
-  _attackVal.style.position = "absolute";
-  _attackVal.innerText = "100";
-  _attackVal.style.right = "-1em";
-  _attackVal.style.top = "-1em";
-  _attackVal.style.backgroundColor = "blue"
-
-  // Sustain button
-  // [ [Synth1] [-] ]
-  // [ [sine]       ]
-  // [ [A][S]       ]
-  var _sustain = CreateAppendChild('p', _body);
-  _sustain.style.position = "relative"
-  _sustain.className = "volume"
-  _sustain.innerText = "[S]"
-  _sustain.onmousedown = function(event){ Slider(event, _sus, function(v){ _sus=v; }); }
-
-  // Release button
-  // [ [Synth1] [-] ]
-  // [ [sine]       ]
-  // [ [A][S][R]    ]
-  var _release = CreateAppendChild('p', _body);
-  _release.style.position = "relative"
-  _release.className = "volume"
-  _release.innerText = "[R]"
-  _release.onmousedown = function(event){ Slider(event, _rel, function(v){ _rel=v; }); }
-
+  Knobify(CreateAppendChild('p', _body, "ATT"), (v)=>(_att=v/100, Round(v)), _att*100);
+  Knobify(CreateAppendChild('p', _body, "SUS"), (v)=>(_sus=v/100, Round(v)), _sus*100);
+  Knobify(CreateAppendChild('p', _body, "REL"), (v)=>(_rel=v/100, Round(v)), _rel*100);
   CreateAppendChild('br', _body);
+  Knobify(CreateAppendChild('p', _body, "VOL"), (v)=>(_volume=v/100, Round(v)), _volume*100);
 
-  // Release button
-  // [ [Synth1] [-] ]
-  // [ [sine]       ]
-  // [ [A][S][R]    ]
-  // [ [VOLUME]     ]
-  var _vol = CreateAppendChild('p', _body);
-  _vol.style.position = "relative"
-  _vol.className = "volume"
-  _vol.innerText = "[vol]"
-  _vol.onmousedown = function(event){ Slider(event, _volume, function(v){ _volume=v; }); }
-
-  //CreateAppendChild('br', _body);
-
-  // Output block
-  // [ [Synth1] [-] ]
-  // [ [sine]       ]
-  // [ [A][S][R]    ]
-  // [ [VOL][ctx]   ]
+  // Destination
+  // [ [27.5][sine][-]]
+  // [ ATT SUS REL    ]
+  // [ VOL [ctx]      ]
   var _output = CreateAppendChild('p', _body);
   _output.style.position = "relative"
   _output.className = "volume"
@@ -1612,8 +1557,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
 var Delay = (function (ctx, destinations) {
   //// Local
   let _name = "delay";
-  let _del = 0.40; // Attack time in seconds.
-  let _gai = 0.50; // Release time in seconds for both the filter and gain.
+  let _del = 0.40; // Delay time
+  let _gai = 0.50; // Attenuation
 
   let _destId = 0;
   let _destination;
@@ -1650,58 +1595,19 @@ var Delay = (function (ctx, destinations) {
   var _body = CreateAppendChild('div', _element);//  [ Delay1 [-] ]
   _body.className = "knobs";                     //  [            ]
 
-  // Waveform button
+  // Delay button
   // [ [Delay1] [-] ]
-  // [ [delay]       ]
-  var _waveformDOM = CreateAppendChild('p', _body)
-  _waveformDOM.className = "actor";
-  _waveformDOM.innerText = "delay"
-  _waveformDOM.onmousedown = function () { }
-
-  CreateAppendChild('br', _body);
-
-  // Attack button
-  // [ [Delay1] [-] ]
-  // [ [sine]       ]
-  // [ [A]          ]
-  var _attack = CreateAppendChild('p', _body);
-  _attack.style.position = "relative"
-  _attack.className = "volume"
-  _attack.innerText = "[D]"
-  _attack.onmousedown = function(event){ Slider(event, _del, function(v){
-    _del=v;
-    _delay.delayTime.value = _del;
-   });}
-
-
-  // Release button
-  // [ [Delay1] [-] ]
-  // [ [sine]       ]
-  // [ [A][F]       ]
-  var _release = CreateAppendChild('p', _body);
-  _release.style.position = "relative"
-  _release.className = "volume"
-  _release.innerText = "[G]"
-  _release.onmousedown = function(event){ Slider(event, _gai, function(v){
-    _gai=v;
-    _gain.gain.value = _gai;
-  }); }
-
-  CreateAppendChild('br', _body);
-
-  // Output block
-  // [ [Delay1] [-] ]
-  // [ [sine]       ]
-  // [ [A][F]       ]
+  // [ [delay]      ]
+  // [ DLY ATN      ]
   // [ [main]       ]
+  Knobify(CreateAppendChild('p', _body, "DLY"), (v)=>(_del=v/100, _delay.delayTime.value=_del, Round(v)), _del*100).title="DELAY";
+  Knobify(CreateAppendChild('p', _body, "ATN"), (v)=>(_gai=v/100, _gain.gain.value=_gai, Round(v)), _del*100).title="ATTENUATION";
+  CreateAppendChild('br', _body);
   var _output = CreateAppendChild('p', _body);
   _output.style.position = "relative"
   _output.className = "volume"
-  _output.innerText = "[main]"
-
-  _output.onmousedown = function (event) {
-    self.connect(Destinations.nextId(_destId));
-  }
+  _output.innerText = "[ctx]"
+  _output.onmousedown = (event)=>self.connect(Destinations.nextId(_destId));
 
   // Public
   let self = [];
@@ -1767,8 +1673,8 @@ var Delay = (function (ctx, destinations) {
 var Lowpass = function (ctx, destinations) {
   //// Local
   let _name = "lp";
-  let _f = .9; // Attack tiem in seconds.
-  let _q = 0.0; // Release time in seconds for both the filter and gain.
+  let _f = .9; // Frequency
+  let _q = 0.0; // Q this just resonates annoyingly when not 0
   let _destId = 0;
   let _destination;
   let _lowpass;
@@ -1799,49 +1705,26 @@ var Lowpass = function (ctx, destinations) {
   var _body = CreateAppendChild('div', _element);//  [ lowpass [-] ]
   _body.className = "knobs";                     //  [            ]
 
-  // Waveform button
-  // [ [lowpass] [-] ]
-  // [ [lp]       ]
-  var _waveformDOM = CreateAppendChild('p', _body)
-  _waveformDOM.className = "actor";
-  _waveformDOM.innerText = "lp"
-  _waveformDOM.onmousedown = function () { }
+  // Lowpass Buttons
+  // [ [lp] [-] ]
+  // [ FRQ      ]
+  Knobify(
+    CreateAppendChild('p', _body, "FRQ"),
+    (v)=>{
+      var osc = ctx.createOscillator();
+      osc.frequency.value = 0;
+      osc.start(0);
+      osc.stop(ctx.currentTime+.05);  // 1/20th of a sec should be long enough
+      osc.onended = ()=>osc.disconnect();
+      osc.connect(_lowpass);
+      _f=v/100;
+      _lowpass.frequency.value = 10000.0*(1.0-_f);
+      return Round(v);
+    },
+    _f*100
+  ).title="DELAY";
 
-  CreateAppendChild('br', _body);
-
-  // Attack button
-  // [ [lowpass] [-] ]
-  // [ [lp]       ]
-  // [ [F]          ]
-  var _attack = CreateAppendChild('p', _body);
-  _attack.style.position = "relative"
-  _attack.className = "volume"
-  _attack.innerText = "[F]"
-  _attack.onmousedown = function(event){ Slider(event, _f, function(v){
-    // The filter needs to be doing something when the parameters are updated otherwise the changes don't take effect.  I wonder if this is a bug in the audio engine's scheduler?
-    var osc = ctx.createOscillator();
-    osc.frequency.value = 0;
-    osc.start(0);
-    osc.stop(ctx.currentTime+.05);  // 1/20th of a sec should be long enough
-    osc.onended = ()=>osc.disconnect();
-    osc.connect(_lowpass);
-
-    _f=v;
-    _lowpass.frequency.value = 10000.0*(1.0-_f);
-   });}
-
-  // Release button
-  // [ [lowpass] [-] ]
-  // [ [lp]         ]
-  // [ [F][Q]       ]
-  var _release = CreateAppendChild('p', _body);
-  _release.style.position = "relative"
-  _release.className = "volume"
-  _release.innerText = "[Q]"
-  _release.onmousedown = function(event){ Slider(event, _q, function(v){
-    _q=v;
-    _lowpass.Q.value = _q * 100.0;
-  }); }
+  //Knobify(CreateAppendChild('p', _body, "QQQ"), (v)=>(_q=v, _lowpass.Q.value=_q, Round(v)), _q).title="ATTENUATION";
 
   //// Public
   let self = [];
@@ -1950,7 +1833,6 @@ var TickerTimer = (function (ctx) {
       playCallback();
     }
     blinkify(e, paused&&"#f00");
-    //DB.post('TickerTimer._pause', paused);
   }
 
 
@@ -2008,9 +1890,9 @@ var TickerTimer = (function (ctx) {
   self.setStart  = function (i) { if (i<=end) { start = i; length=end-start+1; if (paused) { tickCue = renderCue = start; } } return self; };
   self.setEnd    = function (i) { if (start<=i) { end = i; length=end-start+1; } return self; };
   self.rewind = function (e, newTick) { // Reset state so next tick is 0 and next time will be nowish.
-    if (paused) { _pause(e); }
     // Rewind to specified tick or the usual start tick
     tickCue = renderCue = (newTick == undefined) ? start : newTick;
+    if (paused) { self.pause(e); }
     return self;
   };
   self.now = () => ctx.currentTime;
@@ -2205,29 +2087,31 @@ var Sheet = function (id, tickertimer) {
     ()=>(columns.forEach(t=>t.firstChild.style.color="inherit"), "()"));
   brushToPlay.element().title="BRUSH PLAY";
 
-  // Create new parts when this button is activated
-  var _addphrase = document.getElementById('addpartsynth');
-  _addphrase.children[1].onmouseup = function () { _addphrase.children[0].style.display=""; }
-  _addphrase.children[0].onmouseleave = function () { _addphrase.children[0].style.display="none"; }
-  document.getElementById('createphrase').onmousedown = function () {
-    var measures = document.getElementById('addmeasures').value;
-    var beats    = document.getElementById('addbeats').value;
-    var ticks    = document.getElementById('addticks').value;
-    Part(self, 2, 2*20, 0, 60, measures*beats*ticks, Synthesizers[0]);
-    _addphrase.children[0].style.display="none";
-  };
-
-  // Create new parts when this button is activated
-  var _addphrase = document.getElementById('addpartdrum');
-  _addphrase.children[1].onmouseup = function () { _addphrase.children[0].style.display=""; }
-  _addphrase.children[0].onmouseleave = function () { _addphrase.children[0].style.display="none"; }
-  document.getElementById('createphrase').onmousedown = function () {
+  // Create new parts via button
+  var _addpartdrum = document.getElementById('addpartdrum');
+  _addpartdrum.children[1].onmouseup = function () { _addpartdrum.children[0].style.display=""; }
+  _addpartdrum.children[0].onmouseleave = function () { _addpartdrum.children[0].style.display="none"; }
+  document.getElementById('createphrasedrum').onmousedown = function () {
+DB("new drump part");
     var measures = document.getElementById('addmeasures').value;
     var beats    = document.getElementById('addbeats').value;
     var ticks    = document.getElementById('addticks').value;
     Part(self,  2, 2*20, 24, 16, measures*beats*ticks, Drums[0]);
-    _addphrase.children[0].style.display="none";
+    _addpartdrum.children[0].style.display="none";
   };
+
+  var _addpartsynth = document.getElementById('addpartsynth');
+  _addpartsynth.children[1].onmouseup = function () { _addpartsynth.children[0].style.display=""; }
+  _addpartsynth.children[0].onmouseleave = function () { _addpartsynth.children[0].style.display="none"; }
+  document.getElementById('createphrase').onmousedown = function () {
+DB("new synth part");
+    var measures = document.getElementById('addmeasures').value;
+    var beats    = document.getElementById('addbeats').value;
+    var ticks    = document.getElementById('addticks').value;
+    Part(self, 2, 2*20, 21, 88, measures*beats*ticks, Synthesizers[0]);
+    _addpartsynth.children[0].style.display="none";
+  };
+
 
   // Create a preliminary set of columns,
   // [ [[0]] [[1]] ... ]
@@ -2626,7 +2510,6 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, TickCount, pla
 
 var setupControls = function (keyboard, sheet) {
 
-
   Knobify("mainVolume",
     (v)=>{ 
       Destinations.input(0).gain.value = v / 100; // Unit-normalize the gain
@@ -2644,9 +2527,7 @@ var setupControls = function (keyboard, sheet) {
   // Global hot keys
   window.onkeydown = function (v) {
     if (v.code == "Slash") DB.clear(); // Pressing '/' will clear the DB (debug console) element.
-    //DB.post("window.onkeydown", v.code);
-
-    let pauseElement = ElementById('pause');
+    let pauseElement = ElementById("pause");
     if (v.code == "KeyP") { sheet.pause(pauseElement); }
     else if (v.code == "KeyR") { sheet.rewind(pauseElement); } // Rewind the playback.
     else if (v.code == "Space") { // Pause or jump to mark
@@ -2826,8 +2707,9 @@ window.onload = function Main () {
 * Synth listener that crashes (key out of bounds) denies other synths from receiving.
 * Moving part to another tick broken when moved beyond the last phrase grid column.
 * copy/paste
-* resume plays note paused on even if restarted
 * delete objects
 * song save
 * toggle sub quarter-note ticks
+* Dragging Part draws ticks
+* Knobify to include left-click presets list.
 -->
