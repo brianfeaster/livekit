@@ -51,18 +51,29 @@ h1 {
   background:#066;
 }
 
+.knobspresets {
+  position:absolute;
+  z-index:3;
+  margin:1px 0 0 -1px;
+  padding:0;
+  border:solid 1px #0ff;
+}
+
+.knobspresets > p {
+  background-color:#077;
+}
+.knobspresets > p:hover { background-color:#099 }
 
 .actor {
   background-color:#066;
   border: solid 1px #0000;
   margin: 1px;
 }
+.actor:hover { border:solid 1px #0ff }
+
 
 .hit { border:solid 1px black; background-color:blue; }
 .hit:hover { background-color:blue; }
-
-
-.actor:hover { border:solid 1px #0ff }
 
 
 .volume  { display:inline-block; padding:0; margin:0; border: solid 1px black; vertical-align:top; text-align:center}

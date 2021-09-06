@@ -130,6 +130,7 @@ var DB = (function () {
     self.error = function (s) { console.error(s);}
     self.post  = function (t, s) { // For the console, only the first post type is displayed.
       console.log("[" + t + "]" + s);
+      return s;
     }
     self.clear = function () { lastPostType = false; }
   } else {
@@ -400,67 +401,91 @@ var Slider = function () {
 /******************************************************************************
   Knobify - Give an element a "knob" behavior
 
-  A knob reveal its value by hovering and adjust its value with the wheel.
+  A knob reveal its value by hovering, the mouse wheel adjusts while the
+  callback receives the new value, clicking reveals drop down of optional
+  presets.
 
   USAGE::
     <p id="myknob">volume</p>
-    Knobify("myknob", v=>{DB(v); return Round(v);}, 10, 0, 100)
+    Knobify("myknob", (v)=>(vol=v,Round(v)), 10, 0, 100, [100,75,50,25,0])
 
     element  - Element (or element's id) to knobify.
     callback - Function that receives updated values and returns value
                to display (handles rounding, truncating)
     val      - Initial value (default max)
+    fac      - Internal minimum decimal update offset.
     min      - min adjustable value (default 0)
     max      - max adjustable value (default 100)
 ******************************************************************************/
-var Knobify = function (element, callback, val, min, max) {
+var Knobify = function (element, callback, val, fac, min, max, presets) {
   element = element instanceof Element ? element : ElementById(element);
   element.className += " actor"; // Make sure actor style
-  element.contentEditable = true;
 
-  let label = element.innerText || "KNOB";
-  min ||= 0.0;
-  max ||= 100.0;
-  val = val===undefined?max:val; // Make sure value exists.
-  let factor = 10; // Extra precision internally
+  let value = val===undefined ? max :val;
+  let valueSet = (val)=>value=val;
+  fac = fac===undefined ? 0.1 :fac;
+  min = min===undefined ? 0   : min;
+  max = max===undefined ? 100 : max;
 
-  element.onmouseover = () => { // Mousing over reveals value
-    element.focus();
-    element.style.minWidth = element.clientWidth + "px";
-    element.innerText = callback(val);
+  // Move all children into a new child parent.
+  let label = element.innerHTML || "KNOB";
+  element.innerHTML = "";
+  let header = CreateAppendChild('p', element);
+  header.innerHTML=label;
+  header.contentEditable = true;
+
+  let epresets = undefined;
+  if (presets) {
+    epresets = CreateAppendChild('div', element);
+    epresets.className = "knobspresets";
+    epresets.style.display="none";
+
+    element.onmousedown = ()=>epresets.style.display="";
+
+    presets.forEach( (val)=>{
+      let e = CreateAppendChild('p', epresets, val);
+      e.onmousedown = ()=>header.innerText=callback(valueSet(val));
+    });
+  }
+
+  header.onmouseover = () => { // Mousing over reveals value
+    header.focus();
+    header.style.minWidth = element.clientWidth + "px";
+    header.innerText = callback(value);
   };
 
   element.onmouseleave = ()=>{
-    element.blur();
-    element.innerText=label; // Revert to label
-  };
+    if (epresets) { epresets.style.display="none"; }
+    header.blur();
+    header.innerHTML=label; // Revert to label
+  }
 
   element.onwheel = (e) => { // Scrolling mouse adjusts value
-    let v = val - e.deltaY / factor;
+    let v = value - e.deltaY * fac;
     if (v < min) { v=min; } else if (max < v) { v=max; }
-    if (v != val) { element.innerText = callback(val=v); }
+    if (v != value) { header.innerText= callback(valueSet(v)); }
     e.preventDefault(); // So scrolling doesn't affect the browser
   };
 
-  element.onkeydown = function (event) {
-    let v;
+  header.onkeydown = function (event) {
+    let val;
     if (event.code == "ArrowUp") {
-      v = val + 1;
+      val = value + 1;
     } else if (event.code == "ArrowDown") {
-      v = val - 1;
+      val = value - 1;
     } else if (event.code == "Enter") {
-      v = parseFloat(event.target.innerText);
-      if (isNaN(v)) { v = val; } else { v *= factor; }
+      val = parseFloat(event.target.innerText);
+      if (isNaN(val)) { val = value; }
     } else {
       event.stopPropagation(); // Stop any other key from propagating
       return;
     }
-    if (v < min) { v=min; } else if (max < v) { v=max; }
-    element.innerText = callback(val=v);
+    if (val < min) { val=min; } else if (max < val) { val=max; }
+    header.innerText = callback(valueSet(val));
     event.preventDefault(); // Prevent element's text receiving a newline
   };
 
-  callback(val); // Make sure callback is synchronized
+  callback(value); // Make sure callback is synchronized
   return element;
 }; // Knobify
 
@@ -1368,8 +1393,9 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   // [ FREQ [sine] ]
   Knobify(
     CreateAppendChild('p', _body, "FREQ"),
-    (v)=>(_freq=v/10, Trunc1(v/10)),
-    _freq*10, 1, 1000
+    (v)=>(_freq=v, Trunc1(v)),
+    _freq, .01, 1, 100,
+    [440, 220, 110, 55, 27.5, 13.75]
   ).title = "BASE FREQ";
   var _waveformDOM = CreateAppendChild('p', _body)
   _waveformDOM.className = "actor";
@@ -1723,8 +1749,6 @@ var Lowpass = function (ctx, destinations) {
     },
     _f*100
   ).title="DELAY";
-
-  //Knobify(CreateAppendChild('p', _body, "QQQ"), (v)=>(_q=v, _lowpass.Q.value=_q, Round(v)), _q).title="ATTENUATION";
 
   //// Public
   let self = [];
@@ -2514,13 +2538,16 @@ var setupControls = function (keyboard, sheet) {
     (v)=>{ 
       Destinations.input(0).gain.value = v / 100; // Unit-normalize the gain
       return Round(v);
-    });
+    },
+    55, .1, 0, 100,
+    [100, 75, 50, 25, 0]);
 
   Knobify("bpm",
-    (v)=>TickerTimer.setBpm(Trunc1(v / 10)),
-    600, 10, 6666);
+    (v)=>TickerTimer.setBpm(Trunc1(v)),
+    60, .01, 1, 666,
+    [190, 120, 90, 60, 30, 20, 10]);
 
-  //document.getElementById('volume').oninput = (e) => Destinations.input(0).gain.value = e.srcElement.value / 100.0;
+  //document.getElementById('volume').oninput = (e) => Destinations.input(0).gain.value = e.srcElement.value / 100.0; // HTML form slider element
 
   window.onmouseup = function () { MouseIsDown = false; }
 
@@ -2711,5 +2738,8 @@ window.onload = function Main () {
 * song save
 * toggle sub quarter-note ticks
 * Dragging Part draws ticks
-* Knobify to include left-click presets list.
+* text-area parts (for notes, karaoke?)
+* triggers, counters, maybe embedded scheme? (for phrase repeating, knob controlling)
+* visual rendering doesn't synch right when BPM very low
 -->
+
