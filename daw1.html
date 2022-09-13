@@ -1067,20 +1067,12 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   this.play = _play;
   this.wave = function () { return _waveformIdx; }
   this.waveform = function () { return _waveforms[_waveformIdx]; }
-  var _lastKey = -1;
-  this.highlight = function (key) {
-      keyboard.unhighlight(_lastKey, color); // Remove last high-light
-      keyboard.highlight(key, color); // Set new high-light
-      _lastKey = key
-  };
-  this.unhighlight = function () {
-    keyboard.unhighlight(_lastKey, color); // Remove last high-light
-  };
   this.connect = function(d) {
     _destination = d;
     _output.innerText = Destinations.name(Destinations.index(d));
   };
   this.destination = function () { return _destination; };
+  this.keyboard = keyboard;
 } // Synthesizer
 
 
@@ -1464,6 +1456,19 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
       this.play(_tick, when + (t * BeatDuration / subBeatCount)); // Play each tick's note in succeeding tick durations.
     }
   }
+  var _lastKey = -1;
+  this.highlight = function (key) {
+    let keyboard = playable.keyboard;
+    let color = playable.color;
+    keyboard.unhighlight(_lastKey, color); // Remove last high-light
+    keyboard.highlight(key, color); // Set new high-light
+    _lastKey = key
+  };
+  this.unhighlight = function () {
+    let keyboard = playable.keyboard;
+    let color = playable.color;
+    keyboard.unhighlight(_lastKey, color); // Remove last high-light
+  };
 } // Part
 
 /******************************************************************************
@@ -1550,7 +1555,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   _newSynthPart.onmousedown = function () {
     var s;
     if (0 == document.getElementById('synths').children.length) {
-      s = new Synthesizer(ctx, false, 1, keyboard, "#84f");
+      s = new Synthesizer(ctx, false, 1, keyboard, "#f4f");
       document.getElementById('synths').appendChild(s.element);
     } else {
       s = Synthesizers[0];
@@ -2322,11 +2327,13 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
   } else if (1 == next) { // Synthesizer
     DB("LK3 Synth...");
     label = gs.nextString(gs.nextByte());
-    var synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#84f");
-    if (!Synthesizer0) Synthesizer0 = synth;
-    else if (!Synthesizer1) Synthesizer1 = synth;
-    else if (!Synthesizer2) Synthesizer2 = synth;
-    else if (!Synthesizer3) Synthesizer3 = synth;
+    var synth;
+    if (!Synthesizer0) Synthesizer0 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#44f");
+    else if (!Synthesizer1) Synthesizer1 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#4f4");
+    else if (!Synthesizer2) Synthesizer2 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#f44");
+    else if (!Synthesizer3) Synthesizer3 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#4ff");
+    else synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#ff4");
+
     document.getElementById('synths').appendChild(synth.element);
     gs.nextByte(); // Ignore volume for now
     synth.attSet(gs.nextByte());
@@ -2516,11 +2523,12 @@ var restoreSongLK2 = function (keyboard, drumKit, encodedSong) {
   while (null != (next = gs.nextByte()))
   if (0 == next) { // Synthesizer
     label = gs.nextString(gs.nextByte());
-    var synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#84f");
-    if (!Synthesizer0) Synthesizer0 = synth;
-    else if (!Synthesizer1) Synthesizer1 = synth;
-    else if (!Synthesizer2) Synthesizer2 = synth;
-    else if (!Synthesizer3) Synthesizer3 = synth;
+    var synth;
+    if (!Synthesizer0) Synthesizer0 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#44f");
+    else if (!Synthesizer1) Synthesizer1 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#4f4");
+    else if (!Synthesizer2) Synthesizer2 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#f44");
+    else if (!Synthesizer3) Synthesizer3 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#4ff");
+    else synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#ff4");
     document.getElementById('synths').appendChild(synth.element);
     gs.nextByte(); // Ignore volume for now
     synth.attSet(gs.nextByte());
@@ -3015,12 +3023,12 @@ var rendererLoop = (function (_lastRef, _lastPhrase, _lastBeat, _lastTick) { ret
         part.elementName.style.color = part.playable.color // Update part name's high-light every tick
 
         if (part.playable instanceof Synthesizer) { // Highlight this part's keyboard with it's synth's color
-          part.playable.highlight(part.key(tick));
+          part.highlight(part.key(tick));
         }
       } else {
         part.elementName.style.color = "" // Unhighlight part's name every tick
         if (part.playable instanceof Synthesizer) { // Unhighlight this part's keyboard highlight (if any)
-          part.playable.unhighlight();
+          part.unhighlight();
         }
       }
     }
@@ -3336,7 +3344,7 @@ function Main () {
   Sheet0 = new Sheet(); // Global sheet object
 
   document.getElementById('addsynth').onmousedown = function () { 
-    var s = new Synthesizer(ctx, false, 1, keyboard, "#84f");
+    var s = new Synthesizer(ctx, false, 1, keyboard, "#44f");
     document.getElementById('synths').appendChild(s.element);
   }
 
@@ -3358,6 +3366,7 @@ function Main () {
 
   // MIDI fun
   function onMIDISuccess( m ) {
+    DB("MIDI success" + m);
     m.inputs.forEach(function(e){e.onmidimessage=function(e){keyboard.midi(e);};});
   }
 
@@ -3383,9 +3392,10 @@ function Main () {
   // LiveKa7 v2
   restoreSongLK2(keyboard, drumKit);
 
+
   // LiveKa7 v1
   if (!Synthesizer0) {
-    Synthesizer0 = new Synthesizer(ctx, false, 0, keyboard, "#84f");
+    Synthesizer0 = new Synthesizer(ctx, false, 0, keyboard, "#44f");
     document.getElementById('synths').appendChild(Synthesizer0.element);
   }
 
@@ -3395,12 +3405,12 @@ function Main () {
   }
 
   if (!Synthesizer2) {
-    Synthesizer2 = new Synthesizer(ctx, false, 2, keyboard, "#44f");
+    Synthesizer2 = new Synthesizer(ctx, false, 2, keyboard, "#f44");
     document.getElementById('synths').appendChild(Synthesizer2.element);
   }
 
   if (!Synthesizer3) {
-    Synthesizer3 = new Synthesizer(ctx, false, 3, keyboard, "#84f");
+    Synthesizer3 = new Synthesizer(ctx, false, 3, keyboard, "#4ff");
     document.getElementById('synths').appendChild(Synthesizer3.element);
   }
   restoreSongLK1(keyboard, drumKit);
