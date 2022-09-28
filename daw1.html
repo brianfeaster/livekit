@@ -141,6 +141,8 @@ var ElementById = function(id) { return document.getElementById(id); }
 
 var ctx = (window.AudioContext && new window.AudioContext()) || 
           (window.webkitAudioContext && new window.webkitAudioContext());
+var log = console.log.bind(console);
+var Z = null;
 
 /******************************************************************************
   Debug message console and error checking
@@ -663,9 +665,9 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
   var _highlightColor = "#f8f"
 
   // Helpers to play and set and unset key's high-light
-  var _setHighlightAndPlay = function(key) {
+  var _setHighlightAndPlay = function(key, vel) {
     self.highlight(key, _highlightColor); // Set current key high-light
-    IBC([id, key]); // Notify listeners a key was pressed  ["piano1", 12]
+    IBC([id, key, vel]); // Notify listeners a key was pressed  ["piano1", 12]
   }
   var _unsetHighlight = function(key) {
     self.unhighlight(key, _highlightColor);
@@ -734,12 +736,13 @@ var PianoKeyboard = function (id, keyCount, startKey, startOctave, startFrequenc
     i = stk.length;
     _keysDOM[key].style.backgroundColor = (0 < i) ? stk[i-1] : "";
   }
-  this.midi = function (event) {
-    var d = event.data;
-    var c = d[0];
-    var k = d[1];
-    if ((144 <= c) && (c<=159) && (0 <= k) && (k < keyCount)) {
-      if (d[2]==0) { _unsetHighlight(k); } else { _setHighlightAndPlay(k); }
+  this.midi = function (key, vel) {
+    if ((0 <= key) && (key < keyCount)) {
+      if (0 == vel) {
+        _unsetHighlight(key);
+      } else {
+        _setHighlightAndPlay(key, vel);
+      }
     }
   }
 } // PianoKeyboard 
@@ -1040,7 +1043,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   }
 
   var _keyboardMessageHandler = function (m) {
-    _play(m[1], 1.0, 0);
+    _play(m[1], (m[2]||0x7f)/0x7f, 0);
   }
 
   _nameDOM.onmousedown = function () {
@@ -3367,7 +3370,30 @@ function Main () {
   // MIDI fun
   function onMIDISuccess( m ) {
     DB("MIDI success" + m);
-    m.inputs.forEach(function(e){e.onmidimessage=function(e){keyboard.midi(e);};});
+    m.inputs.forEach( (e)=>{
+      e.onmidimessage = (e)=>{
+        log([...e.data].map((e)=>e.toString(16)));
+        var d = e.data;
+        var cmd     = d[0] >> 4;
+        var channel = d[0] & 0xf;
+        switch (cmd) {
+        case 0x9:
+          keyboard.midi(d[1], d[2]); // key vel
+          break;
+        case 0xb:
+          switch (d[1]) {
+          case 1: // mod wheel
+            log("mod wheel");
+            Destinations[2].setParams([d[2]/0x7f,0]);
+            break;
+          case 7: // main vol
+            Volume = d[2]/0x7f;
+            break;
+          }
+          break;
+        }
+      }
+    } );
   }
 
   function onMIDIFailure(msg) { DB("MIDI "+msg ); }
