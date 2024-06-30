@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="DBx" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation 1.0 &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -3383,7 +3383,7 @@ function Main () {
         case 0xb:
           switch (d[1]) {
           case 1: // mod wheel
-            log("mod wheel");
+            //log("mod wheel");
             Destinations[2].setParams([d[2]/0x7f,0]);
             break;
           case 7: // main vol

@@ -12,6 +12,7 @@ body {
  -moz-user-select: none;
  -ms-user-select: none;
  user-select: none;
+ cursor:"cursor.cur";
 }
 
 a         {text-decoration: none}
@@ -46,7 +47,7 @@ h1 {
 ******************************************************************************/
 .mustshift:hover { background:red }
 
-.knobs > p {
+.knobs p {
   display:inline-block;
   background:#066;
 }
@@ -60,6 +61,7 @@ h1 {
 }
 
 .knobspresets > p {
+  display:block;
   background-color:#077;
 }
 .knobspresets > p:hover { background-color:#099 }
@@ -187,7 +189,7 @@ h1 {
 }
 
 .piano > div:hover,
-.piano > p:hover   {
+ .piano > p:hover   {
   background-color: #00f
 }
 
@@ -197,8 +199,14 @@ h1 {
 ******************************************************************************/
 
 .sheet { height:50ch; overflow:scroll; width:calc(100vw - 2ch); white-space:nowrap; position:relative; }
-.sheet > div { background-color:#112; height:1000%; display:inline-block; }
-.sheet > div > p { border:solid 1px transparent; background-color:#22F; position:sticky; top:0; z-index:2; }
+.sheet > div {
+  background-color:#112;
+  height:1000%;
+  display:inline-block;
+  width:1ch;
+  border:0;
+ }
+.sheet > div > p { border:0; background-color:#22F; position:sticky; top:0; z-index:2; }
 .sheet > div > div { position: absolute;; }
 
 .sheet > div.phrasehighlight { background-color:blueviolet; }
@@ -218,25 +226,49 @@ h1 {
   height:100%;
   min-height:1em;
   position:absolute;
+  width: 0;
+  display: flex;
 }
+
 .part > div:nth-child(1) > p {
-  border:solid 1px transparent;
-  display:inline-block;
+  border:0;
   height:100%;
+  display:inline-block;
+  flex: auto;
 }
-.part > div:nth-child(1) > p:nth-child(4n+1) { border-left:solid 1px #555; }
+
+/* beat vertical line
+.part > div:nth-child(1) > p.d1 { border-left:solid 1px #555; }*/
+
 .part > div:nth-child(1) > p:hover { background-color:#0ff; }
+
+/* Zoomable subnotes
+*/
+
+.part:not(.d2) p.d2 { display:none; }
+.part:not(.d3) p.d3 { display:none; }
+.part:not(.d4) p.d4 { display:none; }
+.part:not(.d5) p.d5 { display:none; }
+.part:not(.d6) p.d6 { display:none; }
+.part:not(.d7) p.d7 { display:none; }
+.part:not(.d8) p.d8 { display:none; }
+.part:not(.d9) p.d9 { display:none; }
+
 
 .part > div:nth-child(2) { background-color:#0008; margin-top:1em; position:relative; }
 
 /* Row and each descendants [label [ticks]] */
+
 .part > div:nth-child(2) > div > p,
-.part > div:nth-child(2) > div > div,
-.part > div:nth-child(2) > div > div > p { height:1em; }
+ .part > div:nth-child(2) > div > div,
+  .part > div:nth-child(2) > div > div > p { height:1em; }
+
+.part > div:nth-child(2) > div > div { display:flex; }
+.part > div:nth-child(2) > div > div > p { flex:auto; }
 
 /* Tick */
-.part > div:nth-child(2) > div > div > p { border:solid 1px transparent; display:inline-block; }
-.part > div:nth-child(2) > div > div > p:nth-child(4n+1) { border-left:solid 1px #333; }
+.part > div:nth-child(2) > div > div > p { height:1em; border:0; display:inline-block; width:1ch}
+/*.part > div:nth-child(2) > div > div > p:nth-child(4n+1) { border-left:solid 1px #333; } */
 
 /* Label natural keys */
 .part > div:nth-child(2) > div.nat > p {
@@ -285,10 +317,13 @@ h1 {
 
 /* Label and container of ticks */
 .part > div:nth-child(2) > div:hover > p,
-.part > div:nth-child(2) > div:hover > div { color:yellow; background-color:blue; }
+ .part > div:nth-child(2) > div:hover > div { color:yellow; background-color:blue; }
 
 /* Tick */
 .part > div:nth-child(2) > div > div > p:hover { background:darkcyan; }
 
 
-/* ex ch PC EM -- CSS units/*
+/*
+ Units: ex ch pc em
+ Selectors: .nth-child(4n+1)
+/*
