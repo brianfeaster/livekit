@@ -52,6 +52,8 @@ h1 {
   background:#066;
 }
 
+.knobs > div { display:inline-block; }
+
 .knobspresets {
   position:absolute;
   z-index:3;
@@ -82,10 +84,6 @@ h1 {
 .volume:hover { border: solid 1px #a0a }
 .volume > p { display: none }
 .volume:hover > p { display: inline-block; }
-
-
-.addpart { display:inline-block; }
-.addpart > div > input { font-size:inherit; width:3ch; }
 
 
 /******************************************************************************
@@ -237,8 +235,8 @@ h1 {
   flex: auto;
 }
 
-/* beat vertical line
-.part > div:nth-child(1) > p.d1 { border-left:solid 1px #555; }*/
+/* beat vertical line */
+.part > div:nth-child(1) > p.d1 { border-left:solid 1px #555; }
 
 .part > div:nth-child(1) > p:hover { background-color:#0ff; }
 
