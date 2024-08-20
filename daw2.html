@@ -1818,7 +1818,7 @@ var Lowpass = function (ctx, destinations) {
 /******************************************************************************
   TickerTimer - Manage playback time
 
-  Produce a beat range [from, to] and time representing the
+  Produce a beat range and time [from, to, time] representing the
   current beat range to process and at what (usually future) time.
 
   Ticks represent periodic time units that need to be sequentially
@@ -1860,170 +1860,172 @@ var Lowpass = function (ctx, destinations) {
     Current tick determined and used to calculate end time to play
 
   ClockDomain
-    EPOCH-v   v-NOW  v-time
+    continuous increment of everything, epoch advances when cue rewinds
+    
+   EPOCH1-v   v-NOW  v-time  v-EPOCH2
       ----|---#------*--------
-  BeatDomain
-      0     beatLast-v    v-beatEnd
-      @---=---@---=---@---=---
-                       ^-beatNext
 
+  BeatDomain
+    cue cycles between cueStart and cueEnd.  cue and time align the two ranges
+
+     cueStart-v    cue-v      v-cueEnd
+      0---=---1---=---2---=---3
+                        ^-cueNext
+
+
+  Timer just increments from 0 to cueEnd-cueStart which is dynamic as cueEnd could change
+  whereas cueStart won't change but cueStartNext can change.
+  When end reached, resets to 0 and resets cueStart to 
 ******************************************************************************/
 var TickerTimer = (function (ctx) {
-  let margin = 0.0; // seconds to start processing/sending audio (in case that's a problem)
-  let lead  = 1.0; // Audio buffer length in seconds
 
-  let bpm   = 60;
-  let beats =  1; 
-  let subs  =  1; // beat subdivisions (in ticks)
+  let lead_time = 0.0;  // seconds in the future to write/process audio (in case that's a problem)
+  let buff_time = 1.0; // Output buffer in seconds
 
-  let ticks = beats * subs;
-  let tickStart = 2; // start tick
-  let tickEnd   = 6; // end tick (exclusive)
-  let tickRange = tickEnd - tickStart;
+  let bps = 1;
+  let subs = 1; // beat subdivisions, 1 or more, AKA ticks
 
-  let epoch = -1; // real time we started aligned with start tick
-  let time  = -1; // last time (exclusive) processed, usually ahead of now()
+  // tick domain
+  let tickBeg = 0;
+  let tickEnd = 0; // number of ticks to cycle over, 1 tick = 1/(bps*subs) seconds = 1/subs beats
 
-  let beatLast = 0;
-  let beatEnd = 0;
-  // Dynamic state
-  let playCallback = null;
-  let paused = true;
+  // beat domain
+  let cueBeg = 0; // Timer beat start
+  let cue = 0; // next beat to render at, cue2tick => floor(cue*subs)       cue2time => cue/bps
+  let cueEnd = 0; // Timer beat end
 
-  let tickCue = 0;
-  let renderCue = 0;
+  // real time domain
+  let epoch = 0; // real time range began playing
+  let time  = 0; // real time (possibly future) to play/process next, aligned with cue
 
-  let render = -1; // last time rendered
+  let playCallback = null; // Called when unpaused/resumed TODO: incorporate the scheduler into this object?
 
-  let state = "reset"; // pause reset running
-
-  /* Last emitted time +jiffy - CurrentTime / jiffy -> number of ticks back from tick the real time tick count is */
-  let _pause = function (e) {
-  }
+  let state = "pause"; // jause reset running
 
   // Debugging message
-  var self = function (f, r) {
-    //DB.post("next Tick", `${paused} ${tickCue} ${tick} ${time}   ${now}   ${renderCue} ${render} => ${r} ${f?"RRRRRRR":"ttt"} `);
-    return r;
+  var self = function () { };
+
+  self.setBpm   = function (b) { bps=b/60;  epoch=time-cue/bps; return b; }
+  self.setSubs = function (s)  {
+    let orig = subs;
+    tickBeg = Floor((tickBeg/orig)*subs);
+    tickEnd = Ceil((tickEnd/orig)*subs)
+    cueEnd = tickEnd/subs;
+    return subs=s;
+  }
+  self.jiffy = function () { return 1 / bps / subs; }
+
+  self.setBeg  = function (t) {
+    if (t < tickEnd) { tickBeg = t; }
+    return self;
   };
 
-  self.setBpm   = function (b) { bpm=b;                     return bpm; }
-  self.setBeats = function (b) { beats=b; ticks=beats*subs; return beats; }
-  self.setSubs = function (s)  { subs=s;  ticks=beats*subs; return subs; }
+  self.setEnd  = function (t) {
+    if (tickBeg<=t) {
+      tickEnd = t+1; 
+      cueEnd = tickEnd/subs;
+    }
+    return self;
+  };
 
-  self.getRange  = function () { return [tickStart, tickEnd]; }
-  self.setStart  = function (t) { if (true||t<=tickEnd) { tickStart=t; tickRange=tickEnd-tickStart; if (paused) { tickCue = renderCue = tickStart; } } return self; };
-  self.setEnd    = function (t) { if (true||tickStart<=t) { tickEnd=t; tickRange=tickEnd-tickStart; beatEnd=tickRange/subs} return self; };
+  self.getRange  = function () { return [tickBeg, tickEnd]; }
+  self.tickRange = function () { return (tickEnd-tickBeg); }
+
 
   self.registerPlayCallback = function (f) { playCallback = f; }
 
-  self.jiffy = function () { return 60 / bpm / subs; }
-  self.tickRange = function () { return (tickEnd-tickStart); }
-
-  // Request the next tick and time to render it.  False implies not ready.
+  // Request the next beat range and time to render it, false implies pre buffer full.
   self.nextTick = function () {
     let now = ctx.currentTime;
     switch (state) {
     case "pause":
+      cue = (now - epoch) * bps;
       time = now;
       return false;
-    case "resume":
-      epoch += now - time + margin; // adjust epoch by how long paused
-      time = now + margin;
+    case "reset":
+      cueBeg = cue = tickBeg / subs;
+      cueEnd = tickEnd / subs;
+      time = now + lead_time;
+      epoch = time - cueBeg/bps;
       state = "running";
       break;
-    case "reset":
-      time = epoch = now + margin;
-      beatLast = 0;
+    case "resume":
+      time = now + lead_time;
+      epoch = time - cue/bps ;
       state = "running";
       break;
     case "running":
+      break;
     default:
     }
 
-    if (now+lead <= time) { return false; } // Buffer full, skip rendering
+    if (now+buff_time <= time) { return false; } // Buffer full, skip rendering
 
-    let tickLast = Floor(beatLast * subs)
-    let beatNext = (tickLast+1) / subs
+    let tick = Floor(cue * subs);
+    let cueNext = (tick+1) / subs;
+    if (cueNext <= cue) { cueNext = (tick+2) / subs; }
     let rewind = false;
-    if (beatEnd <= beatNext) {
-      beatNext = beatEnd  
-      rewind = true
+
+    if (cueEnd <= cueNext) {
+      cueNext = cueEnd;
+      rewind = true;
     }
 
-    let offset = tickStart/subs;
-    let result = [offset+beatLast, offset+beatNext, time]
+//DB(`${state} ${subs} [${tickBeg} ${tick} ${tickEnd}]\t[${cueBeg} ${cue} ${cueEnd} ${cueNext}]\t{${Trunc2(epoch)} ${Trunc2(time)}}`);
+
+    let res = [cue, cueNext, time]
 
     if (rewind) {
-      epoch += beatEnd * 60/bpm
-      beatLast = 0;
+      epoch += (cueEnd-cueBeg) / bps; // Advance epoch
+      cueBeg = cue = tickBeg / subs;   // Reset cue beginning
     } else {
-      beatLast = beatNext
+      cue = cueNext;
     }
 
-    time = epoch+beatLast*60/bpm
+    time = epoch + cue/bps
 
-    return result;
+    return res; // make sure progress is made in case of rounding error
+
   }; // TickerTimer.nextTick()
 
 
-  // Request the next rendering tick.  False implies tick hasn't moved.
+  // Request the next rendering tick.  False implies tick hasn't moved. BF TODO this is outdated, parts might be misaligned
   self.nextRender = function () {
-    let ret = false;  // Default return value
-    if (renderCue != -1) { // Cued (running or paused)...
-      if (renderCue != render) { // Update with cue.
-        render = renderCue;
-        ret = render;
-      } // Skip, already on cue.
-      renderCue = -1;
-    } else if (!paused) { // Normal running...
-      let currentTick = self.currentTick();
-      if (currentTick != render) { // Update with new tick.
-        ret = render = currentTick;
-      } // Skip, on same tick
-    } // Paused,..always skip.
-    return ret;
+    return state=="pause" ? false : self.currentTick();
   }
 
   self.tick = self;
-  self.pause     = function (e)  {
-    if (paused = !paused) { // Did we switch into pause mode?
-      tickCue = renderCue = self.currentTick(); // Force next tick and render to current realtime.
+  self.pause = function (e)  {
+    if (state != "pause") { // Switch into pause mode?
+      state = "pause";
       Destinations.cut(); // halt external sound immediately
     } else {
+      state = "resume";
       playCallback();
     }
-    blinkify(e, paused&&"#f00");
+    blinkify(e, (state=="pause")&&"#f00");
   };
-  self.rewind = function (e, newTick) { // Reset state so next tick is 0 and next time will be nowish.
-    // Rewind to specified tick or the usual start tick
-    tickCue = renderCue = (newTick == undefined) ? tickStart : newTick;
-    if (paused) { self.pause(e); }
+  self.rewind = function (e, newTick) {
+    if ("pause" == state) {
+      state = "reset";
+      playCallback();
+    } else {
+      state = "reset";
+    }
     return self;
   };
-  self.now = () => ctx.currentTime;
 
-  /* Derive the realtime tick to render (which will most likely have already been processed)
-  // When deriving the live beat for DOM highlighting, must do so within the current active beat range
-  // So the distance between (BeatTime - currentTime) / beatDuration is how beats to subtract from Beat
-  // to get the live beat.  But if this is less than BeatInitial, mod the BeatRange to compensate..
-  self.currentTickOld = function (adj) {
-    let now = ctx.currentTime + (adj||0);
-    //               |4.00 now4.12 2|4.25    3|4.5    4|4.75  5|5.00=TIME 6|
-    //   time - now  = .88 % .25 = 3.52 ceil=4  tick- = 2
-    //                           tick- = 2.48
-    let ticksAhead = Floor(tick - (time - now) / self.jiffy());
-    return Mod(ticksAhead-tickStart, length)+tickStart;
-  } */
+  self.now = () => ctx.currentTime;
 
   self.currentTick = function (adj) {
     let now = ctx.currentTime + (adj||0);
-    return tickStart + (Floor((now - epoch) * bpm/60 * subs) + tickRange) % tickRange;
+    let ticks = tickEnd - tickBeg;
+    return (Floor((now - epoch) * bps * subs) - tickBeg + ticks) % ticks + tickBeg;
   }
-  self.isPaused = function () { return paused; }
+  self.isPaused = function () { return state=="pause"; }
   self.lastTime = function () { return time + self.jiffy(); }
-  self.bpm = function () { return bpm; }
-  self.bps = function () { return 60/bpm; }
+  self.bpm = function () { return bps*60; }
+  self.bps = function () { return bps; }
   self.subs = function () { return subs; }
   return self;
 })(ctx); // TickerTimer
@@ -2062,10 +2064,10 @@ var Sheet = function (id, tickertimer) {
   self.refreshHeader = function () {
     let [start, end] = self.getRange();
     for (let i=0; i < self.tickCount(); i++) {
-      columns[i].firstChild.style.backgroundColor = (i<start || end<i) ? "#444" : "";
+      columns[i].firstChild.style.backgroundColor = (i<start || (end-1)<i) ? "#444" : "";
     }
   }
-  self.setStart = function (t) { tickertimer.setStart(t); self.refreshHeader(); return self; }
+  self.setBeg = function (t) { tickertimer.setBeg(t); self.refreshHeader(); return self; }
   self.setEnd = function (t) { tickertimer.setEnd(t); self.refreshHeader(); return self; }
 
   self.getRange = function () {
@@ -2082,7 +2084,7 @@ var Sheet = function (id, tickertimer) {
     });
   }
 
-  self.playRangeAt = function (range) {
+  self.playRange = function (range) {
     let [from, to, time] = range;
     parts.forEach((p)=>{
       p.playRange(from, to, time); // Play its notes along its tick
@@ -2184,7 +2186,7 @@ var Sheet = function (id, tickertimer) {
     }
 
     header.onmousedown = function (e) { // Handle updating sheet's start/end playback ticks and repeat marker
-      let t = beat*(subs+1)+tick;
+      let t = Floor(beat*(subs+1)+tick);
       if (hoverState==1) { self.setEnd(t); }
       else if (hoverState==0) {
         // Handle marked tick in phrase sheet's header
@@ -2195,7 +2197,7 @@ var Sheet = function (id, tickertimer) {
           columns[markedTick=t].firstChild.style.color = "black";
         }
       } else {
-        self.setStart(t);
+        self.setBeg(t);
       }
     };
     return column;
@@ -2208,7 +2210,6 @@ var Sheet = function (id, tickertimer) {
       column.firstChild.title = `${beat}+${sub}/${subs+1}`;
       if (sub++==subs) { sub=0; ++beat; }
     } );
-    tickertimer.setBeats(beats);
     tickertimer.setSubs(subs+1);
   }
 
@@ -2234,8 +2235,8 @@ var Sheet = function (id, tickertimer) {
     subs--;
     fixTickTimes();
     updatePartsBeatWidthInvariants();
-    self.setStart(rangeOriginal[0]*(subs+1)/(subs+2));
-    self.setEnd(rangeOriginal[1]*(subs+1)/(subs+2));
+    self.setBeg(Floor(rangeOriginal[0]*(subs+1)/(subs+2)));
+    self.setEnd(Floor(rangeOriginal[1]*(subs+1)/(subs+2)));
   }
 
   self.insertSubbeats = function () {
@@ -2254,8 +2255,8 @@ var Sheet = function (id, tickertimer) {
     fixTickTimes();
     updatePartsBeatWidthInvariants();
 
-    self.setStart(rangeOriginal[0]*(subs+1)/(subs));
-    self.setEnd(rangeOriginal[1]*(subs+1)/(subs));
+    self.setBeg(Floor(rangeOriginal[0]*(subs+1)/(subs)));
+    self.setEnd(Floor(rangeOriginal[1]*(subs+1)/(subs)));
   };
 
   self.beatWidth = function () { return subs+1; }
@@ -2264,7 +2265,6 @@ var Sheet = function (id, tickertimer) {
     let tick = self.createTickColumn(beats++, 0, (beats-1)%8);
     columns.push(tick); // Keep track of the column
     element.appendChild(tick);
-    tickertimer.setBeats(beats);
 
     RangeForEach(subs, (subIdx, idx)=>{
       let tick = self.createTickColumn(beats-1, idx+1, '-');
@@ -2304,7 +2304,7 @@ var Sheet = function (id, tickertimer) {
   // Reset the TickerTimer state object
   tickertimer
     .setEnd(self.tickCount()-1)
-    .setStart(0);
+    .setBeg(0);
 
   return self;
 }; // Sheet
@@ -2401,17 +2401,8 @@ var RefPart = function (partObj, tickIdx, height) {
   }
 
   self.playRange = function (from, to, time) {
-    time = time || ctx.currentTime; //0 indicates play immediately
-    // consider part's start and end global beat
-    let start = eval(ref.parentElement.firstChild.title);
-    let end = start + partObj.divisions()[0];
-    if (to<start || end<=from) { return; } // return if play range does't overlap part
-    [...partObj.headerTicks().children].forEach( (note)=>{ // over each part tick...
-      let t = eval(note.title) + start; // consider tick's sheet beat time
-      if (from<=t && t<to) {
-        partObj.playTick(note.title, time+(t-from)*TickerTimer.bps()); // adjust play time if not aligned on tick
-      }
-    });
+    let via = eval(ref.parentElement.firstChild.title);
+    partObj.playRangeVia(via, from, to, time);
   }
 
   self.updateBeatWidthInvariants = function () {
@@ -2533,7 +2524,6 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
   }
 
   let updateBeatWidthInvariants = function () {
-    //TickCount = tickCount(); // TODO outdated concept
     body.className="part";
     let width=1, sheetBeatWidth=sheetObj.beatWidth();
     RangeForEach([1, divisions.length-1], (div)=>{
@@ -2752,7 +2742,6 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
   subBeatByThird.onmousedown = insertSubbeats.bind(null, 3);
   subBeatByThird.className = "actor";
 
-
   // Clicking title will raise it.  Dragging title will move it around the sheet
   title.onmousedown = function (e) {
     // Right click on title toggle minimization but right button + meta bring up browser menu
@@ -2810,18 +2799,22 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
     return start<b && a<=end && [start, end];
   }
 
-  self.playRange = function (from, to, time) {
+  self.playRangeVia = function (via, from, to, time) {
     time = time || ctx.currentTime; //0 indicates play immediately
-    // consider part's start and end global beat
-    let start = eval(part.parentElement.firstChild.title);
+    let start = via;
     let end = start + divisions[0];
     if (to<start || end<=from) { return; } // return if play range does't overlap part
     [...elHeaderTicks.children].forEach( (note)=>{ // over each part tick...
       let t = eval(note.title) + start; // consider tick's sheet beat time
       if (from<=t && t<to) {
-        self.playTick(note.title, time+(t-from)*TickerTimer.bps()); // adjust play time if not aligned on tick
+        self.playTick(note.title, time+(t-from)/TickerTimer.bps()); // adjust play time if not aligned on tick
       }
     });
+  }
+
+  self.playRange = function (from, to, time) {
+    let via = eval(part.parentElement.firstChild.title);
+    self.playRangeVia(via, from, to, time);
   }
 
   // Called by global conductor
@@ -2885,6 +2878,10 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
   self.focus = () => { // Raise/focus this element in sheet and reset others
     sheetObj.partsResetZ();
     part.style.zIndex = 1;
+  }
+
+  self.setTick = function (row, tick) {
+    rows[row].children[1].children[tick].innerText = '*';
   }
 
   return self;
@@ -2953,28 +2950,25 @@ var setupControls = function (keyboard, sheet) {
 
 var eventLoops = function (sheet) {
   (function processHandlerLoop () {
+//DB.log("eventLoops", sheet);
     let ticktime = TickerTimer.nextTick(); // [tick to process, time audio is written/buffered]
     if (ticktime !== false) {
-      //sheet.playTicksAt.apply(null, ticktime);
-      sheet.playRangeAt(ticktime);
-      setTimeout(processHandlerLoop, 1000 * TickerTimer.jiffy()/4); // Fill buffer within 4 jiffies
-      //DB.post("event loop ctx", "!");
+      sheet.playRange(ticktime);
+      setTimeout(processHandlerLoop, 1000 * TickerTimer.jiffy()/4); // Fill buffer within 4 jiffies TODO BF is /4 still usefull?
     } else if (!TickerTimer.isPaused()) {
       setTimeout(processHandlerLoop, 1000 * TickerTimer.jiffy());
-      //DB.post("event loop ctx", "");
     }
-    // else paused so allow event loop to end.
+    // else paused, loop ends
   })();
   (function renderHandlerLoop () {
     var tick = TickerTimer.nextRender();
     if (tick !== false ) {
       sheet.render(tick);
       setTimeout(renderHandlerLoop, 1000 * TickerTimer.jiffy()-10); // Next update in a jiffy
-      //DB.post("event loop css", "!");
     } else if (!TickerTimer.isPaused()) {
       setTimeout(renderHandlerLoop, 10); // Try again very soon
-      //DB.post("event loop css", "");
     }
+    // else paused, loop ends
   })();
 }
 
@@ -3070,7 +3064,7 @@ var Start = function () {
   Part0 = Part(Sheet0, 2, 1*21, 24, 16, DrumKit0 );
 //  Part(Sheet0,         2,16*21, 21, 88, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
-  Sheet0.setStart(2).setEnd(6);
+  Sheet0.setBeg(2).setEnd(6);
 
   DB.post("Start", "UpdatePartsSlowly");
   updatePartsSlowly();
@@ -3091,7 +3085,32 @@ function updatePartsSlowly() {
     Part0.appendBeat,
     Part0.insertSubbeats.bind(0,2),
     Part0.insertSubbeats.bind(0,2),
-    ()=>{Sheet0.setStart(2*2 * 2).setEnd(2*2 * 6);}
+    ()=>{Sheet0.setBeg(2*2 * 2).setEnd(2*2 * 6 - 1);},
+    TickerTimer.rewind,
+    Part0.setTick.bind(0, 11, 0),
+    Part0.setTick.bind(0, 11, 4),
+    Part0.setTick.bind(0, 11, 8),
+    Part0.setTick.bind(0, 11, 12),
+    Part0.setTick.bind(0, 2, 2),
+    Part0.setTick.bind(0, 2, 6),
+    Part0.setTick.bind(0, 2, 10),
+    Part0.setTick.bind(0, 2, 14),
+    Part0.setTick.bind(0, 3, 0),
+    Part0.setTick.bind(0, 3, 1),
+    Part0.setTick.bind(0, 3, 2),
+    Part0.setTick.bind(0, 3, 3),
+    Part0.setTick.bind(0, 3, 4),
+    Part0.setTick.bind(0, 3, 5),
+    Part0.setTick.bind(0, 3, 6),
+    Part0.setTick.bind(0, 3, 7),
+    Part0.setTick.bind(0, 3, 8),
+    Part0.setTick.bind(0, 3, 9),
+    Part0.setTick.bind(0, 3, 10),
+    Part0.setTick.bind(0, 3, 11),
+    Part0.setTick.bind(0, 3, 12),
+    Part0.setTick.bind(0, 3, 13),
+    Part0.setTick.bind(0, 3, 14),
+    Part0.setTick.bind(0, 3, 15),
   ].forEach((f,i)=>setTimeout(f, i*50));
 }
 
