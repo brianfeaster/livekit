@@ -2726,7 +2726,7 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
   midiOut.title = "CHANNEL OUT";
   midiOut.onmousedown = (e) => {
     if (e.button == 0) { 0<chanOut && --chanOut; };
-    if (e.button == 4) { chanOut<15 && ++chanOut; };
+    if (e.button == 2) { chanOut<15 && ++chanOut; };
     midiOut.innerText = chanOut;
   };
 
@@ -2822,20 +2822,6 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
 
   // Called by player/self
   self.playTick = function (tick, time) {
-    /*
-    if (tick < 0 || TickCount <= tick) {
-      DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
-      return;
-    }
-    RangeForEach(keyCount, (y)=>{
-      let notes = rows[keyCount-y-1].children[1];
-      let note = notes[tick];
-      if (!!note && note.innerText == "*") {
-        IBC([chanOut, keyBeg + keyCount-row-1, 1.0, time, 0]) // chan note vol time sus
-      }
-      //self.playNote(y, tick, time)
-    });
-    */
     RangeForEach(keyCount, (y)=>self.playNote(y, tick, time));
   }
 
@@ -2852,7 +2838,8 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
       IBC([chanOut, keyBeg + keyCount-row-1, 1.0, time, 0]) // chan note vol time sus
     }
   };
-/*
+/* TODO BEFORE DELETING THIS, handle dashes/sustain
+
   self.playNoteOld = function (row, tick, time) {
     if (tick < 0 || TickCount <= tick) {
       DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
