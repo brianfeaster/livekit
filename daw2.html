@@ -21,7 +21,7 @@
  <a onmousedown="window.location.href=window.location.pathname+''">Clear</a>
  <a onmousedown="popupToggle('pauseicon')">Kitteh</a>
  <a onmousedown="popupToggle('djRefact0r')">DjRefact0r</a>
- <a href="https://shroom.dv8.org/daw/">DAW1</a>
+ <a onmousedown="window.location.href='https://shroom.dv8.org/daw'+window.location.search">DAW1.0</a>
  <a href="https://www.w3.org/TR/webaudio/">WebAudio</a>
 </div>
 
@@ -511,6 +511,7 @@ var Knobify = function (element, callback, val, fac, min, max, presets) {
   };
 
   callback(value); // Make sure callback is synchronized
+  element.set = function (v) { callback(valueSet(v)); };
   return element;
 }; // Knobify
 
@@ -522,8 +523,7 @@ var Knobify = function (element, callback, val, fac, min, max, presets) {
   USAGE::
     hyphen(msg)      Send message to Hyphen
 ******************************************************************************/
-//hyphen.song = function () { return ""; }
-var hyphen = function () {
+var hyphen = (function () {
    DB ("Connecting to Hyphen!");
    let server = new WebSocket( window.location.protocol=="https:" ? "wss://shroom.dv8.org:7179" : "ws://shroom.dv8.org:7180");
    let song = false;
@@ -565,7 +565,7 @@ var hyphen = function () {
 
    return self
 
-};
+})();
 
 
 /******************************************************************************
@@ -811,7 +811,7 @@ var IBC = function () {
     let ls = _listeners.filter( (l)=>!l[2] ); // Listeners we haven't messaged yet
 
     // Debug dump the message and the handler ID's who'll get it
-    if (_debug) { DB( ` ${ls.reduce( ((r,l) => r+=" "+l[0]), JSON.stringify(m)+" ->")}`); }
+    if (_debug) { DB(ls.reduce( ((r,l) => r += " " + l[0]), JSON.stringify(m) + " ->")); }
 
     ls.forEach((f)=>{
       f[2] = true; // Set handler messaged bool to prevent message cycles
@@ -886,7 +886,7 @@ var PianoKeyboard = function (id, keyStart, keyCount) {
   //// Private
   let self = this;
   let element = document.getElementById(id);
-  let chanOut = 0;
+  let chanOut = 3;
   DB.check(element, "ERROR: PianoKeyboard: Element id=" + id + " not found in DOM.");
 
   let knobs = element.parentElement.previousElementSibling;
@@ -1172,7 +1172,7 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   let destinations = Array(audioBuffers.length).fill(0); // Default destination of each sound to default
   let volumes = Array(audioBuffers.length).fill(1.0); // Default volumes
   let _ibcId = false;
-  let chanIn = 3;
+  let chanIn = 10;
 
   // Element []
   let _element = document.createElement('div'); // [ ]
@@ -1291,7 +1291,9 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   }
   this.connect = function (dest, idx) { destinations[idx] = dest; }
   this.connected = function (idx) { return destinations[idx]; }
-
+  this.chanIn = function (c) { midi.innerText=chanIn=c; return this; }
+  this.chanIn = function () { return chanIn; }
+  this.chanInSet = function (c) { midi.innerText=chanIn=c; return this; }
 } // Drumkit
 
 
@@ -1358,10 +1360,10 @@ DB.check( KeyFreq(117)==7040, "KeyFreq frequency mismatch key 117 != 7040Hz");
 var SynthGlobalCounter = 0;
 var Synthesizers = [];
 var Synthesizer = function (ctx, label, type, keyboard, color) {
+  label = label ||  ("Synth" + ++SynthGlobalCounter);
   //// Local
   let self = this;
   let _ibcId = false;
-  let _name = label || ("Synth" + ++SynthGlobalCounter);
   let _att = 0.01; // Attack time in seconds.
   let _sus = 0.01;
   let _rel = 0.50; // Release time in seconds for both the filter and gain.
@@ -1378,7 +1380,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
 
   let _nameDOM = CreateAppendChild('div', _element); // [ Synth1 ]
   _nameDOM.style.background="";
-  _nameDOM.innerText = _name;
+  _nameDOM.innerText = label;
 
   let knobs = CreateAppendChild('div', _element); // [ Synth1 [ ] ]
 
@@ -1460,7 +1462,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
     //DB.post("_play", [key, vol, when, sustain]);
     // Depending on how this is called (when is either 0 or a time in the
     // future) now will be the current time or when
-    let sus = _sus + (sustain ? sustain*TickerTimer.jiffy() : 0);
+    let sus = _sus + (sustain ? sustain : 0);
     let at = !when ? ctx.currentTime : when;
     let osc = ctx.createOscillator(); // Create and add to table if not already
     // Adding a random [0..1] value to the freq in an attempt to get rid of beating.
@@ -1546,8 +1548,10 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   //// Public
   this.element = _element;
   this.color = color
-  //this.name = function () { return _name; }
+  this.label = function () { return label; }
+  this.chanIn = function () { return chanIn;  }
   this.adsr = function () { return [parseInt(_att*255), 0, parseInt(_sus*255), parseInt(_rel*255)]; }
+  this.chanInSet = function (c) { midi.innerText=chanIn=c; return this; }
   this.attSet = function (att) { _att = att/255.0; }
   this.susSet = function (sus) { _sus = sus/255.0; }
   this.relSet = function (rel) { _rel = rel/255.0; }
@@ -1562,6 +1566,10 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   };
   this.unhighlight = function () {
     keyboard.unhighlight(_lastKey, color); // Remove last high-light
+  };
+  this.connect = function(d) {
+    _filterIdx = d;
+    _output.innerText = Destinations.name(Destinations.index(d));
   };
   this.destination = function () { return _filterIdx; };
 
@@ -1725,7 +1733,7 @@ var Lowpass = function (ctx, destinations) {
   //// Local
   let _name = "lp";
   let _f = .9; // Frequency
-  let _q = 0.0; // Q this just resonates annoyingly when not 0
+  let _q = 0.0; // Q this just resonates annoyingly when not. TODO: 0 Q always set to 0
   let _destId = 0;
   let _destination;
   let _lowpass;
@@ -1784,8 +1792,9 @@ var Lowpass = function (ctx, destinations) {
   self.setParams = function (ps) {
     _f = ps[0];
     _lowpass.frequency.value = 10000.0*(1.0-_f);
-    _q = ps[1];
-    _lowpass.Q.value = _q * 100.0;
+    // Q always set to 0
+    //_q = ps[1];
+    //_lowpass.Q.value = _q * 100.0;
   }
   // NEW
   self.dest = function () { return _destId; }
@@ -2426,6 +2435,7 @@ var RefPart = function (partObj, tickIdx, height) {
 ******************************************************************************/
 var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
   let chanIn  = 0;
+  let volume = 1.0;
   let chanOut = playable instanceof Synthesizer ? 4 : 3;
   let sheet = sheetObj.element(); // Parent object's element
   let timer = sheetObj.tickerTimer();
@@ -2507,9 +2517,13 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
     header.onmouseleave = ()=> MouseIsDown && IBC([chanOut, key, 0]);
   });
 
+  let beatToTick = function (tick) {
+    let [beat, sub, divs] = tick.split(/[+/]/).map(n=>parseInt(n));
+    return beat*divs + sub;
+  }
+
   let sheetTick = function () {
-    let [beat, sub, divs] = part.parentElement.children[0].title.split(/[+/]/).map(n=>parseInt(n));
-    return beat*divs+sub
+    return beatToTick(part.parentElement.children[0].title);
   }
 
   let subToGlyph = function (depth) {
@@ -2520,20 +2534,25 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
     return divisions.reduce((p,n)=>p*n);
   }
   let subTickCount = function (upTo) {
-    return divisions.slice(1, upTo&&++upTo).reduce((p,n)=>p*n);
+    let s = divisions.slice(1, upTo&&++upTo);
+    return s.length ? s.reduce((p,n)=>p*n) : 1;
   }
 
+  // Adjust CSS to view visible part ticks based on sheet tick "zoom" level
   let updateBeatWidthInvariants = function () {
-    body.className="part";
-    let width=1, sheetBeatWidth=sheetObj.beatWidth();
+    let sheetBeatWidth=sheetObj.beatWidth();
+    let beats = divisions[0];
+
+    let width=1;
+    body.className="part"; // visible beats added to this "part d2 d3..."
     RangeForEach([1, divisions.length-1], (div)=>{
       if (sheetBeatWidth < (width *= divisions[div])) { return; }
       body.className += ` d${++div}`;
     });
-    elHeaderTicks.style.width = `${divisions[0]*sheetBeatWidth}ch`;
+    elHeaderTicks.style.width = `${beats*sheetBeatWidth}ch`;
 
     RangeForEach(keyCount, (y) => {
-      let notes = rows[y].children[1].style.width=`${divisions[0]*sheetBeatWidth}ch`;
+      rows[y].children[1].style.width=`${beats*sheetBeatWidth}ch`;
     });
 
     addBeat.title = `[${divisions}]${tickCount()}`;
@@ -2543,6 +2562,7 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
     if (0 == divisions[0]) { return; }
     insertHeaderSubbeats(subs);
     insertNotesSubbeats(subs);
+    recalculateBeatValues();
   }
 
   let insertHeaderSubbeats = function (subs) {
@@ -2585,9 +2605,22 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
     });
   };
 
+  let recalculateBeatValues = function () {
+    RangeForEach(keyCount, (y)=>{
+      let beat = 0;
+      let sub = 0;
+      let subs = subTickCount();
+      [...rows[y].children[1].children].forEach((t,i)=>{
+        elHeaderTicks.children[i].title = t.title = `${beat}+${sub}/${subs}`;
+        if (++sub == subs) { beat++; sub=0; }
+      });
+    });
+  }
+
   let appendBeat = function () {
     appendHeaderBeat();
     appendNotesBeat();
+    recalculateBeatValues();
   }
 
   let appendHeaderBeat = function () {
@@ -2620,8 +2653,8 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
   let appendNotesBeat = function () {
     RangeForEach(keyCount, (y) => {
       let notes = rows[y].children[1];
-      let tick = CreateAppendChild('p', notes, NBSP).
-        setClassAndTitle("d1", `${divisions[0]-1}+0/1`);
+      let tick = CreateAppendChild('p', notes, NBSP)
+        .setClassAndTitle("d1", `${divisions[0]-1}+0/1`);
       addTickAction(tick);
       appendNotesSubbeats_(notes, y, 1, 0);
     });
@@ -2678,6 +2711,9 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
     // Broadcast the note
     IBC([chanOut, note, vol, when, sus]);
   });
+
+  // Volume/Velocity value
+  Knobify(CreateAppendChild('p', knobs, "VOL"), (v)=>(volume=v/100, Round(v)), volume*100, .1, 0, 100, [100, 80, 50, 20, 0]).title="VOLUME";
 
   // Midi channel in number button
   let midiIn = CreateAppendChild('p', knobs, chanIn);
@@ -2788,6 +2824,7 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
   self.headerTicks = function () { return elHeaderTicks; };
   self.headerTick = function (tick) { return elHeaderTicks.children[tick]; };
   self.sheet = ()=> sheetObj;
+  self.setVolume = function (v) { volume=v; return self; }
   self.setStartTick = function (tick) { tickIdx = tick; }
   self.startTick = function () { return tickIdx; }
   self.divisions = ()=>divisions;
@@ -2833,34 +2870,17 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
       return;
     }
     let notes = rows[keyCount-row-1].children[1];
-    let note = notes.querySelector(`p[title="${tick}"]`);
-    if (!!note && note.innerText == "*") {
-      IBC([chanOut, keyBeg + keyCount-row-1, 1.0, time, 0]) // chan note vol time sus
-    }
-  };
-/* TODO BEFORE DELETING THIS, handle dashes/sustain
 
-  self.playNoteOld = function (row, tick, time) {
-    if (tick < 0 || TickCount <= tick) {
-      DB.error(`tick ${tick} out of range ${tickIdx}..${tickIdx+TickCount-1}`);
-      return;
-    }
-    if (row < 0 || keyCount <= row) {
-      DB.error(`row ${row} out of range 0..${keyCount-1}`);
-      return;
-    }
-    //let notes = grid.children[row].children[1].children;
-    let notes = rows[keyCount-row-1].children[1].children;
-    let note = notes[tick];
-    if (!!note && note.innerText == "*") {
-      // Count subsequent "-" in grid for sustain
-      let tickLast = tick+1;
-      while (tickLast<TickCount && "-"==notes[tickLast].innerText) { ++tickLast; }
-      // Send note message to those listening on chanOut
-      IBC([chanOut, keyBeg + keyCount-row-1, 1.0, time, tickLast-tick-1]) // chan note vol time sus
-    }
+    let idx = beatToTick(tick);
+    let note = notes.children[idx];
+    if (!note || note.innerText != "*") { return; }
+
+    let tickCount = self.tickCount();
+    let tickNext = idx+1;
+    while (tickNext<tickCount && "-"==notes.children[tickNext].innerText) { ++tickNext; }
+    let sustain = (tickNext-idx-1)/(subTickCount()*TickerTimer.bps());
+    IBC([chanOut, keyBeg + keyCount-row-1, volume, time, sustain]) // chan note vol time sus
   };
-*/
 
   self.focus = () => { // Raise/focus this element in sheet and reset others
     sheetObj.partsResetZ();
@@ -2871,6 +2891,10 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
     rows[row].children[1].children[tick].innerText = '*';
   }
 
+  self.chanOutSet = function (c) { midiOut.innerText=chanOut=c; return this; }
+
+  self.toggleDisplay = function () { ToggleElementDisplay(grid); }
+
   return self;
 } // Part
 
@@ -2879,10 +2903,12 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
 /******************************************************************************
  Runtime
 ******************************************************************************/
+var knobVolume;
+var knobBpm;
 
 var setupControls = function (keyboard, sheet) {
 
-  Knobify("mainVolume",
+  knobVolume = Knobify("mainVolume",
     (v)=>{
       Destinations.input(0).gain.value = v / 100; // Unit-normalize the gain
       return Round(v);
@@ -2890,7 +2916,7 @@ var setupControls = function (keyboard, sheet) {
     50, .1, 0, 100,
     [100, 75, 50, 25, 0]);
 
-  Knobify("bpm",
+  knobBpm = Knobify("bpm",
     (v)=>TickerTimer.setBpm(Trunc1(v)),
     60, .01, 1, 666,
     [190, 120, 90, 60, 30, 20, 10]);
@@ -2960,6 +2986,148 @@ var eventLoops = function (sheet) {
 }
 
 
+var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
+  let gs = new GetStringBase64(encodedSong);
+  let next, b, label, d;
+  let synthCount = 0;
+  let sheetBeatOffset = 2;
+  let sheetPartOffset = 1;
+  if (!gs.assertString("LK") || !gs.assertBytes([3])) {
+    DB("Not LK3")
+    return false;
+  }
+
+  DB("Decoding LK3...")
+
+  Sheet0.insertSubbeats()
+  Sheet0.insertSubbeats()
+  Sheet0.insertSubbeats()
+
+  b = gs.nextByte();
+  knobVolume.set(b/255.0*100); // normalize then centify
+
+  b = (gs.nextByte() + (gs.nextByte()<<8))/100.0;
+  knobBpm.set(b);
+
+  while (null != (next = gs.nextByte()))
+  if (0 == next) { // FILTER / DESTINATION
+    DB("LK3 new filter");
+    label = gs.nextString(gs.nextByte()); // NAME LENGTH, NAME
+    var t = gs.nextByte(); // TYPE
+    b = gs.nextByte(); // PARAM COUNT
+    //DB("params count = " + b);
+    var ps=[]
+    for (var i=0; i<b; ++i) { // PARAMS
+      ps.push(gs.nextByte() / 255.0);
+    }
+    //DB("params = " + ps);
+    if (t==0) {
+      d = new Delay(ctx);
+      //DB("LK3 delay create");
+    } else if (t==1) {
+      //DB("LK3 lowpass create");
+      d = new Lowpass(ctx);
+    } else { t==-1; }
+
+    if (-1 != t) {
+      Destinations.push(d);
+      document.getElementById('filters').appendChild(d.element);
+      d.setParams(ps);
+    }
+  } else if (1 == next) { // Synthesizer
+    DB("LK3 new synth");
+    label = gs.nextString(gs.nextByte());
+    var synth;
+    if (!Synthesizer0) Synthesizer0 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#44f");
+    else if (!Synthesizer1) Synthesizer1 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#4f4");
+    else if (!Synthesizer2) Synthesizer2 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#f44");
+    else if (!Synthesizer3) Synthesizer3 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#4ff");
+    else synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#ff4");
+    synth.chanInSet(++synthCount);
+
+    document.getElementById('synths').appendChild(synth.element);
+    gs.nextByte(); // Ignore volume for now
+    synth.attSet(gs.nextByte());
+    synth.susSet(gs.nextByte());
+    synth.relSet(gs.nextByte());
+    var i = gs.nextByte();
+    //synth.connect(Destinations[i].input());
+    synth.connect(i);
+  } else if (2 == next) { // Phrase...extract into parts
+    label = gs.nextString(gs.nextByte());
+    var partDrums = false;
+    var measures = gs.nextByte();
+    var beatsper = gs.nextByte();
+    var ticksper = gs.nextByte();
+    var tickCount = measures*beatsper*ticksper;
+    var partCount = gs.nextByte();
+
+    //var phrase = new Part(label, measures, beatsper, ticksper, keyboard); // BF
+    //Sheet0.add(new PhraseReference(phrase));  // BF old method was sheet contained only references
+
+    sheetPartOffset = 30;
+    RangeForEach(measures*beatsper, Sheet0.appendBeat);
+    for (var i=0; i<partCount; ++i) {
+      var part;
+      label = gs.nextString(gs.nextByte());
+      var vol = gs.nextByte()/255;
+      var dst = gs.nextByte(); // Destination (set below if drumkit track)
+      var bools = gs.nextBools(tickCount);
+
+      if (gs.peekByte() & 128) {
+        var fixedNote = gs.nextByte() & 127;
+        //part = phrase.createPartFixed(drumKit, fixedNote)
+        if (!partDrums) {
+          //              (sheetObj,                         tickIdx, height,      keyBeg, keyCount, playable)
+          partDrums = Part(Sheet0, sheetBeatOffset*(Sheet0.subs()+1), sheetPartOffset, 24, 16, DrumKit0);
+          RangeForEach(measures*beatsper, partDrums.appendBeat);
+          partDrums.insertSubbeats(ticksper);
+          partDrums.chanOutSet(DrumKit0.chanIn());
+          sheetPartOffset += 50;
+          partDrums.toggleDisplay();
+        }
+        bools.map(function(n,i){if (n) { partDrums.setTick(fixedNote, i);}});
+        //drumKit.connect(Destinations.input(dst), fixedNote); // DESTINATION/FILTER
+        //part.elementFilter.innerText = Destinations.name(dst);
+      } else {
+        Synthesizers.map(function(s) { // Lookup synth
+          if (s.label() == label) {
+            //part = phrase.createPart(s);
+            part = new Part(Sheet0, sheetBeatOffset*(Sheet0.subs()+1), sheetPartOffset, 21,           88, Synthesizer1); // BF
+            RangeForEach(measures*beatsper, part.appendBeat);
+            part.insertSubbeats(ticksper);
+            part.chanOutSet(s.chanIn());
+            part.setVolume(vol);
+          }
+        });
+        DB.check(part, `part was not created for ${label}`);
+        bools.map(function(n,i){if (n) { part.setTick(15+gs.nextByte(), i);}});
+        sheetPartOffset += 60;
+        part.toggleDisplay();
+      }
+      //part.setVol(vol/255.0); // Volume
+      //bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
+    }
+    sheetBeatOffset += measures*beatsper;
+  } else if (3 == next) { // Phrase reference TODO: this is tricky since phrases are now individual parts.
+    label = gs.nextString(gs.nextByte()); // Look-up existing phrase id and create a new ref using it.
+/*
+    for (var i=0; i<Sheet0.length(); ++i) {
+      var phrase = Sheet0.phrase(i)
+      if (phrase.id == label) { // Found it
+        var refPhrase = new PhraseReference(phrase);
+        Sheet0.add(refPhrase);
+        DB(label + " reference");
+        break;
+      }
+    }
+*/
+  }
+  Sheet0
+    .setEnd(sheetBeatOffset*(Sheet0.subs()+1)-1)
+    .setBeg(2*(Sheet0.subs()+1));
+  return true;
+} // restoreSongLK3
 
 /******************************************************************************
  MAIN
@@ -2985,10 +3153,10 @@ var Part0;
 var DragOverTickState = 1;
 var MouseIsDown = false; // It's nice to keep track of global mouse button state.  The window element will always catch this event and handle it.
 
-var Start = function () {
-  DB.post("Start", DB.status());
+var Setup = function () {
+  DB.post("Setup", DB.status());
 
-  DB.post("Start", "Buttons");
+  DB.post("Setup", "Buttons");
   document.getElementById('addsynth').onmousedown = function () {
     var s = new Synthesizer(ctx, false, 1, Keyboard0, "#84f");
     document.getElementById('synths').appendChild(s.element);
@@ -3007,12 +3175,12 @@ var Start = function () {
   }
 
   // Create a piano object and DOM element.  88 keys, starting at 21/A0.
-  DB.post("Start", "Keyboard");
+  DB.post("Setup", "Keyboard");
   Keyboard0 = new PianoKeyboard("piano1", 21, 88);
   //var keyboard2 = new PianoKeyboard("piano2",  21, 16, 0, 27.5); // 88-key piano: A0 A# B C1 C# D ...
 
   // MIDI fun
-  DB.post("Start", "MIDI");
+  DB.post("Setup", "MIDI");
   function onMIDISuccess( m ) { // TODO Keyboard0 should not be receiving MIDI commands.
     m.inputs.forEach( e => {e.onmidimessage=function(e){Keyboard0.midi(e);};} );
   }
@@ -3028,40 +3196,42 @@ var Start = function () {
   Sheet0 = Sheet("sheet", TickerTimer);
   RangeForEach(8, Sheet0.appendBeat);
 
-  DB.post("Start", "More Buttons");
+  DB.post("Setup", "More Buttons");
   setupControls(Keyboard0, Sheet0); // Setup menus and moveable buttons.
 
-  DB.post("Start", "Noises");
+  DB.post("Setup", "Noises");
 
   // Load the audio asynchronously and create the default drumkit.
   DrumKit0 = new Drumkit(ctx, false, "orange", 24, ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"]);
 
-  Synthesizer0 = new Synthesizer(ctx, false, 1, Keyboard0, "#84f");
-  Synthesizer1 = new Synthesizer(ctx, false, 2, Keyboard0, "#4f4");
-  Synthesizer2 = new Synthesizer(ctx, false, 3, Keyboard0, "#f48");
-  ElementById('synths').appendChild(Synthesizer0.element);
-  ElementById('synths').appendChild(Synthesizer1.element);
-  ElementById('synths').appendChild(Synthesizer2.element);
+  if (restoreSongLK3(Keyboard0, DrumKit0, hyphen.song())) {
+    setTimeout(TickerTimer.rewind, 1000);
+  } else {
+    DrumKit0.chanInSet(3);
+    Synthesizer0 = new Synthesizer(ctx, false, 1, Keyboard0, "#84f");
+    Synthesizer1 = new Synthesizer(ctx, false, 2, Keyboard0, "#4f4");
+    Synthesizer2 = new Synthesizer(ctx, false, 3, Keyboard0, "#f48");
+    ElementById('synths').appendChild(Synthesizer0.element);
+    ElementById('synths').appendChild(Synthesizer1.element);
+    ElementById('synths').appendChild(Synthesizer2.element);
 
-  // Effects
-  ElementById('filters').appendChild(Delay().element);
-  ElementById('filters').appendChild(Lowpass().element);
+    // Effects
+    ElementById('filters').appendChild(Delay().element);
+    ElementById('filters').appendChild(Lowpass().element);
 
-  DB.post("Start", "Parts");
-  Part0 = Part(Sheet0, 2, 1*21, 24, 16, DrumKit0 );
-//  Part(Sheet0,         2,16*21, 21, 88, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
+    DB.post("Start", "Parts");
+    Part0 = Part(Sheet0, 2, 1*21, 24, 16, DrumKit0 );
+    Part(Sheet0,         2,16*21, 21, 88, Synthesizer1 ); // startTick, verticalPos, keyCount <=61, tickCount
 
-  Sheet0.setBeg(2).setEnd(6);
+    Sheet0.setBeg(2).setEnd(6);
 
-  DB.post("Start", "UpdatePartsSlowly");
-  updatePartsSlowly();
-
-  DB.post("Start", "CallbackHandlers");
-  TickerTimer.registerPlayCallback(eventLoops.bind(null, Sheet0));
+    updatePartsSlowly();
+  }
 }; // Start
 
 
 function updatePartsSlowly() {
+  DB.post("Start", "UpdatePartsSlowly");
   [
     Sheet0.insertSubbeats,
     Sheet0.insertSubbeats,
@@ -3114,7 +3284,10 @@ window.onload = function Main () {
     // longer looks like a play button.
     revealCenter("pauseicon", false)
     setTimeout( ()=>ElementById("pauseicon").style.clipPath="", 1100);
-    Start();
+    Setup();
+
+    DB.post("Start", "CallbackHandlers");
+    TickerTimer.registerPlayCallback(eventLoops.bind(null, Sheet0));
   }
 };
 

@@ -236,7 +236,10 @@ h1 {
 }
 
 /* beat vertical line */
-.part > div:nth-child(1) > p.d1 { border-left:solid 1px #555; }
+.part > div:nth-child(1) > p.d1 {
+  border-left:solid 1px #555;
+  margin-left: -1px;
+}
 
 .part > div:nth-child(1) > p:hover { background-color:#0ff; }
 
