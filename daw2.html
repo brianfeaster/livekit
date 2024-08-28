@@ -30,7 +30,7 @@
   <div>SHEET</div>
   <div class="knobs">
     <p id="mainVolume" title="MAIN VOLUME">VOL</p>
-    <p id="bpm" title="BEATS PER MINUTE">&nbsp;BPM&nbsp;</p>
+    <p id="bpm" title="BEATS PER MINUTE" style="width:5ch; text-align:center">BPM</p>
     <p class="actor reset" title="PLAY" onmousedown="TickerTimer.rewind(this)">|&gt;</p>
     <p id="pause" class="actor pause" title="PAUSE" onmousedown="TickerTimer.pause(this)">||</p>
     <div class="actor" title="NEW PART" onmouseleave="event.currentTarget.children[1].style.display='none'" onmousedown="event.currentTarget.children[1].style.display=''">
@@ -426,8 +426,8 @@ var Slider = function () {
 /******************************************************************************
   Knobify - Give an element a "knob" behavior
 
-  A knob reveal its value by hovering, the mouse wheel adjusts while the
-  callback receives the new value, clicking reveals drop down of optional
+  A knob reveal its external value by hovering, the mouse wheel adjusts while
+  the callback receives the new value, clicking reveals drop down of optional
   presets.
 
   USAGE::
@@ -435,30 +435,106 @@ var Slider = function () {
     Knobify("myknob", (v)=>(vol=v,Round(v)), 10, 0, 100, [100,75,50,25,0])
 
     element  - Element (or element's id) to knobify.
-    callback - Function that receives updated values and returns value
-               to display (handles rounding, truncating)
+    set      - Function that sets the external value and returns value
+               to display (which should handle rounding/truncating)
+    get      - Function that gets the current (external) value.
     val      - Initial value (default max)
-    fac      - Internal minimum decimal update offset.
+    inc      - Internal minimum decimal update offset.
     min      - min adjustable value (default 0)
     max      - max adjustable value (default 100)
 ******************************************************************************/
-var Knobify = function (element, callback, val, fac, min, max, presets) {
+var Knobify = function (element, set, get, fac, min, max, presets) {
+  fac = fac===undefined ? 0.1 : fac;
+  min = min===undefined ? 0   : min;
+  max = max===undefined ? 100 : max;
+
+  element = element instanceof Element ? element : ElementById(element);
+  element.className += " actor"; // Make sure actor style
+
+  // Move all children into a new child parent.
+  let label = element.innerHTML || "KNOB";
+  element.innerHTML = "";
+
+  let header = CreateAppendChild('p', element, label);
+  header.contentEditable = true;
+
+  let value;
+  header.onmouseover = () => { // Mousing over reveals value
+    header.focus();
+    header.style.minWidth = element.clientWidth + "px";
+    value = get();
+    header.innerText = set(value);
+  };
+
+  // The presets dropdown element
+  let epresets = undefined;
+  if (presets) {
+    epresets = CreateAppendChild('div', element);
+    epresets.className = "knobspresets";
+    epresets.style.display="none";
+
+    element.onmousedown = ()=>epresets.style.display="";
+
+    presets.forEach( (val)=>
+      CreateAppendChild('p', epresets, val)
+        .onmousedown=()=>header.innerText = set(val));
+  }
+
+  element.onmouseleave = ()=>{
+    if (epresets) { epresets.style.display="none"; }
+    header.blur();
+    header.innerHTML=label; // Revert to label
+  }
+
+  element.onwheel = (e) => { // Scrolling mouse adjusts value
+    value -= e.deltaY * fac;
+    if (value < min) { value=min; }
+    else if (max < value) { value=max; }
+    header.innerText = set(value);
+    e.preventDefault(); // So scrolling doesn't affect the browser
+  };
+
+  // TODO make sur ethis owrks
+  header.onkeydown = function (event) {
+    let val=value;
+    if (event.code == "ArrowUp") {
+      val += 1;
+    } else if (event.code == "ArrowDown") {
+      val -= 1;
+    } else if (event.code == "Enter") {
+      val = parseFloat(event.target.innerText);
+      if (isNaN(val)) { val = value; }
+    } else {
+      event.stopPropagation(); // Stop any other key from propagating
+      return;
+    } 
+    header.innerText = set(value = val<min ? min : max<val ? max : val);
+    event.preventDefault(); // Prevent element's text receiving a newline
+  };
+
+  return element;
+}; // Knobify
+
+/*
+var KnobifyOld = function (element, callback, val, inc, min, max, presets) {
   element = element instanceof Element ? element : ElementById(element);
   element.className += " actor"; // Make sure actor style
 
   let value = val===undefined ? max :val;
   let valueSet = (val)=>value=val;
-  fac = fac===undefined ? 0.1 :fac;
+  inc = inc===undefined ? 0.1 : inc;
   min = min===undefined ? 0   : min;
   max = max===undefined ? 100 : max;
 
   // Move all children into a new child parent.
   let label = element.innerHTML || "KNOB";
   element.innerHTML = "";
+
   let header = CreateAppendChild('p', element);
   header.innerHTML=label;
   header.contentEditable = true;
 
+  // The presets dropdown element
   let epresets = undefined;
   if (presets) {
     epresets = CreateAppendChild('div', element);
@@ -486,7 +562,7 @@ var Knobify = function (element, callback, val, fac, min, max, presets) {
   }
 
   element.onwheel = (e) => { // Scrolling mouse adjusts value
-    let v = value - e.deltaY * fac;
+    let v = value - e.deltaY * inc;
     if (v < min) { v=min; } else if (max < v) { v=max; }
     if (v != value) { header.innerText= callback(valueSet(v)); }
     e.preventDefault(); // So scrolling doesn't affect the browser
@@ -514,6 +590,8 @@ var Knobify = function (element, callback, val, fac, min, max, presets) {
   element.set = function (v) { callback(valueSet(v)); };
   return element;
 }; // Knobify
+*/
+
 
 
 
@@ -1215,10 +1293,14 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
       _output.innerText = Destinations.name(destinations[k]);
     };
 
-    Knobify(CreateAppendChild('p', buttons, "VOL"), (v)=>(volumes[k]=v/100, Round(v)), volumes[k]*100).title="DRUM VOLUME";
+    Knobify(CreateAppendChild('p', buttons, "VOL"),
+      (v)=>(volumes[k]=v/100, Round(v)),
+      ()=>volumes[k]*100,
+      1, 0, 100, [100, 75, 50, 25, 10, 0]
+    ).title="DRUM VOLUME";
 
     if (0==k) {
-      Knobify(CreateAppendChild('p', buttons, "REL"), (v)=>(bassRel=v/100, Round(v)), volumes[k]*100).title="BASS DRUM RELEASE";
+      Knobify(CreateAppendChild('p', buttons, "REL"), (v)=>(bassRel=v/100, Round(v)), ()=>volumes[k]*100).title="BASS DRUM RELEASE";
     }
 
     let drum = CreateAppendChild('p', buttons, audioBuffers.fileNameCompact(k));
@@ -1315,7 +1397,7 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
 let KeyFreq = function (freqa0) {
   // Generate able of base frequency multipliers
   let keymult = RangeMap(128, (k) => Pow(2, (k-21)/12.0));
-  let self = (k, f) => keymult[k] * (f || freqa0);// + Rnd()*0.5 - 0.25;
+  let self = (k, f) => keymult[k] * (f || freqa0) + Rnd()*0.5 - 0.25;
   self.setFreqA0 = (f) => freqa0=f;
   self.freq = () => freqa0;
   return self;
@@ -1421,8 +1503,8 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   Knobify(
     CreateAppendChild('p', _body, "FREQ"),
     (v)=>(_freq=v, Trunc1(v)),
-    _freq, .01, 1, 100,
-    [440, 220, 110, 55, 27.5, 13.75]
+    ()=>_freq,
+    .01, 1, 440, [440, 220, 110, 55, 27.5, 13.75]
   ).title = "BASE FREQ";
   let _waveformDOM = CreateAppendChild('p', _body)
   _waveformDOM.className = "actor";
@@ -1439,11 +1521,11 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   // [ ATT SUS REL    ]
   // [ VOL [ctx]      ]
   CreateAppendChild('br', _body);
-  Knobify(CreateAppendChild('p', _body, "ATT"), (v)=>(_att=v/100, Round(v)), _att*100).title="ATTACK";
-  Knobify(CreateAppendChild('p', _body, "SUS"), (v)=>(_sus=v/100, Round(v)), _sus*100).title="SUSTAIN";
-  Knobify(CreateAppendChild('p', _body, "REL"), (v)=>(_rel=v/100, Round(v)), _rel*100).title="RELEASE";
+  Knobify(CreateAppendChild('p', _body, "ATT"), (v)=>(_att=v/100, Round(v)), ()=>_att*100).title="ATTACK";
+  Knobify(CreateAppendChild('p', _body, "SUS"), (v)=>(_sus=v/100, Round(v)), ()=>_sus*100).title="SUSTAIN";
+  Knobify(CreateAppendChild('p', _body, "REL"), (v)=>(_rel=v/100, Round(v)), ()=>_rel*100).title="RELEASE";
   CreateAppendChild('br', _body);
-  Knobify(CreateAppendChild('p', _body, "VOL"), (v)=>(_volume=v/100, Round(v)), _volume*100, .1, 0, 100, [100, 80, 50, 20, 0]).title="VOLUME";
+  Knobify(CreateAppendChild('p', _body, "VOL"), (v)=>(_volume=v/100, Round(v)), ()=>_volume*100, .1, 0, 100, [100, 80, 50, 20, 0]).title="VOLUME";
 
   // Destination
   // [ [27.5][sine][-]]
@@ -1569,7 +1651,7 @@ var Synthesizer = function (ctx, label, type, keyboard, color) {
   };
   this.connect = function(d) {
     _filterIdx = d;
-    _output.innerText = Destinations.name(Destinations.index(d));
+    _output.innerText = Destinations.name(d);
   };
   this.destination = function () { return _filterIdx; };
 
@@ -1659,8 +1741,8 @@ var Delay = (function (ctx, destinations) {
   // [ [delay]      ]
   // [ DLY ATN      ]
   // [ [main]       ]
-  Knobify(CreateAppendChild('p', _body, "DLY"), (v)=>(_del=v/100, _delay.delayTime.value=_del, Round(v)), _del*100).title="DELAY";
-  Knobify(CreateAppendChild('p', _body, "ATN"), (v)=>(_gai=v/100, _gain.gain.value=_gai, Round(v)), _del*100).title="ATTENUATION";
+  Knobify(CreateAppendChild('p', _body, "DLY"), (v)=>(_delay.delayTime.value=_del=v/100, Round(v)), ()=>_del*100).title="DELAY";
+  Knobify(CreateAppendChild('p', _body, "ATN"), (v)=>(_gain.gain.value=_gai=v/100, Round(v)), ()=>_gai*100).title="ATTENUATION";
   CreateAppendChild('br', _body);
   let _output = CreateAppendChild('p', _body);
   _output.style.position = "relative"
@@ -1780,7 +1862,7 @@ var Lowpass = function (ctx, destinations) {
       _lowpass.frequency.value = 10000.0*(1.0-_f);
       return Round(v);
     },
-    _f*100
+    (v)=>_f*100
   ).title="DELAY";
 
   //// Public
@@ -1914,7 +1996,9 @@ var TickerTimer = (function (ctx) {
   // Debugging message
   var self = function () { };
 
+  // TODO when bpm changes, epoch can change but it should be relative to realtime
   self.setBpm   = function (b) { bps=b/60;  epoch=time-cue/bps; return b; }
+  self.bpm = function () { return bps*60; }
   self.setSubs = function (s)  {
     let orig = subs;
     tickBeg = Floor((tickBeg/orig)*subs);
@@ -2713,7 +2797,7 @@ var Part = function (sheetObj, tickIdx, height, keyBeg, keyCount, playable) {
   });
 
   // Volume/Velocity value
-  Knobify(CreateAppendChild('p', knobs, "VOL"), (v)=>(volume=v/100, Round(v)), volume*100, .1, 0, 100, [100, 80, 50, 20, 0]).title="VOLUME";
+  Knobify(CreateAppendChild('p', knobs, "VOL"), (v)=>(volume=v/100, Round(v)), ()=>volume*100, .1, 0, 100, [100, 80, 50, 20, 0]).title="VOLUME";
 
   // Midi channel in number button
   let midiIn = CreateAppendChild('p', knobs, chanIn);
@@ -2909,16 +2993,15 @@ var knobBpm;
 var setupControls = function (keyboard, sheet) {
 
   knobVolume = Knobify("mainVolume",
-    (v)=>{
-      Destinations.input(0).gain.value = v / 100; // Unit-normalize the gain
-      return Round(v);
-    },
-    50, .1, 0, 100,
+    (v)=>((Destinations.input(0).gain.value=v/100),Round(v)), // Unit-normalize the gain
+    ()=>Destinations.input(0).gain.value*100,
+    .1, 0, 100,
     [100, 75, 50, 25, 0]);
 
   knobBpm = Knobify("bpm",
     (v)=>TickerTimer.setBpm(Trunc1(v)),
-    60, .01, 1, 666,
+    ()=>TickerTimer.bpm(),
+    .01, 1, 666,
     [190, 120, 90, 60, 30, 20, 10]);
 
 
@@ -3004,10 +3087,11 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
   Sheet0.insertSubbeats()
 
   b = gs.nextByte();
-  knobVolume.set(b/255.0*100); // normalize then centify
+  Destinations.input(0).gain.value = b/255;
+  // knobVolume.set(b/255.0*100); // normalize then centify
 
   b = (gs.nextByte() + (gs.nextByte()<<8))/100.0;
-  knobBpm.set(b);
+  TickerTimer.setBpm(b);
 
   while (null != (next = gs.nextByte()))
   if (0 == next) { // FILTER / DESTINATION
@@ -3030,7 +3114,6 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
     } else { t==-1; }
 
     if (-1 != t) {
-      Destinations.push(d);
       document.getElementById('filters').appendChild(d.element);
       d.setParams(ps);
     }
