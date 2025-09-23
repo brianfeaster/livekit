@@ -1144,7 +1144,7 @@ var Destinations = (function (ctx) {
   }
 
   return self;
-})(ctx);
+})(ctx); // Destinations
 
 /******************************************************************************
   Database of Web Audio audio buffers.  It will download and convert raw audio
@@ -1248,7 +1248,7 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
   let audioBuffers = new AudioBuffers(ctx, filenames)
   let bassRel = 1.0; // Release time in seconds for both the filter and gain.
   let destinations = Array(audioBuffers.length).fill(0); // Default destination of each sound to default
-  let volumes = Array(audioBuffers.length).fill(1.0); // Default volumes
+  let volumes = Array(audioBuffers.length).fill(0.4); // Default volumes
   let _ibcId = false;
   let chanIn = 10;
 
@@ -1296,11 +1296,11 @@ var Drumkit = function (ctx, label, color, keyStart, filenames) {
     Knobify(CreateAppendChild('p', buttons, "VOL"),
       (v)=>(volumes[k]=v/100, Round(v)),
       ()=>volumes[k]*100,
-      1, 0, 100, [100, 75, 50, 25, 10, 0]
+      .1, 0, 100, [100, 75, 50, 25, 10, 0]
     ).title="DRUM VOLUME";
 
     if (0==k) {
-      Knobify(CreateAppendChild('p', buttons, "REL"), (v)=>(bassRel=v/100, Round(v)), ()=>volumes[k]*100).title="BASS DRUM RELEASE";
+      Knobify(CreateAppendChild('p', buttons, "REL"), (v)=>(bassRel=v/100, Round(v)), ()=>bassRel*100).title="BASS DRUM RELEASE";
     }
 
     let drum = CreateAppendChild('p', buttons, audioBuffers.fileNameCompact(k));
@@ -1403,17 +1403,17 @@ let KeyFreq = function (freqa0) {
   return self;
 }(27.5);
 
-DB.check( KeyFreq(21)==27.5, "KeyFreq frequency mismatch key 21 != 27.5Hz");
-DB.check( KeyFreq(69)==440, "KeyFreq frequency mismatch key 69 != 440Hz");
-DB.check( KeyFreq(105)==3520, "KeyFreq frequency mismatch key 105 != 3520Hz");
-DB.check( KeyFreq(117)==7040, "KeyFreq frequency mismatch key 117 != 7040Hz");
+DB.check( KeyFreq(21)==27.5, `KeyFreq frequency mismatch key 21 ${KeyFreq(21)} != 27.5Hz`);
+DB.check( KeyFreq(69)==440, `KeyFreq frequency mismatch key 69 ${KeyFreq(69)} != 440Hz`);
+DB.check( KeyFreq(105)==3520, `KeyFreq frequency mismatch key 105 ${KeyFreq(105)} != 3520Hz`);
+DB.check( KeyFreq(117)==7040, `KeyFreq frequency mismatch key 117 ${KeyFreq(117)} != 7040Hz`);
 
 
 /******************************************************************************
   Create a playable synthesizer.
 
   USAGE::
-    var Synth = new Synthesizer(ctx, keyboard, color);
+    var synth = new Synthesizer(ctx, keyboard, color);
 
   CONSTRUCTOR PARAMETERS::
     ctx      A web audio context.
@@ -3097,19 +3097,13 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
   if (0 == next) { // FILTER / DESTINATION
     DB("LK3 new filter");
     label = gs.nextString(gs.nextByte()); // NAME LENGTH, NAME
-    var t = gs.nextByte(); // TYPE
+    let t = gs.nextByte(); // TYPE
     b = gs.nextByte(); // PARAM COUNT
-    //DB("params count = " + b);
-    var ps=[]
-    for (var i=0; i<b; ++i) { // PARAMS
-      ps.push(gs.nextByte() / 255.0);
-    }
-    //DB("params = " + ps);
+    let ps=[]
+    RangeForEach(b, ()=>ps.push(gs.nextByte() / 255.0)); // PARAMS
     if (t==0) {
       d = new Delay(ctx);
-      //DB("LK3 delay create");
     } else if (t==1) {
-      //DB("LK3 lowpass create");
       d = new Lowpass(ctx);
     } else { t==-1; }
 
@@ -3134,7 +3128,6 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
     synth.susSet(gs.nextByte());
     synth.relSet(gs.nextByte());
     var i = gs.nextByte();
-    //synth.connect(Destinations[i].input());
     synth.connect(i);
   } else if (2 == next) { // Phrase...extract into parts
     label = gs.nextString(gs.nextByte());
@@ -3159,8 +3152,7 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
 
       if (gs.peekByte() & 128) {
         var fixedNote = gs.nextByte() & 127;
-        //part = phrase.createPartFixed(drumKit, fixedNote)
-        if (!partDrums) {
+        if (!partDrums) { // Create the drum part for aggregating the individual DAW1 drum parts
           //              (sheetObj,                         tickIdx, height,      keyBeg, keyCount, playable)
           partDrums = Part(Sheet0, sheetBeatOffset*(Sheet0.subs()+1), sheetPartOffset, 24, 16, DrumKit0);
           RangeForEach(measures*beatsper, partDrums.appendBeat);
@@ -3169,27 +3161,31 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
           sheetPartOffset += 50;
           partDrums.toggleDisplay();
         }
-        bools.map(function(n,i){if (n) { partDrums.setTick(fixedNote, i);}});
+        bools.map((n,i)=>n&&partDrums.setTick(fixedNote,i));
         //drumKit.connect(Destinations.input(dst), fixedNote); // DESTINATION/FILTER
         //part.elementFilter.innerText = Destinations.name(dst);
       } else {
-        Synthesizers.map(function(s) { // Lookup synth
-          if (s.label() == label) {
-            //part = phrase.createPart(s);
-            part = new Part(Sheet0, sheetBeatOffset*(Sheet0.subs()+1), sheetPartOffset, 21,           88, Synthesizer1); // BF
-            RangeForEach(measures*beatsper, part.appendBeat);
-            part.insertSubbeats(ticksper);
-            part.chanOutSet(s.chanIn());
-            part.setVolume(vol);
-          }
-        });
-        DB.check(part, `part was not created for ${label}`);
-        bools.map(function(n,i){if (n) { part.setTick(15+gs.nextByte(), i);}});
-        sheetPartOffset += 60;
-        part.toggleDisplay();
+        let tickCount = bools.reduce( (res,v)=>v?res+1:res );
+        if (0==vol || !tickCount) {
+          bools.map((n)=>n&&gs.nextByte());
+        } else {
+          Synthesizers.map(function(s) { // Lookup synth
+            if (s.label() == label) {
+              //part = phrase.createPart(s);
+              part = new Part(Sheet0, sheetBeatOffset*(Sheet0.subs()+1), sheetPartOffset, 21,           88, Synthesizer1); // BF
+              RangeForEach(measures*beatsper, part.appendBeat);
+              part.insertSubbeats(ticksper);
+              part.chanOutSet(s.chanIn());
+              part.setVolume(vol);
+            }
+          });
+          DB.check(part, `part was not created for ${label}`);
+          bools.map(function(n,i){if (n) { part.setTick(15+gs.nextByte(), i);}});
+          sheetPartOffset += 60;
+          part.toggleDisplay();
+        }
       }
       //part.setVol(vol/255.0); // Volume
-      //bools.map(function(n,i){part.elementTick(i).innerText = n?"X":".";});
     }
     sheetBeatOffset += measures*beatsper;
   } else if (3 == next) { // Phrase reference TODO: this is tricky since phrases are now individual parts.

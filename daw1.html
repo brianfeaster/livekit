@@ -7,7 +7,7 @@
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:20em; position:fixed; right:0; bottom:0"></p>
+<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:30em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation 1.0 &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -144,7 +144,6 @@ var ElementById = function(id) { return document.getElementById(id); }
 var ctx = (window.AudioContext && new window.AudioContext()) || 
           (window.webkitAudioContext && new window.webkitAudioContext());
 var log = console.log.bind(console);
-var Z = null;
 
 /******************************************************************************
   Debug message console and error checking
@@ -783,16 +782,18 @@ var AudioBuffers = function (ctx, filenames) {
           var statusState = ((200 == client.status) || (0 == client.status) && (null != client.response)); // When loaded locally with --allow-file-access-from-files, status is 0 so must check client.response instead
           DB.check(statusState, "ERROR: AudioBuffers: " + client.status + " '" + (client.responseURL || fn) + "'");
           if (statusState) {
-            //DB.log("LOADED " + fn);
-            var samples = new Int16Array(client.response); // Consider u8 ary as s16 ary.
-            // Normalized each s16 sample to f32 between -1 and 1.
-            var Noise =  new Float32Array(samples.length);
-            for (var j=0; j<samples.length; ++j) {
-              Noise[j] = samples[j]/32768;
+            if ("horn.raw"==fn) {
+              _audioBuffers[i]=ctx.createBuffer(1, client.response.byteLength, 8000);
+              _audioBuffers[i].getChannelData(0).set([...new Int8Array(client.response)].map(e=>e/128));
+            } else {
+              var samples = new Int16Array(client.response) // Consider u8 ary as s16 ary.
+              // Normalized each s16 sample to f32 between -1 and 1.
+              var Noise =  new Float32Array(samples.length);
+              for (var j=0; j<samples.length; ++j) { Noise[j] = samples[j]/32768; }
+              // Create and set the audio buffer
+              _audioBuffers[i]=ctx.createBuffer(1, samples.length, 44100);
+              _audioBuffers[i].getChannelData(0).set(Noise);
             }
-            // Create and set the audio buffer
-            _audioBuffers[i] = ctx.createBuffer(1, samples.length, 44100);
-            _audioBuffers[i].getChannelData(0).set(Noise);
           } // if
         } // function()
       client.send();
@@ -1372,6 +1373,7 @@ var Destinations = (function (ctx) {
     .setAllKeys        Set the default key or drum index.
     .cursor()          Get the "cursor" representing one of the tick indices.
     .setCursor(i)      Set the "cursor" tick index.
+    .highlightSelected Highlight selected ticks
     .vol()             Get volume (default = 0.5).
     .setVol(v)         Get volume.
     .play(tick, when)  Play the key or pad at tick 'tick'
@@ -1409,7 +1411,7 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
     _elementBeats.push(beatElement);
     for (var t=0; (t < subBeatCount); ++t) { // Sub-beats AKA 'tick' elements added to each beat element
       var tickElement = CreateAppendChild('p', beatElement);
-      tickElement.className = "tick"
+      tickElement.className = "tick";
       tickElement.innerText = '.';
       // Keep track of the part DOM element.
       _elementTicks.push(tickElement);
@@ -1441,6 +1443,7 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
   this.ticksPerBeat = subBeatCount;
   this.elementTicks = _elementTicks;
   this.elementTick = function (i) { return _elementTicks[i]; }
+  this.tickIndex = function(t) { return _elementTicks.findIndex(tt=>t==tt) }
   this.elementID = _id;
   this.elementFilter = _elementFilter;
   this.elementName = _elementName;
@@ -1452,6 +1455,21 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
   this.vol = function () {return _vol; }
   this.setVol = function (v) {_vol = v; }
   this.setCursor = function (i) { _cursor = Mod(i, self.tickLength); }
+
+  this.highlightSelected = function (phraseIdx, reset) {
+    _elementTicks.forEach(t=>{
+      const tickIdx = this.tickIndex(t);
+      if (reset===true || (
+            MouseShiftRange[0][0]<= phraseIdx && phraseIdx <= MouseShiftRange[1][0] &&
+            MouseShiftRange[0][1]<= tickIdx && tickIdx <= MouseShiftRange[1][1])) {
+        const noteOn = _elementTicks[tickIdx].innerText==="X";
+        const key = _notes[tickIdx];
+        if (reset!=true) { MouseShiftRangeNotes.push(noteOn ? key : undefined); }
+        const z = t.style.backgroundColor = (reset===true ? null : "purple");
+      }
+    });
+  }
+
   this.play = function (tick, when) { self.playable.play(_notes[tick], _vol, when); } // Since self.playable is mutated.  BAD!
   this.playTicks = function (beat, when) {
     if (0 == when) when = ctx.currentTime; // If someone wants this beat played now, compensate otherwise it will be "played in the past".
@@ -1506,6 +1524,7 @@ var Part = function (id, beatCount, subBeatCount, beatsPerMeasure, playable) {
     .referenceDel(ref)       Remove reference from my set.
     .highlightBeat(b)        Set beat high-light marker.
     .unhighlightBeat()       Disable cursor
+    .highlightSelected       highlight a range of selected ticks
     .createPart(playable)    Appends a new part to the phrase and associates it with a playable object which implements .play(note, vol, when).
     .createPartFixed(        Appends a new part to the phrase and associates it with a playable object that will be called with a fixedNote.
        playable, fixedNote)
@@ -1636,6 +1655,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   this.partCount = function () { return _parts.length; }
   this.parts     = _parts;
   this.part      = function (p) { return _parts[p]; }
+  this.partIndex = function(p) { return _parts.findIndex((pp)=>p==pp) }
   this.toggleElement = function () { // Toggle the editable DOM element.
     ToggleElementDisplay(_element);
     var off = _element.style.display == "none";  // 'none' implies off.  '' implies on
@@ -1668,9 +1688,29 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
   this.unhighlightBeat = function () {
     cursor.style.display = "none";
   }
+  this.highlightSelected = function (reset=false) {
+    reset === false && (MouseShiftRangeNotes = []);
+    _parts.forEach(p=>p.highlightSelected(this.partIndex(p),reset))
+  }
+  this.pasteSelected = function (partIdx, tickIdx) {
+     const height = MouseShiftRange[1][0] - MouseShiftRange[0][0] + 1;
+     const width = MouseShiftRange[1][1] - MouseShiftRange[0][1] + 1;
+     var notes = [...MouseShiftRangeNotes];
+     [...Array(height).keys()].forEach(y=>[...Array(width).keys()].forEach(x=>{
+       const n = notes.shift();
+       if (n===undefined) {
+         _parts[y+partIdx].elementTick(x+tickIdx).innerText = '.';
+       } else {
+         _parts[y+partIdx].elementTick(x+tickIdx).innerText = 'X';
+         if (DrumKit0 != _parts[y+partIdx].playable) {
+           _parts[y+partIdx].setKey(x+tickIdx, n);
+         }
+       }
+     }));
+  }
   this.createPart = function (playable) {
     var _part = _createPart(playable);
-    setupSynthPart(_part, keyboard);
+    setupSynthPart(_part, keyboard, this);
     return _part;
   }
   this.createPartFixed = function (drumKit, fixedNote) {
@@ -1692,13 +1732,31 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
       _part.elementName.style.color = "";
     }
     _part.elementTicks.map(function (tickElement, t) { // Over every tick...
+      const part=_part, phrase=self;
+      tickElement.onmouseup = function (event) {
+        MouseShiftIsDown &&  phrase.highlightSelected(true);
+      }
       tickElement.onmousedown = function (event) { // Every tick can be toggled
+        if (event.shiftKey) { // Shift clicking is phrase-range-select mode
+          MouseShiftIsDown = true;
+          MouseShiftRange[0] = [phrase.partIndex(part), part.tickIndex(tickElement)];
+          return;
+        }
+        if (event.altKey) { // Alt clicking is phrase-range-paste action
+          phrase.pasteSelected(phrase.partIndex(part), part.tickIndex(tickElement));
+          return;
+        }
         MouseIsDown = true;
         DragOverTickState = this.innerText == "." ? 1 : 2;
         this.innerText = DragOverTickState == 1 ? "X" : "."
         if (this.innerText=="X") _part.playable.play(_part.key(t), _part.vol(), 0);
       }
       tickElement.onmouseover = function (event) { // Every tick will play on hover and be set if mouseDown
+        if (MouseShiftIsDown) { // Currently in phrase-range-select mode
+          MouseShiftRange[1] = [phrase.partIndex(part), part.tickIndex(tickElement)];
+          phrase.highlightSelected();
+          return;
+        }
         if (MouseIsDown) { this.innerText = (DragOverTickState == 1 ? "X" : ".") }
         else if (this.innerText == "X") _part.playable.play(_part.key(t), _part.vol(), 0);
       }
@@ -1710,7 +1768,7 @@ var Phrase = function (id, measures, beatsper, ticksper, keyboard) {
 
 /* The synth tracks all share one cursor for the keyboard.  It could be the case that there are multiple keyboards.  This means the keyboard should keep track of which part and tick the cursor is.
 */
-function setupSynthPart (part, keyboard) {
+function setupSynthPart (part, keyboard, phrase) {
   var _ibcId = false; // This synth-part's IBC callback.
 
   // Clicking on the part's name will cycle the synth used.
@@ -1769,7 +1827,16 @@ function setupSynthPart (part, keyboard) {
   var hoverNote = false; // For some reason, mouseleave can occur after mouseover.  This is used to ignore mouseover should it be on an element the mouse is not on any more.
   part.elementTicks.map(function (tickElement, t) { // Over every tick elements...
 
+    tickElement.onmouseup = function (event) {
+      MouseShiftIsDown &&  phrase.highlightSelected(true);
+    }
+
     tickElement.onmouseover = function (event) {
+      if (MouseShiftIsDown) { // Currently in phrase-range-select mode
+        MouseShiftRange[1] = [phrase.partIndex(part), part.tickIndex(tickElement)];
+        phrase.highlightSelected();
+        return;
+      }
       // If mousing over a tick but still on another tick, remove other key's high-light
       if (!(false === hoverNote)) {
         keyboard.unhighlight(hoverNote, "yellow")
@@ -1790,6 +1857,15 @@ function setupSynthPart (part, keyboard) {
     }
 
     tickElement.onmousedown = function () {
+      if (event.shiftKey) { // Shift clicking is phrase-range-select mode
+        MouseShiftIsDown = true;
+        MouseShiftRange[0] = [phrase.partIndex(part), part.tickIndex(tickElement)];
+        return;
+      }
+      if (event.altKey) { // Alt clicking is phrase-range-paste action
+        phrase.pasteSelected(phrase.partIndex(part), part.tickIndex(tickElement));
+        return;
+      }
       MouseIsDown = true; // Set global state
       // Flip a tick's note if it's not selected or already highlighted.  That way an already selected note can be slected and immediately edited in the keybard.
       var sameHighlight = (_ibcId && (part.cursor() == t)); // Click on the cursor with a active tick?
@@ -3295,7 +3371,13 @@ var Volume = 0.5; // A global value shared by all output gain logic
 
 // It's nice to keep track of the user's mouse button state.  The window element will always catch this event and handle it.
 var MouseIsDown = false;
-window.onmouseup = function () { MouseIsDown = false; }
+var MouseShiftIsDown = false;
+var MouseShiftRange = [[0,0],[0,0]];
+var MouseShiftRangeNotes = []
+window.onmouseup = function () {
+  MouseIsDown = false;
+  MouseShiftIsDown = false;
+}
 
 // It's nice to keep track of the user's shift state.
 var ShiftIsDown = false;
@@ -3310,7 +3392,6 @@ window.onkeyup = function (event) {
   }
 }
 
-var z;
 window.onkeydown = function (event) {
   if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
   if (event.keyCode == 82) { // Pressing 'r' will rewind the playback.
@@ -3340,11 +3421,9 @@ document.body.addEventListener('touchstart', function (event) {if (event.touches
 var addphrase;
 var midi = null;
 
-
 function Main () {
   DB("::onload");
-  //IBC.debug();
-
+  const stateMidiSkip = -1 != location.search.indexOf('nomidi');
 
   Sheet0 = new Sheet(); // Global sheet object
 
@@ -3400,14 +3479,16 @@ function Main () {
 
   function onMIDIFailure(msg) { DB("MIDI "+msg ); }
 
-  if (navigator.requestMIDIAccess) {
+  if (!stateMidiSkip && navigator.requestMIDIAccess) {
     navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure );
+  } else {
+    DB("MIDI skipped");
   }
 
   setupControls(keyboard); // Setup menus and moveable buttons.
 
   // Load the audio asynchronously and create the default drumkit.
-  var filenames = ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw"];
+  var filenames = ["808.bass.raw", "808.snare.drum.raw", "808.snare.noise.raw", "808.maracas.raw", "808.cowbell.raw", "808.rim.raw", "808.highhat.closed.raw", "808.claves.raw", "808.clap.raw", "808.highhat.opened.raw", "808.cymbal.raw", "909.thump.raw", "909.snare.noise.raw", "tsss.raw", "boots.raw", "cats.raw", "horn.raw"];
   var audioBuffers = new AudioBuffers(ctx, filenames)
   var drumKit = new Drumkit(ctx, "orange", audioBuffers);
 
@@ -3497,6 +3578,7 @@ function Main () {
   DB("--onload [" + DB.status() + "]");
 }
 
+DB("CTX="+ctx);
 
 // Await for user gesture then restart WebAudio
 function PreMain (i) {
