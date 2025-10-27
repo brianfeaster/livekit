@@ -4,10 +4,11 @@
 <head>
  <title>Liveka7 DAW</title>
  <link rel="stylesheet" href="daw1.css" type="text/css" media="screen" title="Shrewm"/>
+ <meta http-equiv="Expires" content="0">
 </head>
 <body Xoncontextmenu="return false;">
 
-<p id="xDB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:30em; position:fixed; right:0; bottom:0"></p>
+<p id="DB" style="width:30em; background:black; z-index:1; border:solid 1px green; white-space:pre; overflow:auto; max-height:30em; position:fixed; right:0; bottom:0"></p>
 
 <h1>Liveka7 Digital Audio Workstation 1.0 &#x2669; &#x266b; &#x266a; &#x266c; &#x266d; &#x266e; &#x266f;</h1>
 <hr/>
@@ -43,6 +44,7 @@
  </div>
  <a onmousedown="popupToggle('skeuomorph')">Skeuomorph</a>
  <a onmousedown="popupToggle('pauseicon')">Kitteh</a>
+ <a onclick="DB.toggle()">Console</a>
  <a onmousedown="window.location.href='https://shroom.dv8.org/daw/daw2.html'+window.location.search">DAW2.0</a>
  <a href="http://webaudio.github.io/web-audio-api/">WebAudio</a>
  <a href="http://validator.w3.org/check/referer">XHTML1.0</a>
@@ -117,7 +119,7 @@
   <b>Skeuomorphic:</b> Real-world facsimile within an artificial reality.
 </div>
 
-<img id="pauseicon" alt=" P A U S E " style="display:none; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.gif" onclick="ctx.resume()"/>
+<img id="pauseicon" alt=" P A U S E " style="display:none; opacity:0; transition:opacity 2s; border-radius:50%; clip-path: polygon(35% 0, 100% 55%,35% 100%);" src="catpause.gif" onclick="ctx.resume()"/>
 
 
 <script type="text/javascript">//<![CDATA[
@@ -155,7 +157,6 @@ var log = console.log.bind(console);
     DB("string")           -- Send string to info window.  Behaves like a pre element.
     DB.log("string")       -- Send string to console.log.
     DB.post(type, string)  -- Send string to info window band keeps track of type.  Subsequent typed messages replace the last.
-    DB.post(type, string)  -- Send string to info window band keeps track of type.  Subsequent typed messages replace the last.
     DB.clear()             -- Empty the entire DB element.
     DB.check(expr, string) -- If expr is false, send string to console.  status() will then always return false.
     DB.status()            -- Returns false if check ever failed.
@@ -169,6 +170,7 @@ var DB = (function () {
   var repeatCount = 0;
 
   var setStyles = function (e) {
+    e.hidden = true;
     return;
     e.style.border = "solid 1px green";
     e.style.whiteSpace = "pre";
@@ -200,6 +202,7 @@ var DB = (function () {
       consoleElement.scrollTop = consoleElement.scrollHeight;
       shouldNewline = lastPostType = false;
     }
+    self.toggle = ()=>consoleElement.hidden^=true;
     self.log = function (s) { console.log(s); }
     self.post = function (t, s) {
       if (t == lastPostType) {
@@ -230,6 +233,8 @@ var DB = (function () {
   return self;
 })(); // DB
 
+DB("CTX="+ctx);
+
 /******************************************************************************
   Hyphen - WebSocket baed Key/Value store
 
@@ -251,10 +256,10 @@ var hyphen =
             song = e.data.split("&")[0];;
             window.location.href = window.location.pathname+"?"+song;
          } else {
-             DB("hyphen text: " + e.data);
+             //DB("hyphen text: " + e.data);
          }
       } else {
-         DB("hyphen bin: " + e.data);
+         //DB("hyphen bin: " + e.data);
       }
    } 
 
@@ -418,9 +423,10 @@ var GetStringBase64 = function (get) {
   var self = this;
   var _gsb64 =
     get ||
-    (window.location.search.substring(1).length < 20 // Using query as song filename as well
+    window.location.search.substring(1).length < 20 // Using query as song filename as well
     ? ""
-    : window.location.search.substring(1));
+    : [...new URLSearchParams(window.location.search)][0][0]; // window.location.search.substring(1));
+
   var _gs = [];
 
   //// PUBLIC
@@ -2399,7 +2405,7 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
   var gs = new GetStringBase64(encodedSong);
   var next, b, label, d;
   if (!gs.assertString("LK") || !gs.assertBytes([3])) {
-    DB("Not LK3")
+    //DB("Not LK3")
     return false;
   }
 
@@ -2437,7 +2443,7 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
       d.setParams(ps);
     }
   } else if (1 == next) { // Synthesizer
-    DB("LK3 Synth...");
+    //DB("LK3 Synth...");
     label = gs.nextString(gs.nextByte());
     var synth;
     if (!Synthesizer0) Synthesizer0 = synth = new Synthesizer(ctx, label, gs.nextByte(), keyboard, "#44f");
@@ -2491,7 +2497,6 @@ var restoreSongLK3 = function (keyboard, drumKit, encodedSong) {
       if (phrase.id == label) { // Found it
         var refPhrase = new PhraseReference(phrase);
         Sheet0.add(refPhrase);
-        DB(label + " reference");
         break;
       }
     }
@@ -2619,7 +2624,7 @@ var restoreSongLK2 = function (keyboard, drumKit, encodedSong) {
   var waveforms = ["sine", "square", "sawtooth", "triangle"];
   var color = ["#f00", "#0f0", "#00f"];
   if (!gs.assertString("LK") || !gs.assertBytes([2])) {
-    DB("Not LK2")
+    //DB("Not LK2")
     return false;
   }
 
@@ -2787,7 +2792,7 @@ var restoreSongLK1 = function (keyboard, drumKit, encodedSong) {
   var waveforms = ["sine", "square", "sawtooth", "triangle"];
   //var color = ["#f00", "#0f0", "#00f"];
   if (!gs.assertString("LK") || !gs.assertBytes([1])) {
-    DB("Not LK1")
+    //DB("Not LK1")
     return false;
   }
 
@@ -2902,7 +2907,7 @@ var restoreSongLK0 = function (keyboard, drumKit) {
   var gs = new GetStringBase64();
 
   if (320 != gs.length()) {
-    DB("Not LK0");
+    //DB("Not LK0");
     return false;
   }
 
@@ -2994,6 +2999,7 @@ var pauseFeedback = function (id, op) {
   icon.style.opacity = opacity;
   if (op == 1.0) { return; }
   var fn = function() {
+    icon.style.transition = ""; // hack transition on pause icon only used at startup
     icon.style.opacity = opacity;
     if (opacity <= op) {
       opacity = 1.0;
@@ -3424,18 +3430,18 @@ window.onkeyup = function (event) {
 }
 
 window.onkeydown = function (event) {
-  if (event.keyCode == 191) DB.clear(); // Pressing '/' will clear the DB (debug console) element.
-  if (event.keyCode == 82) { // Pressing 'r' will rewind the playback.
-    reset(event);
+  DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code); // event.key is preferred?
+  log(event);
+
+  if (event.key == '/') { DB.clear(); } // '/' will clear the DB (debug console) element
+  if (event.key == 'r') { reset(event); } // 'r' rewinds playback
+  if (event.key == ' ') {
+    pause(event); // Pressing space will pause the playback.
+    event.preventDefault();
   }
-  if (event.keyCode == 80) {
-    pause(event); // Pressing 'p' will pause the playback.
-    event.stopPropagation(); // TODO This doesn't prevent spacebar from scrolling the main window so for now 'p' will pause the sequencer.
-  }
-  DB.post("onkeydown keyCode", event.keyCode + " key:'" + event.key + "' code:"+ event.code);
-  if (event.keyCode == 67) { IBC(["tickclear"]); } // Clear whatever the cursor is on
-  if (event.keyCode == 68) { IBC(["tickmove", -1]); } // Retard cursor key 'd'
-  if (event.keyCode == 70) { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
+  if (event.key == "c") { IBC(["tickclear"]); } // Clear whatever the cursor is on
+  if (event.key == "d") { IBC(["tickmove", -1]); } // Retard cursor key 'd'
+  if (event.key == "f") { IBC(["tickmove", 1]); } // Advance cursor key 'f' Was once space but that scrolled the window.  TODO: make the window non-scrollable but then i'd have to implement my own scrolling so annoying.
 }
 
 window.onmousemove = function (event) {
@@ -3453,8 +3459,8 @@ var addphrase;
 var midi = null;
 
 function Main () {
-  DB("::onload");
-  const stateMidiSkip = -1 != location.search.indexOf('nomidi');
+  DB("::Main");
+  const stateMidiSkip = !(new URLSearchParams(window.location.search)).has("midi");
 
   Sheet0 = new Sheet(); // Global sheet object
 
@@ -3496,10 +3502,10 @@ function Main () {
           switch (d[1]) {
           case 1: // mod wheel
             //log("mod wheel");
-            Destinations[2].setParams([d[2]/0x7f,0]);
+            Destinations[2].setParams([d[2] / 0x7f, 0]);
             break;
           case 7: // main vol
-            Volume = d[2]/0x7f;
+            Volume = d[2] / 0x7f;
             break;
           }
           break;
@@ -3511,7 +3517,7 @@ function Main () {
   function onMIDIFailure(msg) { DB("MIDI "+msg ); }
 
   if (!stateMidiSkip && navigator.requestMIDIAccess) {
-    navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure );
+    navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
   } else {
     DB("MIDI skipped");
   }
@@ -3583,7 +3589,6 @@ function Main () {
   setInterval(sequencerLoop, 50);
   setInterval(rendererLoop, 50);
 
-
   // TODO Global hack mechanism to create a new phrase.
   addphrase = function (e) {
     var shouldUpdateRange = (BeatFinal == Sheet0.beatCount()-1);
@@ -3606,10 +3611,8 @@ function Main () {
   }
 
 
-  DB("--onload [" + DB.status() + "]");
+  DB("--Main [" + DB.status() + "]");
 }
-
-DB("CTX="+ctx);
 
 // Await for user gesture then restart WebAudio
 function PreMain (i) {
@@ -3619,7 +3622,6 @@ function PreMain (i) {
    ctx.resume()
    setTimeout(PreMain.bind(0, ++i), 100);
  } else {
-
    DB ("Starting AudioContext!");
    //ctx = window.AudioContext && new window.AudioContext();
    document.getElementById("pauseicon").style.clipPath = null;

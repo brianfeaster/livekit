@@ -1,6 +1,9 @@
 /******************************************************************************
   General
 ******************************************************************************/
+html {
+ /* cursor:url(cursor.cur), pointer; */
+}
 body {
  margin:0 0 0 1ch;
  background:#000;
@@ -12,7 +15,6 @@ body {
  -moz-user-select: none;
  -ms-user-select: none;
  user-select: none;
- cursor:"cursor.cur";
 }
 
 a         {text-decoration: none}
